@@ -1,0 +1,484 @@
+import "./styles.css";
+import { applyStaticTranslations, getLang, t, translations } from "./i18n.js";
+import JsBarcode from "jsbarcode";
+import { createBooking, firebaseConfigured, getCatalog, submitReview, validateCoupon } from "./firebase-client.js";
+
+const $ = selector => document.querySelector(selector);
+const $$ = selector => [...document.querySelectorAll(selector)];
+const state = {
+  lang: getLang(),
+  theme: localStorage.getItem("mz-theme") === "light" ? "light" : "dark",
+  catalog: { categories: [], services: [], packages: [], staff: [], offers: [], content: [], translations: [], settings: {} },
+  cart: JSON.parse(localStorage.getItem("mz-cart") || "[]"),
+  category: "all",
+  step: 1,
+  staffId: "any",
+  date: "",
+  time: "",
+  coupon: null,
+  completedPreview: false
+};
+
+const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
+const localized = (item, key = "name") => item?.[`${key}${state.lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
+const needsAppointment = () => cartItems().some(item => item.kind !== "product");
+const settings = () => state.catalog.settings || {};
+
+function itemIndex() {
+  return new Map([
+    ...state.catalog.services.map(item => [item.id, { ...item, kind: item.type === "product" ? "product" : "service" }]),
+    ...state.catalog.packages.map(item => [item.id, { ...item, kind: "package" }]),
+    ...state.catalog.offers.map(item => [item.id, { ...item, kind: "offer" }])
+  ]);
+}
+
+function cartItems() {
+  const index = itemIndex();
+  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1 })).filter(item => item.id);
+}
+
+function subtotal() { return cartItems().reduce((sum, item) => sum + Number(item.price || item.newPrice || 0) * item.qty, 0); }
+function discountAmount() { return Math.min(subtotal(), Number(state.coupon?.discountAmount || 0)); }
+function total() { return Math.max(0, subtotal() - discountAmount()); }
+
+function saveCart() {
+  localStorage.setItem("mz-cart", JSON.stringify(state.cart));
+  $$('[data-cart-count]').forEach(el => { el.textContent = String(state.cart.length); });
+}
+
+function showToast(message) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"), 2300);
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("mz-theme", theme);
+  $("#themeToggle").textContent = theme === "dark" ? "☀" : "☾";
+}
+
+function setLanguage(lang) {
+  state.lang = lang;
+  localStorage.setItem("mz-lang", lang);
+  applyStaticTranslations(lang);
+  $("#langToggle").textContent = lang === "ar" ? "EN" : "ع";
+  const title = lang === "ar" ? "مزين مصر – فرع طلخا | حجز حلاق وعناية رجالية" : "El Mezaen Egypt – Talkha | Barber Booking & Men's Grooming";
+  const description = lang === "ar" ? "احجز خدمات الحلاقة والعناية الرجالية في مزين مصر فرع طلخا. أسعار ومواعيد واضحة وحجز سريع." : "Book professional barber and men's grooming services at El Mezaen Egypt, Talkha. Clear prices, durations and fast online booking.";
+  document.title = title;
+  $('meta[name="description"]').content = description;
+  $('meta[property="og:title"]').content = title;
+  $('meta[property="og:description"]').content = description;
+  renderAll();
+}
+
+function categoryName(id) {
+  const category = state.catalog.categories.find(item => item.id === id);
+  return localized(category);
+}
+
+function renderOffers() {
+  const now = Date.now();
+  const offers = state.catalog.offers.filter(offer => offer.active !== false && offer.status !== "stopped" && (!offer.startAt || new Date(offer.startAt).getTime() <= now) && (!offer.endAt || new Date(offer.endAt).getTime() >= now));
+  $("#offersGrid").innerHTML = offers.length ? offers.map(offer => {
+    const price = Number(offer.newPrice ?? offer.price ?? 0);
+    const old = Number(offer.oldPrice ?? offer.originalPrice ?? price);
+    const percent = old > 0 ? Math.round((old - price) / old * 100) : 0;
+    return `<article class="offer-card reveal">
+      ${offer.imageUrl ? `<img src="${escapeAttr(offer.imageUrl)}" alt="${escapeAttr(localized(offer))}" loading="lazy">` : ""}
+      <div class="offer-body"><span class="discount-badge">-${percent}%</span><h3>${escapeHtml(localized(offer))}</h3><p>${escapeHtml(localized(offer, "description"))}</p>
+      <div class="price-row"><div><span class="old-price">${money(old)}</span><div class="price">${money(price)}</div></div>${offer.endAt && offer.showCountdown ? `<time data-countdown="${escapeAttr(offer.endAt)}"></time>` : ""}</div>
+      <button class="btn btn-primary" data-add-id="${escapeAttr(offer.id)}" data-kind="offer">${t("addCart", state.lang)}</button></div>
+    </article>`;
+  }).join("") : `<div class="empty-state">${t("noOffers", state.lang)}</div>`;
+  updateCountdowns();
+}
+
+function renderPackages() {
+  $("#packageGrid").innerHTML = state.catalog.packages.filter(item => item.active !== false && item.status !== "expired").map(item => {
+    const badge = item.badge === "popular" ? t("featured", state.lang) : item.badge === "special" ? t("special", state.lang) : t("package", state.lang);
+    return `<article class="package-card ${item.badge ? "highlight" : ""} reveal">
+      <div class="package-cover"><img src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy"><span>${badge}</span></div>
+      <div class="card-top"><span class="card-tag">♛ ${badge}</span><span class="duration">◷ ${item.duration} ${t("minute", state.lang)}</span></div>
+      <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p>
+      <div class="price-row"><strong class="price">${money(item.price)}</strong></div>
+      <button class="btn btn-primary" data-add-id="${escapeAttr(item.id)}" data-kind="package">${t("addCart", state.lang)}</button>
+    </article>`;
+  }).join("");
+}
+
+function renderServices() {
+  const active = state.catalog.services.filter(item => item.active !== false);
+  $("#categoryFilters").innerHTML = `<button class="filter-chip ${state.category === "all" ? "active" : ""}" type="button" data-category="all" role="tab">${t("all", state.lang)}</button>` + state.catalog.categories.filter(cat => cat.active !== false && cat.id !== "packages" && active.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${state.category === cat.id ? "active" : ""}" type="button" data-category="${escapeAttr(cat.id)}" role="tab">${escapeHtml(localized(cat))}</button>`).join("");
+  const visible = (state.category === "all" ? active : active.filter(item => item.categoryId === state.category)).slice(0, 6);
+  const icons = { hair: "✂", beard: "♢", skin: "✦", extras: "+", wax: "◈", "beard-care": "♢", "hair-care": "✧", service: "▦", installation: "⌁", products: "▣", "facial-cleaning": "✦" };
+  $("#serviceGrid").innerHTML = visible.map(item => `<article class="service-card reveal">
+    <span class="service-icon" aria-hidden="true">${icons[item.categoryId] || "✂"}</span>
+    <div class="service-meta"><span>${escapeHtml(categoryName(item.categoryId))}</span><span>◷ ${item.duration} ${t("minute", state.lang)}</span></div>
+    <h3>${escapeHtml(localized(item))}</h3>
+    <div class="price-row"><div>${item.startsFrom ? `<small>${t("from", state.lang)}</small>` : ""}<strong class="price">${money(item.price)}</strong></div>${item.type === "product" ? `<span class="type-pill">${t("product", state.lang)}</span>` : ""}</div>
+    <button class="btn btn-ghost" data-add-id="${escapeAttr(item.id)}" data-kind="${item.type === "product" ? "product" : "service"}">${t("addCart", state.lang)}</button>
+  </article>`).join("");
+  observeReveals();
+}
+
+function renderTeam() {
+  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
+    <img class="team-photo" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" width="220" height="220">
+    <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
+    <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
+  </article>`).join("");
+}
+
+function renderContent() {
+  const celebrities = state.catalog.content.filter(item => item.active !== false && item.type === "celebrity");
+  $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
+  const gallery = state.catalog.content.filter(item => item.active !== false && item.type === "gallery");
+  const galleryItems = gallery.length ? gallery : [
+    { imageUrl: "/assets/hero-barbershop-cyan.webp", titleAr: "من أعمال مزين مصر", titleEn: "El Mezaen Egypt Work" },
+    { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
+    { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
+  ];
+  $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">`).join("");
+  const news = state.catalog.content.filter(item => item.active !== false && item.type === "news");
+  $("#newsSection").hidden = news.length === 0;
+  $("#newsGrid").innerHTML = news.map(item => `<article class="content-card reveal">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">` : ""}<h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${item.linkUrl ? `<a class="btn btn-ghost" href="${escapeAttr(item.linkUrl)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</article>`).join("");
+}
+
+function renderSettings() {
+  const s = settings();
+  const business = state.lang === "ar" ? s.businessNameAr : s.businessNameEn;
+  $$('[data-business-name]').forEach(el => { el.textContent = business || (state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"); });
+  $("#hoursText").textContent = `${s.openingTime || "11:00"} – ${s.closingTime || "23:00"}`;
+  $("#addressText").textContent = state.lang === "ar" ? s.addressAr : s.addressEn;
+  $("#phoneLink").textContent = s.phone || "01093008896";
+  $("#phoneLink").href = `tel:+2${String(s.phone || "01093008896").replace(/\D/g, "")}`;
+  $("#branchCall").href = `tel:+2${String(s.phone || "01093008896").replace(/\D/g, "")}`;
+  $("#branchWhatsapp").href = `https://wa.me/${s.whatsapp || "201093008896"}`;
+  $("#aboutText").textContent = state.lang === "ar" ? (s.aboutAr || t("aboutText", state.lang)) : (s.aboutEn || t("aboutText", state.lang));
+  const icons = { Facebook: '<svg viewBox="0 0 24 24"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>', Instagram: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>', TikTok: '<svg viewBox="0 0 24 24"><path d="M14 3v11a4 4 0 1 1-4-4v4a1 1 0 1 0 1 1V3h3c.4 2 2 3.6 4 4v3c-1.5 0-2.9-.5-4-1.3V3Z"/></svg>', WhatsApp: '<svg viewBox="0 0 24 24"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg>' };
+  const links = [[s.facebook, "Facebook"], [s.instagram, "Instagram"], [s.tiktok, "TikTok"], [`https://wa.me/${s.whatsapp || "201093008896"}`, "WhatsApp"]];
+  $("#socialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${icons[name]}</a>`).join("");
+  $("#contactSocialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${icons[name]}<span>${name}</span></a>`).join("");
+}
+
+function renderAll() {
+  renderOffers();
+  renderPackages();
+  renderServices();
+  renderTeam();
+  renderContent();
+  renderSettings();
+  renderCart();
+  renderStaffPicker();
+  updateSummary();
+  observeReveals();
+}
+
+function addToCart(id) {
+  if (!itemIndex().has(id)) return;
+  if (!state.cart.some(line => line.id === id)) state.cart.push({ id, qty: 1 });
+  saveCart();
+  state.coupon = null;
+  renderCart();
+  updateSummary();
+  showToast(t("added", state.lang));
+}
+
+function removeFromCart(id) {
+  state.cart = state.cart.filter(line => line.id !== id);
+  state.coupon = null;
+  saveCart();
+  renderCart();
+  updateSummary();
+}
+
+function renderCart() {
+  const items = cartItems();
+  $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line"><div><b>${escapeHtml(localized(item))}</b><small>${item.duration ?? 0} ${t("minute", state.lang)}</small></div><strong class="line-price">${money(item.price || item.newPrice)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button></div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
+  saveCart();
+  updateProductOnlyUi();
+}
+
+function renderStaffPicker() {
+  const any = `<button class="staff-choice ${state.staffId === "any" ? "selected" : ""}" type="button" data-staff-id="any"><b>${t("anyStaff", state.lang)}</b><small>${state.lang === "ar" ? "أقرب متخصص متاح" : "Nearest available specialist"}</small></button>`;
+  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
+}
+
+function updateProductOnlyUi() {
+  const onlyProducts = state.cart.length > 0 && !needsAppointment();
+  $("#productOnlyStaff").classList.toggle("show", onlyProducts);
+  $("#productOnlyDate").classList.toggle("show", onlyProducts);
+  $("#staffPicker").hidden = onlyProducts;
+  $("#appointmentFields").hidden = onlyProducts;
+  if (onlyProducts) { state.staffId = "any"; state.date = ""; state.time = ""; }
+}
+
+function updateSummary() {
+  const items = cartItems();
+  $("#summaryItems").textContent = items.length ? items.map(item => localized(item)).join("، ") : (state.lang === "ar" ? "من فضلك اختر خدمة" : "Please choose a service");
+  $("#summaryDate").textContent = state.date && state.time ? `${state.date} • ${state.time}` : (needsAppointment() ? (state.lang === "ar" ? "من فضلك اختر التاريخ والوقت" : "Please choose date and time") : (state.lang === "ar" ? "لا يحتاج موعد" : "No appointment required"));
+  const selected = state.catalog.staff.find(item => item.id === state.staffId);
+  $("#summaryStaff").textContent = selected ? localized(selected) : t("anyStaff", state.lang);
+  $("#summarySubtotal").textContent = money(subtotal());
+  $("#summaryDiscount").textContent = money(discountAmount());
+  $("#discountPercent").textContent = `(${Number(state.coupon?.discountPercent || 0)}%)`;
+  $("#summaryTotal").textContent = money(total());
+}
+
+async function refreshCatalog(silent = true) {
+  try {
+    const catalog = await getCatalog();
+    state.catalog = { ...state.catalog, ...catalog };
+    for (const entry of state.catalog.translations || []) {
+      if (entry.key && entry.ar) translations.ar[entry.key] = entry.ar;
+      if (entry.key && entry.en) translations.en[entry.key] = entry.en;
+    }
+    applyStaticTranslations(state.lang);
+    renderAll();
+    return true;
+  } catch (error) {
+    if (!silent) showToast(t("loadError", state.lang));
+    console.error("Catalog refresh failed", error);
+    return false;
+  }
+}
+
+async function openBooking() {
+  if (firebaseConfigured) await refreshCatalog(true);
+  if (state.step === 5) resetBooking();
+  $("#bookingDialog").showModal();
+  document.body.style.overflow = "hidden";
+  goToStep(1);
+}
+
+function closeBooking() {
+  $("#bookingDialog").close();
+  document.body.style.overflow = "";
+  if (state.step === 5) resetBooking();
+}
+
+function resetBooking() {
+  state.step = 1;
+  state.staffId = "any";
+  state.date = "";
+  state.time = "";
+  state.coupon = null;
+  state.completedPreview = false;
+  $("#customerForm").reset();
+  $("#bookingDate").value = "";
+  $("#bookingTime").innerHTML = '<option value="">—</option>';
+  $("#previewNotice").classList.remove("show");
+  goToStep(1);
+}
+
+function goToStep(step) {
+  state.step = Math.max(1, Math.min(5, step));
+  $$('.booking-step').forEach(section => section.classList.toggle("active", Number(section.dataset.step) === state.step));
+  $$('#bookingProgress li').forEach((item, index) => {
+    item.classList.toggle("active", index + 1 === state.step);
+    item.classList.toggle("done", index + 1 < state.step);
+  });
+  $("#dialogActions").hidden = state.step === 5;
+  $("#bookingSummary").hidden = state.step === 5;
+  $("#prevStep").style.visibility = state.step === 1 ? "hidden" : "visible";
+  $("#nextStep").textContent = state.step === 4 ? t("createBooking", state.lang) : t("next", state.lang);
+  updateProductOnlyUi();
+  updateSummary();
+}
+
+function canAdvance() {
+  if (state.step === 1 && !state.cart.length) { showToast(t("cartHint", state.lang)); return false; }
+  if (state.step === 3 && needsAppointment() && (!state.date || !state.time)) { showToast(t("required", state.lang)); return false; }
+  return true;
+}
+
+async function nextStep() {
+  if (!canAdvance()) return;
+  if (state.step < 4) { goToStep(state.step + 1); return; }
+  if (state.step === 4) await submitBooking();
+}
+
+function setDateBounds() {
+  const now = new Date();
+  const max = new Date(now);
+  max.setDate(max.getDate() + 60);
+  const iso = date => date.toISOString().slice(0, 10);
+  $("#bookingDate").min = iso(now);
+  $("#bookingDate").max = iso(max);
+}
+
+function renderTimes() {
+  const select = $("#bookingTime");
+  const [openH, openM] = String(settings().openingTime || "11:00").split(":").map(Number);
+  const [closeH, closeM] = String(settings().closingTime || "23:00").split(":").map(Number);
+  const step = Math.max(5, Number(settings().slotMinutes || 15));
+  const duration = Math.max(0, cartItems().filter(item => item.kind !== "product").reduce((sum, item) => sum + Number(item.duration || 0), 0));
+  const selectedDate = $("#bookingDate").value;
+  const now = new Date();
+  const options = [];
+  for (let mins = openH * 60 + openM; mins + duration <= closeH * 60 + closeM; mins += step) {
+    const h = String(Math.floor(mins / 60)).padStart(2, "0");
+    const m = String(mins % 60).padStart(2, "0");
+    const value = `${h}:${m}`;
+    const candidate = new Date(`${selectedDate}T${value}:00`);
+    if (!selectedDate || candidate.getTime() <= now.getTime()) continue;
+    options.push(`<option value="${value}">${new Intl.DateTimeFormat(state.lang === "ar" ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" }).format(candidate)}</option>`);
+  }
+  select.innerHTML = `<option value="">—</option>${options.join("")}`;
+  state.time = "";
+  updateSummary();
+}
+
+async function applyCouponCode() {
+  const code = $("#couponCode").value.trim();
+  if (!code) return;
+  const button = $("#applyCoupon");
+  button.disabled = true;
+  button.textContent = t("applying", state.lang);
+  try {
+    const result = await validateCoupon({ code, subtotal: subtotal(), phone: $("#customerPhone").value.trim(), itemIds: state.cart.map(line => line.id) });
+    if (!result.valid) throw new Error(result.message || "invalid");
+    state.coupon = result;
+    updateSummary();
+    showToast(state.lang === "ar" ? "تم تطبيق الخصم" : "Discount applied");
+  } catch {
+    state.coupon = null;
+    updateSummary();
+    showToast(t("couponInvalid", state.lang));
+  } finally {
+    button.disabled = false;
+    button.textContent = t("apply", state.lang);
+  }
+}
+
+async function submitBooking() {
+  const form = $("#customerForm");
+  if (!form.reportValidity()) { showToast(t("required", state.lang)); return; }
+  const button = $("#nextStep");
+  button.disabled = true;
+  button.textContent = t("creating", state.lang);
+  const customer = {
+    firstName: $("#firstName").value.trim(),
+    lastName: $("#lastName").value.trim(),
+    phone: $("#customerPhone").value.trim(),
+    note: $("#customerNote").value.trim()
+  };
+  try {
+    const result = await createBooking({
+      items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty })),
+      staffId: state.staffId,
+      bookingDate: state.date || null,
+      bookingTime: state.time || null,
+      customer,
+      partySize: Number($("#partySize").value || 1),
+      couponCode: state.coupon?.code || $("#couponCode").value.trim() || null,
+      locale: state.lang,
+      clientRequestId: crypto.randomUUID()
+    });
+    $("#successCode").textContent = result.bookingCode;
+    JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
+    state.completedPreview = Boolean(result.preview);
+    $("#previewNotice").classList.toggle("show", state.completedPreview);
+    const phone = settings().whatsapp || "201093008896";
+    const message = state.lang === "ar" ? `مرحبًا، أنشأت حجزًا لدى مزين مصر فرع طلخا. كود الحجز: ${result.bookingCode}` : `Hello, I created a booking at El Mezaen Egypt – Talkha. Booking code: ${result.bookingCode}`;
+    $("#successWhatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    state.cart = [];
+    saveCart();
+    renderCart();
+    goToStep(5);
+  } catch (error) {
+    console.error("Booking failed", error);
+    showToast(error?.message || t("loadError", state.lang));
+  } finally {
+    button.disabled = false;
+    button.textContent = t("createBooking", state.lang);
+  }
+}
+
+$("#reviewForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await submitReview(Object.fromEntries(new FormData(event.currentTarget)));
+    event.currentTarget.reset();
+    showToast(state.lang === "ar" ? "شكرًا! تم إرسال تقييمك للمراجعة" : "Thank you! Your review was submitted");
+  } catch (error) { showToast(error.message || "تعذر إرسال التقييم"); }
+  finally { button.disabled = false; }
+});
+
+function updateCountdowns() {
+  $$('[data-countdown]').forEach(el => {
+    const diff = new Date(el.dataset.countdown).getTime() - Date.now();
+    if (diff <= 0) { el.textContent = state.lang === "ar" ? "انتهى" : "Ended"; return; }
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor(diff % 86400000 / 3600000);
+    el.textContent = state.lang === "ar" ? `${days} يوم • ${hours} ساعة` : `${days}d • ${hours}h`;
+  });
+}
+
+function escapeHtml(value) {
+  const node = document.createElement("div");
+  node.textContent = value ?? "";
+  return node.innerHTML;
+}
+function escapeAttr(value) { return escapeHtml(String(value ?? "")).replaceAll('"', "&quot;"); }
+
+let observer;
+function observeReveals() {
+  if (!('IntersectionObserver' in window)) { $$('.reveal').forEach(el => el.classList.add("visible")); return; }
+  observer ||= new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add("visible"); observer.unobserve(entry.target); } }), { rootMargin: "0px 0px -8%", threshold: .08 });
+  $$('.reveal:not(.visible)').forEach(el => observer.observe(el));
+}
+
+document.addEventListener("click", event => {
+  const add = event.target.closest("[data-add-id]");
+  if (add) addToCart(add.dataset.addId);
+  const remove = event.target.closest("[data-remove-id]");
+  if (remove) removeFromCart(remove.dataset.removeId);
+  const filter = event.target.closest("[data-category]");
+  if (filter) { state.category = filter.dataset.category; renderServices(); }
+  const staff = event.target.closest("[data-staff-id]");
+  if (staff) { state.staffId = staff.dataset.staffId; renderStaffPicker(); updateSummary(); }
+  if (event.target.closest("[data-open-booking]")) openBooking();
+  if (event.target.closest("[data-close-booking]")) closeBooking();
+});
+
+$("#langToggle").addEventListener("click", () => setLanguage(state.lang === "ar" ? "en" : "ar"));
+$("#themeToggle").addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
+$("#menuToggle").addEventListener("click", () => {
+  const open = $("#navLinks").classList.toggle("open");
+  $("#menuToggle").setAttribute("aria-expanded", String(open));
+});
+$("#navLinks").addEventListener("click", () => { $("#navLinks").classList.remove("open"); $("#menuToggle").setAttribute("aria-expanded", "false"); });
+$("#nextStep").addEventListener("click", nextStep);
+$("#prevStep").addEventListener("click", () => goToStep(state.step - 1));
+$("#applyCoupon").addEventListener("click", applyCouponCode);
+$("#bookingDate").addEventListener("change", event => { state.date = event.target.value; renderTimes(); updateSummary(); });
+$("#bookingTime").addEventListener("change", event => { state.time = event.target.value; updateSummary(); });
+$("#bookingDialog").addEventListener("click", event => { if (event.target === $("#bookingDialog")) closeBooking(); });
+$("#bookingDialog").addEventListener("close", () => { document.body.style.overflow = ""; });
+
+async function init() {
+  setTheme(state.theme);
+  applyStaticTranslations(state.lang);
+  $("#langToggle").textContent = state.lang === "ar" ? "EN" : "ع";
+  setDateBounds();
+  const siteUrl = globalThis.__SITE_URL__ || $("#canonical").href || location.origin;
+  $("#canonical").href = siteUrl;
+  await refreshCatalog(false);
+  saveCart();
+  observeReveals();
+  if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Service worker registration failed", error));
+  if (firebaseConfigured) {
+    setInterval(() => { if (!document.hidden) refreshCatalog(true); }, 30000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCatalog(true); });
+  }
+  if (!firebaseConfigured) document.documentElement.dataset.preview = "true";
+}
+
+init();

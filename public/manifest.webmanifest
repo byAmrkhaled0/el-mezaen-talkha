@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "مزين مصر – فرع طلخا",
+  "short_name": "مزين طلخا",
+  "description": "حجز خدمات الحلاقة والعناية الرجالية في مزين مصر – فرع طلخا",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#04101b",
+  "theme_color": "#071a2c",
+  "categories": ["beauty", "lifestyle"],
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

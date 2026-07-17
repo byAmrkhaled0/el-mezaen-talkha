@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  customer_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  service_name TEXT NOT NULL,
+  staff_name TEXT NOT NULL,
+  booking_date TEXT NOT NULL,
+  booking_time TEXT NOT NULL,
+  total REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

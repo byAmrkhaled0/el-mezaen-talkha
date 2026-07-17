@@ -1,0 +1,21 @@
+@import "@fontsource/tajawal/400.css";
+@import "@fontsource/tajawal/700.css";
+@import "@fontsource/alexandria/700.css";
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -10%, rgba(34,211,238,.18), transparent 34rem), #020811; color: #f4fbff; font-family: "Tajawal", sans-serif; }
+.login-page { min-height: 100dvh; }
+.login-shell { min-height: 100dvh; padding: 24px; display: grid; place-items: center; position: relative; }
+.login-back { position: absolute; top: 22px; inset-inline-start: 22px; color: #9bb4c3; text-decoration: none; }
+.login-card { width: min(440px, 100%); padding: 31px; border: 1px solid rgba(139,230,245,.18); border-radius: 27px; text-align: center; background: rgba(8,29,47,.84); box-shadow: 0 25px 80px rgba(0,0,0,.4); backdrop-filter: blur(18px); }
+.login-card img { width: 126px; height: 148px; object-fit: cover; border-radius: 18px; border: 1px solid rgba(34,211,238,.42); }
+.login-card > span { display: block; color: #22d3ee; font-weight: 700; margin-top: 12px; }
+.login-card h1 { font: 700 28px "Alexandria"; margin: 12px 0; }
+.login-card p { color: #9bb4c3; }
+.login-card label { display: block; text-align: start; margin-top: 15px; }
+.login-card label b { display: block; margin-bottom: 7px; }
+.login-card input { width: 100%; min-height: 51px; border: 1px solid rgba(139,230,245,.18); border-radius: 13px; background: #0b2135; color: #fff; padding: 10px 12px; font: inherit; }
+.login-button { width: 100%; min-height: 51px; border: 0; border-radius: 14px; margin-top: 14px; background: linear-gradient(135deg,#22d3ee,#a2f4ff); color: #00141c; font: 700 16px "Tajawal"; cursor: pointer; }
+.login-button:disabled { opacity: .5; }
+.login-error { min-height: 22px; color: #ff7287 !important; }
+.login-card small { display: block; color: #7593a2; margin-top: 13px; }
+@media (max-width: 480px) { .login-shell { padding: 13px; } .login-card { padding: 24px 17px; } .login-card h1 { font-size: 23px; } }

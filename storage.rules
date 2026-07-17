@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function canManageMedia() {
+      return request.auth != null && request.auth.token.role in ['admin', 'manager'];
+    }
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if canManageMedia()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
