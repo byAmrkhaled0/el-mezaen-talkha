@@ -33,11 +33,13 @@ assert.match(sourceCss, /@media \(max-width: 390px\)/);
 assert.match(sourceCss, /@media \(max-width: 360px\)/);
 assert.match(sourceCss, /@media \(max-width: 320px\)/);
 assert.match(adminCss, /@media\(max-width:430px\)/);
-assert.match(index, /id="branchCall"[^>]+href="tel:/);
-assert.match(index, /id="branchWhatsapp"[^>]+href="https:\/\/wa\.me\//);
-assert.match(appSource, /#branchCall/);
-assert.match(appSource, /#branchWhatsapp/);
-assert.match(appSource, /#contactSocialLinks/);
+assert.match(index, /id="branchDialog"/);
+assert.match(index, /id="branchPicker"/);
+assert.match(index, /id="branchFooterGrid"/);
+assert.match(index, /id="summaryBranch"/);
+assert.match(appSource, /branchId:/);
+assert.match(appSource, /data-select-branch/);
+assert.match(appSource, /data-book-branch/);
 
 for (const html of [index, admin, login]) {
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);

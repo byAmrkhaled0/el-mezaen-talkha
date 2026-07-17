@@ -6,14 +6,14 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#071a2c">
   <link rel="icon" href="/assets/el-mezaen-logo.jpeg" type="image/jpeg">
-  <title>لوحة إدارة مزين مصر – طلخا</title>
+  <title>لوحة إدارة مزين مصر</title>
 </head>
 <body>
   <div class="admin-loading" id="authLoading">جارٍ التحقق من الصلاحية...</div>
   <div class="admin-app" id="adminApp" hidden>
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="إغلاق القائمة"></button>
     <aside class="sidebar" id="sidebar">
-      <a class="admin-brand" href="/"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" width="55" height="65"><span><strong>مزين مصر</strong><small>إدارة فرع طلخا</small></span></a>
+      <a class="admin-brand" href="/"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" width="55" height="65"><span><strong>مزين مصر</strong><small>لوحة الإدارة</small></span></a>
       <nav aria-label="أقسام لوحة الإدارة">
         <button class="active" data-section="dashboard">⌂ الرئيسية والإحصائيات</button>
         <button data-section="bookings">▦ الحجوزات</button>
@@ -28,16 +28,13 @@
         <button data-section="gallery">▧ الصور والمعرض</button>
         <button data-section="celebrities">★ صور المشاهير</button>
         <button data-section="posts">▤ الأخبار والمنشورات</button>
-        <button data-section="contact">☎ بيانات التواصل والسوشيال</button>
         <button data-section="settings">⚙ إعدادات الموقع</button>
-        <button data-section="translations">文 اللغة والترجمات</button>
         <button data-section="activity">☷ سجل الأنشطة</button>
-        <button data-section="users">♜ صلاحيات المستخدمين</button>
       </nav>
     </aside>
     <main class="admin-main">
       <header class="admin-header">
-        <div class="header-title"><button class="square-button mobile-menu" id="adminMenu" type="button">☰</button><div><span id="welcomeText">لوحة إدارة الفرع</span><h1 id="pageTitle">الرئيسية والإحصائيات</h1></div></div>
+        <div class="header-title"><button class="square-button mobile-menu" id="adminMenu" type="button">☰</button><div><span id="welcomeText">لوحة إدارة مزين مصر</span><h1 id="pageTitle">الرئيسية والإحصائيات</h1></div></div>
         <div class="header-actions"><a class="small-button" href="/" target="_blank">عرض الموقع</a><button class="square-button" id="pushButton" type="button" title="تفعيل إشعارات الحجز">🔔</button><button class="square-button" id="adminTheme" type="button" title="تغيير المظهر">☀</button><button class="small-button danger" id="logoutButton" type="button">تسجيل الخروج</button></div>
       </header>
 
@@ -50,19 +47,19 @@
           <article class="metric-card"><span>غير مدفوع</span><strong id="statUnpaid">0</strong></article>
           <article class="metric-card"><span>آخر مبلغ محصل</span><strong id="statLastCollected">0 ج.م</strong></article>
         </div>
-        <article class="admin-panel"><div class="panel-head"><div><h2>أحدث الحجوزات</h2><p>البيانات تتحدث تلقائيًا كل 20 ثانية.</p></div><button class="small-button" data-go="bookings">كل الحجوزات</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
+        <article class="admin-panel"><div class="panel-head"><div><h2>أحدث الحجوزات</h2><p>البيانات تتحدث تلقائيًا كل 20 ثانية.</p></div><button class="small-button" data-go="bookings">كل الحجوزات</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
       </section>
 
       <section class="admin-section" id="bookings">
-        <article class="admin-panel"><div class="panel-head wrap"><div><h2>إدارة الحجوزات</h2><p>تأكيد، رفض، إلغاء أو إكمال الحجز مع طباعة شيك.</p></div><div class="toolbar"><input id="bookingSearch" placeholder="بحث بالكود أو الاسم أو الهاتف"><select id="bookingStatusFilter"><option value="all">كل الحالات</option><option value="pending">جديد</option><option value="confirmed">مؤكد</option><option value="completed">مكتمل</option><option value="rejected">مرفوض</option><option value="cancelled">ملغي</option></select><button class="small-button primary" id="openScanner">▥ مسح الباركود</button><button class="small-button" id="exportBookings">تصدير CSV</button></div></div><div class="table-scroll"><table class="wide-table"><thead><tr><th>الكود</th><th>العميل</th><th>الخدمات والإجمالي</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th><th>إجراءات</th></tr></thead><tbody id="bookingsTable"></tbody></table></div></article>
+        <article class="admin-panel"><div class="panel-head wrap"><div><h2>إدارة الحجوزات</h2><p>تأكيد، رفض، إلغاء أو إكمال الحجز مع طباعة شيك.</p></div><div class="toolbar"><input id="bookingSearch" placeholder="بحث بالكود أو الاسم أو الهاتف"><select id="bookingBranchFilter"><option value="all">كل الفروع</option></select><select id="bookingStatusFilter"><option value="all">كل الحالات</option><option value="pending">جديد</option><option value="confirmed">مؤكد</option><option value="completed">مكتمل</option><option value="rejected">مرفوض</option><option value="cancelled">ملغي</option></select><button class="small-button primary" id="openScanner">▥ مسح الباركود</button><button class="small-button" id="exportBookings">تصدير CSV</button></div></div><div class="table-scroll"><table class="wide-table"><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات والإجمالي</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th><th>إجراءات</th></tr></thead><tbody id="bookingsTable"></tbody></table></div></article>
       </section>
 
       <section class="admin-section" id="revenue">
         <div class="metric-grid compact"><article class="metric-card"><span>إيراد اليوم</span><strong id="revenueToday">0</strong></article><article class="metric-card"><span>إيراد الشهر</span><strong id="revenueMonth">0</strong></article><article class="metric-card"><span>الإجمالي</span><strong id="revenueTotal">0</strong></article><article class="metric-card"><span>آخر تحصيل</span><strong id="revenueLast">0</strong></article></div>
-        <article class="admin-panel"><div class="panel-head wrap"><div><h2>سجل الدفع والإيرادات</h2><p>كل عملية دفع أو استرداد تُسجل مرة واحدة بمعاملة خادم.</p></div><div class="toolbar"><input type="date" id="revenueFrom"><input type="date" id="revenueTo"><select id="revenueStaff"><option value="all">كل العاملين</option></select><input id="revenueService" placeholder="معرّف الخدمة"><button class="small-button" id="applyRevenueFilter">تطبيق</button><button class="small-button" id="exportRevenue">تصدير CSV</button></div></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الحجز</th><th>النوع</th><th>الطريقة</th><th>العامل</th><th>المبلغ</th></tr></thead><tbody id="revenueTable"></tbody></table></div></article>
+        <article class="admin-panel"><div class="panel-head wrap"><div><h2>سجل الدفع والإيرادات</h2><p>كل عملية دفع أو استرداد تُسجل مرة واحدة بمعاملة خادم.</p></div><div class="toolbar"><input type="date" id="revenueFrom"><input type="date" id="revenueTo"><select id="revenueBranch"><option value="all">كل الفروع</option></select><select id="revenueStaff"><option value="all">كل العاملين</option></select><input id="revenueService" placeholder="معرّف الخدمة"><button class="small-button" id="applyRevenueFilter">تطبيق</button><button class="small-button" id="exportRevenue">تصدير CSV</button></div></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الحجز</th><th>النوع</th><th>الطريقة</th><th>العامل</th><th>المبلغ</th></tr></thead><tbody id="revenueTable"></tbody></table></div></article>
       </section>
 
-      <section class="admin-section" id="services"><article class="admin-panel"><div class="panel-head wrap"><div><h2>الخدمات والتصنيفات</h2><p>إضافة وتعديل وحذف وإخفاء الخدمات من مكان واحد.</p></div><div class="toolbar"><input name="servicesSearch" data-entity-search="services" placeholder="بحث في الخدمات" aria-label="بحث في الخدمات"><button class="small-button" data-new="categories">+ تصنيف</button><button class="small-button primary" data-new="services">+ خدمة</button></div></div><div class="split-lists"><div><h3>التصنيفات</h3><div class="entity-grid" data-list="categories"></div></div><div><h3>الخدمات</h3><div class="entity-grid dense" data-list="services"></div></div></div></article></section>
+      <section class="admin-section" id="services"><article class="admin-panel services-manager"><div class="panel-head wrap"><div><h2>الخدمات والتصنيفات</h2><p>إدارة الأسعار والمدد والتصنيفات من شاشة واحدة مرتبة.</p></div><div class="toolbar services-toolbar"><input name="servicesSearch" data-entity-search="services" placeholder="ابحث باسم الخدمة" aria-label="بحث في الخدمات"><button class="small-button" data-new="categories">+ تصنيف جديد</button><button class="small-button primary" data-new="services">+ خدمة جديدة</button></div></div><div class="split-lists"><section class="category-column"><div class="list-title"><h3>التصنيفات</h3><span>تنظيم الخدمات</span></div><div class="entity-grid category-grid" data-list="categories"></div></section><section class="services-column"><div class="list-title"><h3>الخدمات</h3><span>السعر والمدة والحالة</span></div><div class="entity-grid dense services-grid" data-list="services"></div></section></div></article></section>
       <section class="admin-section" id="packages"><entity-panel data-collection="packages" data-title="الباقات"></entity-panel></section>
       <section class="admin-section" id="offers"><entity-panel data-collection="offers" data-title="العروض"></entity-panel></section>
       <section class="admin-section" id="coupons"><entity-panel data-collection="coupons" data-title="أكواد الخصم"></entity-panel></section>
@@ -72,11 +69,8 @@
       <section class="admin-section" id="gallery"><content-panel data-type="gallery" data-title="الصور والمعرض"></content-panel></section>
       <section class="admin-section" id="celebrities"><content-panel data-type="celebrity" data-title="صور المشاهير"></content-panel></section>
       <section class="admin-section" id="posts"><content-panel data-type="news" data-title="الأخبار والمنشورات"></content-panel></section>
-      <section class="admin-section" id="contact"><article class="admin-panel"><div class="panel-head"><div><h2>بيانات التواصل والسوشيال</h2><p>تظهر في الموقع والفوتر وروابط واتساب.</p></div></div><form class="settings-form cols" id="contactSettings"><label>رقم الهاتف<input name="phone"></label><label>رقم واتساب الدولي<input name="whatsapp"></label><label>العنوان بالعربية<input name="addressAr"></label><label>Address in English<input name="addressEn"></label><label>Facebook<input name="facebook" type="url"></label><label>Instagram<input name="instagram" type="url"></label><label>TikTok<input name="tiktok" type="url"></label><button class="small-button primary">حفظ البيانات</button></form></article></section>
       <section class="admin-section" id="settings"><article class="admin-panel"><div class="panel-head"><div><h2>إعدادات الموقع</h2><p>الاسم والنبذة والعملة والهوية النصية.</p></div></div><form class="settings-form cols" id="siteSettings"><label>اسم النشاط بالعربية<input name="businessNameAr"></label><label>Business Name<input name="businessNameEn"></label><label class="full">نبذة بالعربية<textarea name="aboutAr"></textarea></label><label class="full">About in English<textarea name="aboutEn"></textarea></label><label>العملة<input name="currency" value="EGP"></label><button class="small-button primary">حفظ الإعدادات</button></form></article></section>
-      <section class="admin-section" id="translations"><entity-panel data-collection="translations" data-title="اللغة والترجمات"></entity-panel></section>
       <section class="admin-section" id="activity"><entity-panel data-collection="activityLogs" data-title="سجل الأنشطة" data-readonly="true"></entity-panel></section>
-      <section class="admin-section" id="users"><article class="admin-panel"><div class="panel-head"><div><h2>صلاحيات المستخدمين</h2><p>Admin / Manager / Receptionist / Accountant</p></div></div><form class="settings-form cols" id="roleForm"><label>Firebase UID<input name="uid" required></label><label>البريد الإلكتروني<input name="email" type="email"></label><label>الصلاحية<select name="role"><option value="admin">Admin</option><option value="manager">Manager</option><option value="receptionist">Receptionist</option><option value="accountant">Accountant</option></select></label><button class="small-button primary">حفظ الصلاحية</button></form><div class="entity-grid" data-list="users"></div></article></section>
     </main>
   </div>
 

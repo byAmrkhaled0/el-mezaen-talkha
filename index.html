@@ -4,19 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071a2c">
-  <meta name="description" content="احجز خدمات الحلاقة والعناية الرجالية في مزين مصر فرع طلخا. قص شعر، دقن، تنظيف بشرة، باقات وتركيب شبكية بمواعيد وأسعار واضحة.">
-  <meta name="keywords" content="حلاق طلخا, مزين مصر, حجز حلاق, صالون رجالي طلخا, تنظيف بشرة للرجال, الدقهلية">
+  <meta name="description" content="احجز خدمات الحلاقة والعناية الرجالية في مزين مصر بفرعي طلخا والمشاية. اختر الفرع والخدمات والمتخصص والموعد في خطوات واضحة.">
+  <meta name="keywords" content="حلاق طلخا, حلاق المشاية, مزين مصر, حجز حلاق المنصورة, صالون رجالي, تنظيف بشرة للرجال, الدقهلية">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta property="og:type" content="business.business">
   <meta property="og:locale" content="ar_EG">
   <meta property="og:locale:alternate" content="en_US">
-  <meta property="og:title" content="مزين مصر – فرع طلخا | احجز لوكك">
-  <meta property="og:description" content="خدمات حلاقة وعناية رجالية احترافية في طلخا منذ 1995.">
+  <meta property="og:title" content="مزين مصر | فرعا طلخا والمشاية">
+  <meta property="og:description" content="اختر فرع طلخا أو المشاية واحجز خدمات الحلاقة والعناية الرجالية بسهولة.">
   <meta property="og:image" content="__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp">
-  <meta property="og:site_name" content="مزين مصر – فرع طلخا">
+  <meta property="og:site_name" content="مزين مصر">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="مزين مصر – فرع طلخا">
-  <meta name="twitter:description" content="احجز خدمات الحلاقة والعناية الرجالية في طلخا.">
+  <meta name="twitter:title" content="مزين مصر | فرعا طلخا والمشاية">
+  <meta name="twitter:description" content="اختر الفرع واحجز خدمات الحلاقة والعناية الرجالية بسهولة.">
   <meta name="twitter:image" content="__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp">
   <link rel="canonical" id="canonical" href="__SITE_URL__">
   <link rel="alternate" hreflang="ar-EG" href="__SITE_URL__?lang=ar">
@@ -25,34 +25,38 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
   <link rel="apple-touch-icon" href="/assets/el-mezaen-logo.jpeg">
-  <title>مزين مصر – فرع طلخا | حجز حلاق وعناية رجالية</title>
+  <title>مزين مصر | حجز فرعي طلخا والمشاية</title>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": ["Barbershop", "LocalBusiness"],
-    "name": "مزين مصر – فرع طلخا",
-    "alternateName": "El Mezaen Egypt – Talkha Branch",
-    "url": "__SITE_URL__",
-    "image": "__SITE_ORIGIN__/assets/el-mezaen-logo.jpeg",
-    "telephone": "+201093008896",
-    "priceRange": "EGP",
-    "address": {
-      "@type": "PostalAddress",
-      "addressLocality": "طلخا",
-      "addressRegion": "الدقهلية",
-      "addressCountry": "EG"
-    },
-    "areaServed": ["طلخا", "المنصورة", "الدقهلية"],
-    "openingHoursSpecification": [{
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-      "opens": "11:00",
-      "closes": "23:00"
-    }],
-    "sameAs": [
-      "https://www.facebook.com/profile.php?id=61559147948668",
-      "https://www.instagram.com/ahmed_elmzin1",
-      "https://www.tiktok.com/@ahmedelmzin1"
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "__SITE_URL__#organization",
+        "name": "مزين مصر",
+        "alternateName": "El Mezaen Egypt",
+        "url": "__SITE_URL__",
+        "logo": "__SITE_ORIGIN__/assets/el-mezaen-logo.jpeg",
+        "sameAs": ["https://www.facebook.com/profile.php?id=61559147948668", "https://www.instagram.com/ahmed_elmzin1", "https://www.tiktok.com/@ahmedelmzin1"]
+      },
+      {
+        "@type": ["Barbershop", "LocalBusiness"],
+        "@id": "__SITE_URL__#talkha",
+        "parentOrganization": {"@id": "__SITE_URL__#organization"},
+        "name": "مزين مصر – فرع طلخا",
+        "telephone": "+201093008896",
+        "priceRange": "EGP",
+        "address": {"@type": "PostalAddress", "streetAddress": "تقسيم بهاء الشربيني، أمام محل لندن", "addressLocality": "طلخا", "addressRegion": "الدقهلية", "addressCountry": "EG"}
+      },
+      {
+        "@type": ["Barbershop", "LocalBusiness"],
+        "@id": "__SITE_URL__#mashaya",
+        "parentOrganization": {"@id": "__SITE_URL__#organization"},
+        "name": "مزين مصر – فرع المشاية",
+        "telephone": "+201101006961",
+        "priceRange": "EGP",
+        "address": {"@type": "PostalAddress", "streetAddress": "المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع", "addressLocality": "المنصورة", "addressRegion": "الدقهلية", "addressCountry": "EG"}
+      }
     ]
   }
   </script>
@@ -61,9 +65,9 @@
   <a class="skip-link" href="#main">تخطي إلى المحتوى</a>
   <header class="site-header" id="home">
     <div class="container nav-wrap">
-      <a class="brand" href="#home" aria-label="مزين مصر – فرع طلخا">
-        <img src="/assets/el-mezaen-mark-v2.png" alt="شعار مزين مصر فرع طلخا" data-alt-ar="شعار مزين مصر فرع طلخا" data-alt-en="El Mezaen Egypt Talkha branch logo" width="58" height="68">
-        <span><strong data-business-name>مزين مصر</strong><small data-i18n="branch">فرع طلخا</small></span>
+      <a class="brand" href="#home" aria-label="مزين مصر">
+        <img src="/assets/el-mezaen-mark-v2.png" alt="شعار مزين مصر" data-alt-ar="شعار مزين مصر" data-alt-en="El Mezaen Egypt logo" width="58" height="68">
+        <span><strong data-business-name>مزين مصر</strong><small data-branch-label data-i18n="branch">فرعا طلخا والمشاية</small></span>
       </a>
       <nav class="nav-links" id="navLinks" aria-label="التنقل الرئيسي">
         <a href="#home" data-i18n="home">الرئيسية</a>
@@ -75,6 +79,7 @@
         <a href="#contact" data-i18n="contact">تواصل معنا</a>
       </nav>
       <div class="nav-actions">
+        <button class="branch-switch" id="branchSwitch" type="button" data-open-branch><span aria-hidden="true">⌖</span><b data-branch-switch-text data-i18n="chooseBranch">اختر الفرع</b></button>
         <button class="icon-btn" id="langToggle" type="button" data-i18n-aria="language" aria-label="تغيير اللغة">EN</button>
         <button class="icon-btn" id="themeToggle" type="button" data-i18n-aria="theme" aria-label="تغيير المظهر">☀</button>
         <button class="icon-btn menu-toggle" id="menuToggle" type="button" data-i18n-aria="menu" aria-label="القائمة" aria-controls="navLinks" aria-expanded="false">☰</button>
@@ -89,6 +94,7 @@
       <span class="floating-tool comb" aria-hidden="true">▥</span>
       <div class="container hero-grid">
         <div class="hero-copy reveal">
+          <button class="selected-branch-pill" type="button" data-open-branch><span aria-hidden="true">⌖</span><span data-branch-pill-text data-i18n="chooseBranch">اختر الفرع</span><b>‹</b></button>
           <span class="eyebrow" data-i18n="heroBadge">منذ 1995 • خبرة تصنع الفارق</span>
           <h1 id="hero-title"><span data-i18n="heroTitle1">لوكك يبدأ من</span> <em data-i18n="heroTitle2">مزين مصر</em></h1>
           <p data-i18n="heroText">اختار كل الخدمات التي تحتاجها في سلة واحدة، وحدد المتخصص والموعد المناسب في خطوات بسيطة.</p>
@@ -103,7 +109,7 @@
           </div>
         </div>
         <div class="hero-visual reveal">
-          <img class="hero-photo" src="/assets/hero-barbershop-cyan.webp" alt="تجربة حلاقة رجالية احترافية في مزين مصر طلخا" data-alt-ar="تجربة حلاقة رجالية احترافية في مزين مصر طلخا" data-alt-en="Professional men's grooming at El Mezaen Egypt Talkha" width="640" height="853" fetchpriority="high">
+          <img class="hero-photo" src="/assets/hero-barbershop-cyan.webp" alt="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-ar="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-en="Professional men's grooming at El Mezaen Egypt" width="640" height="853" fetchpriority="high">
           <div class="logo-plate"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="120" height="142"></div>
           <div class="hero-stat"><strong>1995</strong><span>Since</span></div>
         </div>
@@ -119,7 +125,7 @@
 
     <section class="section-pad" id="packages" aria-labelledby="packages-title">
       <div class="container">
-        <div class="section-head reveal"><div><span class="section-kicker" data-i18n="packagesTag">قيمة أكبر في زيارة واحدة</span><h2 id="packages-title" data-i18n="packagesTitle">الباقات</h2><p data-i18n="packagesText">الأسعار والمدد كما هي في فرع طلخا.</p></div></div>
+        <div class="section-head reveal"><div><span class="section-kicker" data-i18n="packagesTag">قيمة أكبر في زيارة واحدة</span><h2 id="packages-title" data-i18n="packagesTitle">الباقات</h2><p data-i18n="packagesText">اختار الفرع ثم احجز الباقة المناسبة بسهولة.</p></div></div>
         <div class="package-grid horizontal-cards" id="packageGrid"></div>
       </div>
     </section>
@@ -141,11 +147,11 @@
         <article class="about-card panel reveal">
           <span class="section-kicker" data-i18n="aboutTag">عن مزين مصر</span>
           <h2 id="about-title" data-i18n="aboutTitle">منذ 1995.. التفاصيل هي سر اللوك</h2>
-          <p id="aboutText" data-i18n="aboutText">وجهتك للحلاقة والعناية الرجالية في طلخا، بخبرة تهتم بالنظافة والدقة والنتيجة المناسبة ليك.</p>
+          <p id="aboutText" data-i18n="aboutText">وجهتك للحلاقة والعناية الرجالية في طلخا والمشاية، بخبرة تهتم بالنظافة والدقة والنتيجة المناسبة ليك.</p>
           <div class="value-list"><span data-i18n="sanitized">أدوات نظيفة</span><span data-i18n="professional">خدمة احترافية</span><span data-i18n="modern">أحدث القصات</span></div>
         </article>
         <div class="gallery-mosaic reveal" id="galleryGrid" aria-label="معرض أعمال مزين مصر">
-          <img src="/assets/hero-barbershop-cyan.webp" alt="من أعمال مزين مصر فرع طلخا" loading="lazy" width="640" height="853">
+          <img src="/assets/hero-barbershop-cyan.webp" alt="من أعمال مزين مصر" loading="lazy" width="640" height="853">
           <img src="/assets/celebrity-1.webp" alt="صورة من معرض مزين مصر" loading="lazy" width="640" height="480">
           <img src="/assets/celebrity-2.webp" alt="لحظة مميزة في مزين مصر" loading="lazy" width="640" height="480">
         </div>
@@ -183,14 +189,13 @@
   </main>
 
   <footer class="site-footer" id="contact">
-    <div class="container footer-grid">
-      <div>
-        <a class="brand footer-brand" href="#home"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="70" height="83"><span><strong data-business-name>مزين مصر</strong><small data-i18n="branch">فرع طلخا</small></span></a>
-        <p data-i18n="footerAbout">وجهتك للحلاقة والعناية الرجالية في طلخا.</p>
+    <div class="container footer-branches-layout">
+      <div class="footer-intro">
+        <a class="brand footer-brand" href="#home"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="70" height="83"><span><strong data-business-name>مزين مصر</strong><small data-i18n="branch">فرعا طلخا والمشاية</small></span></a>
+        <p data-i18n="footerAbout">وجهتك للحلاقة والعناية الرجالية في طلخا والمشاية.</p>
         <div class="social-links" id="socialLinks"></div>
       </div>
-      <div><h3 data-i18n="workingHours">مواعيد العمل</h3><p><span data-i18n="daily">يوميًا</span><br><span id="hoursText">11:00 – 23:00</span></p></div>
-      <div class="contact-panel"><h3 data-i18n="bookingHelp">الحجز والاستفسار</h3><p><a id="phoneLink" href="tel:+201093008896">01093008896</a><br><span id="addressText">طلخا، الدقهلية، مصر</span></p><div class="contact-actions"><a class="contact-action call" id="branchCall" href="tel:+201093008896" aria-label="اتصل بفرع طلخا"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/></svg><span data-i18n="callNow">اتصل الآن</span></a><a class="contact-action whatsapp" id="branchWhatsapp" href="https://wa.me/201093008896" target="_blank" rel="noopener" aria-label="واتساب فرع طلخا"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg><span data-i18n="whatsappBranch">واتساب المحل</span></a></div><div class="contact-socials" id="contactSocialLinks"></div></div>
+      <div class="footer-branch-grid" id="branchFooterGrid" aria-live="polite"></div>
     </div>
     <div class="container footer-bottom"><span>© 2026 El Mezaen Egypt</span><div class="developer-credit"><strong data-i18n="developedBy">تم البرمجة بواسطة المهندس عمرو خالد</strong><a href="https://wa.me/201008454029" target="_blank" rel="noopener" aria-label="واتساب المبرمج"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg><span>01008454029</span></a></div></div>
   </footer>
@@ -198,12 +203,30 @@
   <button class="cart-fab btn btn-primary" type="button" data-open-booking aria-label="فتح سلة الحجز">🛒 <span data-i18n="cart">السلة</span> <span class="count-badge" data-cart-count>0</span></button>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <dialog class="booking-dialog branch-dialog" id="branchDialog" aria-labelledby="branch-dialog-title">
+    <div class="dialog-shell branch-dialog-shell">
+      <header class="dialog-head">
+        <div><span class="section-kicker">EL MEZAEN</span><h2 id="branch-dialog-title" data-i18n="chooseBranch">اختر الفرع</h2></div>
+        <button class="dialog-close" type="button" data-close-branch aria-label="إغلاق">×</button>
+      </header>
+      <div class="branch-dialog-content">
+        <p data-i18n="chooseBranchText">اختر الفرع الأقرب لك، وبعدها كمّل الحجز في خطوات بسيطة.</p>
+        <div class="branch-picker" id="branchPicker"></div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="booking-dialog" id="bookingDialog" aria-labelledby="booking-title">
     <div class="dialog-shell">
       <header class="dialog-head">
         <div><span class="section-kicker">El Mezaen</span><h2 id="booking-title" data-i18n="bookingTitle">احجز موعدك</h2></div>
         <button class="dialog-close" type="button" data-close-booking aria-label="إغلاق">×</button>
       </header>
+      <div class="booking-branch-bar">
+        <span class="booking-branch-icon" aria-hidden="true">⌖</span>
+        <div><small data-i18n="selectedBranch">الفرع المختار</small><strong id="bookingBranchName">—</strong><span id="bookingBranchAddress">—</span></div>
+        <button type="button" data-change-branch data-i18n="changeBranch">تغيير الفرع</button>
+      </div>
       <ol class="booking-progress" id="bookingProgress">
         <li class="active"><span>1</span><b data-i18n="stepServices">الخدمات</b></li>
         <li><span>2</span><b data-i18n="stepStaff">الفريق</b></li>
@@ -256,6 +279,7 @@
         <aside class="booking-summary" id="bookingSummary">
           <h3 data-i18n="review">ملخص الحجز</h3>
           <dl>
+            <div><dt data-i18n="selectedBranch">الفرع المختار</dt><dd id="summaryBranch">—</dd></div>
             <div><dt data-i18n="servicesSelected">الخدمات المختارة</dt><dd id="summaryItems">—</dd></div>
             <div><dt data-i18n="dateTime">التاريخ والوقت</dt><dd id="summaryDate">—</dd></div>
             <div><dt data-i18n="staffMember">عضو الفريق</dt><dd id="summaryStaff">أي عضو</dd></div>

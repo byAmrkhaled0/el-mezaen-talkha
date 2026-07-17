@@ -8,7 +8,7 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const state = {
   lang: getLang(),
   theme: localStorage.getItem("mz-theme") === "light" ? "light" : "dark",
-  catalog: { categories: [], services: [], packages: [], staff: [], offers: [], content: [], translations: [], settings: {} },
+  catalog: { branches: [], categories: [], services: [], packages: [], staff: [], offers: [], content: [], translations: [], settings: {} },
   cart: JSON.parse(localStorage.getItem("mz-cart") || "[]"),
   category: "all",
   step: 1,
@@ -16,6 +16,7 @@ const state = {
   date: "",
   time: "",
   coupon: null,
+  branchId: localStorage.getItem("mz-branch") || "",
   completedPreview: false
 };
 
@@ -23,6 +24,26 @@ const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en
 const localized = (item, key = "name") => item?.[`${key}${state.lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
 const needsAppointment = () => cartItems().some(item => item.kind !== "product");
 const settings = () => state.catalog.settings || {};
+const currentBranch = () => state.catalog.branches.find(item => item.id === state.branchId && item.active !== false) || null;
+const availableAtBranch = item => !state.branchId || !Array.isArray(item?.branchIds) || !item.branchIds.length || item.branchIds.includes(state.branchId);
+const branchName = branch => localized(branch) || (state.lang === "ar" ? branch?.nameAr : branch?.nameEn) || "";
+const branchAddress = branch => state.lang === "ar" ? branch?.addressAr : branch?.addressEn || branch?.addressAr;
+const phoneHref = value => {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.startsWith("0") ? `tel:+2${digits}` : `tel:+${digits}`;
+};
+const whatsappNumber = value => {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.startsWith("0") ? `2${digits}` : digits;
+};
+const socialIcons = {
+  Facebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>',
+  Instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>',
+  TikTok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v11a4 4 0 1 1-4-4v4a1 1 0 1 0 1 1V3h3c.4 2 2 3.6 4 4v3c-1.5 0-2.9-.5-4-1.3V3Z"/></svg>',
+  WhatsApp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg>',
+  Phone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/></svg>',
+  Map: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>'
+};
 
 function itemIndex() {
   return new Map([
@@ -34,7 +55,7 @@ function itemIndex() {
 
 function cartItems() {
   const index = itemIndex();
-  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1 })).filter(item => item.id);
+  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1 })).filter(item => item.id && availableAtBranch(item));
 }
 
 function subtotal() { return cartItems().reduce((sum, item) => sum + Number(item.price || item.newPrice || 0) * item.qty, 0); }
@@ -66,8 +87,10 @@ function setLanguage(lang) {
   localStorage.setItem("mz-lang", lang);
   applyStaticTranslations(lang);
   $("#langToggle").textContent = lang === "ar" ? "EN" : "ع";
-  const title = lang === "ar" ? "مزين مصر – فرع طلخا | حجز حلاق وعناية رجالية" : "El Mezaen Egypt – Talkha | Barber Booking & Men's Grooming";
-  const description = lang === "ar" ? "احجز خدمات الحلاقة والعناية الرجالية في مزين مصر فرع طلخا. أسعار ومواعيد واضحة وحجز سريع." : "Book professional barber and men's grooming services at El Mezaen Egypt, Talkha. Clear prices, durations and fast online booking.";
+  const branch = currentBranch();
+  const selectedName = branch ? branchName(branch) : (lang === "ar" ? "فرعي طلخا والمشاية" : "Talkha & El Mashaya branches");
+  const title = lang === "ar" ? `مزين مصر – ${selectedName} | حجز حلاقة وعناية رجالية` : `El Mezaen Egypt – ${selectedName} | Barber Booking`;
+  const description = lang === "ar" ? "اختر فرع طلخا أو المشاية واحجز خدمات الحلاقة والعناية الرجالية بأسعار ومواعيد واضحة." : "Choose Talkha or El Mashaya and book professional barber and men's grooming services with clear prices and times.";
   document.title = title;
   $('meta[name="description"]').content = description;
   $('meta[property="og:title"]').content = title;
@@ -82,7 +105,7 @@ function categoryName(id) {
 
 function renderOffers() {
   const now = Date.now();
-  const offers = state.catalog.offers.filter(offer => offer.active !== false && offer.status !== "stopped" && (!offer.startAt || new Date(offer.startAt).getTime() <= now) && (!offer.endAt || new Date(offer.endAt).getTime() >= now));
+  const offers = state.catalog.offers.filter(offer => availableAtBranch(offer) && offer.active !== false && offer.status !== "stopped" && (!offer.startAt || new Date(offer.startAt).getTime() <= now) && (!offer.endAt || new Date(offer.endAt).getTime() >= now));
   $("#offersGrid").innerHTML = offers.length ? offers.map(offer => {
     const price = Number(offer.newPrice ?? offer.price ?? 0);
     const old = Number(offer.oldPrice ?? offer.originalPrice ?? price);
@@ -98,7 +121,7 @@ function renderOffers() {
 }
 
 function renderPackages() {
-  $("#packageGrid").innerHTML = state.catalog.packages.filter(item => item.active !== false && item.status !== "expired").map(item => {
+  $("#packageGrid").innerHTML = state.catalog.packages.filter(item => availableAtBranch(item) && item.active !== false && item.status !== "expired").map(item => {
     const badge = item.badge === "popular" ? t("featured", state.lang) : item.badge === "special" ? t("special", state.lang) : t("package", state.lang);
     return `<article class="package-card ${item.badge ? "highlight" : ""} reveal">
       <div class="package-cover"><img src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy"><span>${badge}</span></div>
@@ -111,7 +134,7 @@ function renderPackages() {
 }
 
 function renderServices() {
-  const active = state.catalog.services.filter(item => item.active !== false);
+  const active = state.catalog.services.filter(item => availableAtBranch(item) && item.active !== false);
   $("#categoryFilters").innerHTML = `<button class="filter-chip ${state.category === "all" ? "active" : ""}" type="button" data-category="all" role="tab">${t("all", state.lang)}</button>` + state.catalog.categories.filter(cat => cat.active !== false && cat.id !== "packages" && active.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${state.category === cat.id ? "active" : ""}" type="button" data-category="${escapeAttr(cat.id)}" role="tab">${escapeHtml(localized(cat))}</button>`).join("");
   const visible = (state.category === "all" ? active : active.filter(item => item.categoryId === state.category)).slice(0, 6);
   const icons = { hair: "✂", beard: "♢", skin: "✦", extras: "+", wax: "◈", "beard-care": "♢", "hair-care": "✧", service: "▦", installation: "⌁", products: "▣", "facial-cleaning": "✦" };
@@ -126,7 +149,7 @@ function renderServices() {
 }
 
 function renderTeam() {
-  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
+  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => availableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
     <img class="team-photo" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" width="220" height="220">
     <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
     <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
@@ -150,19 +173,46 @@ function renderContent() {
 
 function renderSettings() {
   const s = settings();
+  const branch = currentBranch();
   const business = state.lang === "ar" ? s.businessNameAr : s.businessNameEn;
   $$('[data-business-name]').forEach(el => { el.textContent = business || (state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"); });
-  $("#hoursText").textContent = `${s.openingTime || "11:00"} – ${s.closingTime || "23:00"}`;
-  $("#addressText").textContent = state.lang === "ar" ? s.addressAr : s.addressEn;
-  $("#phoneLink").textContent = s.phone || "01093008896";
-  $("#phoneLink").href = `tel:+2${String(s.phone || "01093008896").replace(/\D/g, "")}`;
-  $("#branchCall").href = `tel:+2${String(s.phone || "01093008896").replace(/\D/g, "")}`;
-  $("#branchWhatsapp").href = `https://wa.me/${s.whatsapp || "201093008896"}`;
   $("#aboutText").textContent = state.lang === "ar" ? (s.aboutAr || t("aboutText", state.lang)) : (s.aboutEn || t("aboutText", state.lang));
-  const icons = { Facebook: '<svg viewBox="0 0 24 24"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>', Instagram: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>', TikTok: '<svg viewBox="0 0 24 24"><path d="M14 3v11a4 4 0 1 1-4-4v4a1 1 0 1 0 1 1V3h3c.4 2 2 3.6 4 4v3c-1.5 0-2.9-.5-4-1.3V3Z"/></svg>', WhatsApp: '<svg viewBox="0 0 24 24"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg>' };
-  const links = [[s.facebook, "Facebook"], [s.instagram, "Instagram"], [s.tiktok, "TikTok"], [`https://wa.me/${s.whatsapp || "201093008896"}`, "WhatsApp"]];
-  $("#socialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${icons[name]}</a>`).join("");
-  $("#contactSocialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${icons[name]}<span>${name}</span></a>`).join("");
+  const genericBranchLabel = t("branch", state.lang);
+  const selectedLabel = branch ? branchName(branch) : genericBranchLabel;
+  $$('[data-branch-label]').forEach(el => { el.textContent = selectedLabel; });
+  $$('[data-branch-switch-text], [data-branch-pill-text]').forEach(el => { el.textContent = branch ? branchName(branch) : t("chooseBranch", state.lang); });
+  $("#bookingBranchName").textContent = branch ? branchName(branch) : "—";
+  $("#bookingBranchAddress").textContent = branch ? branchAddress(branch) : "—";
+  $("#summaryBranch").textContent = branch ? branchName(branch) : t("chooseBranch", state.lang);
+  const socialSource = branch || s;
+  const links = [[socialSource.facebook || s.facebook, "Facebook"], [socialSource.instagram || s.instagram, "Instagram"], [socialSource.tiktok || s.tiktok, "TikTok"]];
+  $("#socialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${socialIcons[name]}</a>`).join("");
+  renderBranchPicker();
+  renderBranchFooter();
+}
+
+function renderBranchPicker() {
+  const branches = state.catalog.branches.filter(item => item.active !== false);
+  $("#branchPicker").innerHTML = branches.map(branch => `<article class="branch-choice ${branch.id === state.branchId ? "selected" : ""}">
+    <div class="branch-choice-top"><span class="branch-marker">⌖</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div>${branch.id === state.branchId ? `<b class="selected-check">✓</b>` : ""}</div>
+    <p>${escapeHtml(branchAddress(branch))}</p>
+    <div class="branch-quick-info"><span>◷ ${escapeHtml(branch.openingTime || "11:00")} – ${escapeHtml(branch.closingTime || "23:00")}</span><span>☎ ${escapeHtml(branch.phone)}</span></div>
+    <button class="btn btn-primary" type="button" data-select-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button>
+  </article>`).join("") || `<div class="empty-state">${state.lang === "ar" ? "لا توجد فروع متاحة حاليًا" : "No branches are currently available"}</div>`;
+}
+
+function renderBranchFooter() {
+  $("#branchFooterGrid").innerHTML = state.catalog.branches.filter(item => item.active !== false).map(branch => {
+    const wa = whatsappNumber(branch.whatsapp || branch.phone);
+    const socials = [[branch.facebook, "Facebook"], [branch.instagram, "Instagram"], [branch.tiktok, "TikTok"]].filter(([url]) => url);
+    return `<article class="footer-branch-card ${branch.id === state.branchId ? "selected" : ""}">
+      <header><span class="branch-marker">⌖</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div></header>
+      <p>${escapeHtml(branchAddress(branch))}</p>
+      <div class="branch-contact-numbers"><a href="${phoneHref(branch.phone)}">${socialIcons.Phone}<span>${escapeHtml(branch.phone)}</span></a>${branch.secondaryPhone ? `<a href="${phoneHref(branch.secondaryPhone)}">${socialIcons.Phone}<span>${escapeHtml(branch.secondaryPhone)}</span></a>` : ""}</div>
+      <div class="contact-actions three"><a class="contact-action call" href="${phoneHref(branch.phone)}" aria-label="${t("callNow", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Phone}<span>${t("callNow", state.lang)}</span></a><a class="contact-action whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener" aria-label="WhatsApp ${escapeAttr(branchName(branch))}">${socialIcons.WhatsApp}<span>${t("whatsappBranch", state.lang)}</span></a><a class="contact-action maps" href="${escapeAttr(branch.mapsUrl)}" target="_blank" rel="noopener" aria-label="${t("directions", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Map}<span>${t("directions", state.lang)}</span></a></div>
+      <div class="branch-card-bottom"><div class="contact-socials">${socials.map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${socialIcons[name]}</a>`).join("")}</div><button type="button" data-book-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button></div>
+    </article>`;
+  }).join("");
 }
 
 function renderAll() {
@@ -205,7 +255,7 @@ function renderCart() {
 
 function renderStaffPicker() {
   const any = `<button class="staff-choice ${state.staffId === "any" ? "selected" : ""}" type="button" data-staff-id="any"><b>${t("anyStaff", state.lang)}</b><small>${state.lang === "ar" ? "أقرب متخصص متاح" : "Nearest available specialist"}</small></button>`;
-  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
+  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => availableAtBranch(item) && item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
 }
 
 function updateProductOnlyUi() {
@@ -219,6 +269,8 @@ function updateProductOnlyUi() {
 
 function updateSummary() {
   const items = cartItems();
+  const branch = currentBranch();
+  $("#summaryBranch").textContent = branch ? branchName(branch) : t("chooseBranch", state.lang);
   $("#summaryItems").textContent = items.length ? items.map(item => localized(item)).join("، ") : (state.lang === "ar" ? "من فضلك اختر خدمة" : "Please choose a service");
   $("#summaryDate").textContent = state.date && state.time ? `${state.date} • ${state.time}` : (needsAppointment() ? (state.lang === "ar" ? "من فضلك اختر التاريخ والوقت" : "Please choose date and time") : (state.lang === "ar" ? "لا يحتاج موعد" : "No appointment required"));
   const selected = state.catalog.staff.find(item => item.id === state.staffId);
@@ -233,6 +285,10 @@ async function refreshCatalog(silent = true) {
   try {
     const catalog = await getCatalog();
     state.catalog = { ...state.catalog, ...catalog };
+    if (state.branchId && !state.catalog.branches.some(item => item.id === state.branchId && item.active !== false)) {
+      state.branchId = "";
+      localStorage.removeItem("mz-branch");
+    }
     for (const entry of state.catalog.translations || []) {
       if (entry.key && entry.ar) translations.ar[entry.key] = entry.ar;
       if (entry.key && entry.en) translations.en[entry.key] = entry.en;
@@ -249,10 +305,52 @@ async function refreshCatalog(silent = true) {
 
 async function openBooking() {
   if (firebaseConfigured) await refreshCatalog(true);
+  openBranchDialog(true);
+}
+
+function openBranchDialog(continueToBooking = false) {
+  if ($("#bookingDialog").open) $("#bookingDialog").close();
+  $("#branchDialog").dataset.continueBooking = continueToBooking ? "true" : "false";
+  renderBranchPicker();
+  if (!$("#branchDialog").open) $("#branchDialog").showModal();
+  document.body.style.overflow = "hidden";
+}
+
+function closeBranchDialog() {
+  if ($("#branchDialog").open) $("#branchDialog").close();
+  document.body.style.overflow = "";
+}
+
+function showBookingDialog() {
+  if (!currentBranch()) { openBranchDialog(true); return; }
   if (state.step === 5) resetBooking();
   $("#bookingDialog").showModal();
   document.body.style.overflow = "hidden";
   goToStep(1);
+}
+
+function selectBranch(id, continueToBooking = false) {
+  const branch = state.catalog.branches.find(item => item.id === id && item.active !== false);
+  if (!branch) { showToast(state.lang === "ar" ? "هذا الفرع غير متاح حاليًا" : "This branch is currently unavailable"); return; }
+  const previousCount = state.cart.length;
+  state.branchId = branch.id;
+  localStorage.setItem("mz-branch", branch.id);
+  const index = itemIndex();
+  state.cart = state.cart.filter(line => {
+    const item = index.get(line.id);
+    return item && (!item.branchIds?.length || item.branchIds.includes(branch.id));
+  });
+  state.staffId = "any";
+  state.date = "";
+  state.time = "";
+  state.coupon = null;
+  $("#bookingDate").value = "";
+  $("#bookingTime").innerHTML = '<option value="">—</option>';
+  saveCart();
+  closeBranchDialog();
+  setLanguage(state.lang);
+  if (previousCount !== state.cart.length) showToast(state.lang === "ar" ? "تم حذف عناصر غير متاحة في هذا الفرع" : "Unavailable items were removed from the cart");
+  if (continueToBooking) showBookingDialog();
 }
 
 function closeBooking() {
@@ -291,6 +389,7 @@ function goToStep(step) {
 }
 
 function canAdvance() {
+  if (!state.branchId || !currentBranch()) { showToast(t("chooseBranch", state.lang)); return false; }
   if (state.step === 1 && !state.cart.length) { showToast(t("cartHint", state.lang)); return false; }
   if (state.step === 3 && needsAppointment() && (!state.date || !state.time)) { showToast(t("required", state.lang)); return false; }
   return true;
@@ -313,9 +412,10 @@ function setDateBounds() {
 
 function renderTimes() {
   const select = $("#bookingTime");
-  const [openH, openM] = String(settings().openingTime || "11:00").split(":").map(Number);
-  const [closeH, closeM] = String(settings().closingTime || "23:00").split(":").map(Number);
-  const step = Math.max(5, Number(settings().slotMinutes || 15));
+  const schedule = currentBranch() || settings();
+  const [openH, openM] = String(schedule.openingTime || "11:00").split(":").map(Number);
+  const [closeH, closeM] = String(schedule.closingTime || "23:00").split(":").map(Number);
+  const step = Math.max(5, Number(schedule.slotMinutes || 15));
   const duration = Math.max(0, cartItems().filter(item => item.kind !== "product").reduce((sum, item) => sum + Number(item.duration || 0), 0));
   const selectedDate = $("#bookingDate").value;
   const now = new Date();
@@ -340,7 +440,7 @@ async function applyCouponCode() {
   button.disabled = true;
   button.textContent = t("applying", state.lang);
   try {
-    const result = await validateCoupon({ code, subtotal: subtotal(), phone: $("#customerPhone").value.trim(), itemIds: state.cart.map(line => line.id) });
+    const result = await validateCoupon({ code, branchId: state.branchId, subtotal: subtotal(), phone: $("#customerPhone").value.trim(), itemIds: state.cart.map(line => line.id) });
     if (!result.valid) throw new Error(result.message || "invalid");
     state.coupon = result;
     updateSummary();
@@ -369,6 +469,7 @@ async function submitBooking() {
   };
   try {
     const result = await createBooking({
+      branchId: state.branchId,
       items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty })),
       staffId: state.staffId,
       bookingDate: state.date || null,
@@ -383,8 +484,9 @@ async function submitBooking() {
     JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
     state.completedPreview = Boolean(result.preview);
     $("#previewNotice").classList.toggle("show", state.completedPreview);
-    const phone = settings().whatsapp || "201093008896";
-    const message = state.lang === "ar" ? `مرحبًا، أنشأت حجزًا لدى مزين مصر فرع طلخا. كود الحجز: ${result.bookingCode}` : `Hello, I created a booking at El Mezaen Egypt – Talkha. Booking code: ${result.bookingCode}`;
+    const branch = currentBranch();
+    const phone = whatsappNumber(branch?.whatsapp || branch?.phone);
+    const message = state.lang === "ar" ? `مرحبًا، أنشأت حجزًا لدى مزين مصر – ${branchName(branch)}. كود الحجز: ${result.bookingCode}` : `Hello, I created a booking at El Mezaen Egypt – ${branchName(branch)}. Booking code: ${result.bookingCode}`;
     $("#successWhatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     state.cart = [];
     saveCart();
@@ -444,8 +546,15 @@ document.addEventListener("click", event => {
   if (filter) { state.category = filter.dataset.category; renderServices(); }
   const staff = event.target.closest("[data-staff-id]");
   if (staff) { state.staffId = staff.dataset.staffId; renderStaffPicker(); updateSummary(); }
+  const select = event.target.closest("[data-select-branch]");
+  if (select) selectBranch(select.dataset.selectBranch, $("#branchDialog").dataset.continueBooking === "true");
+  const directBranch = event.target.closest("[data-book-branch]");
+  if (directBranch) selectBranch(directBranch.dataset.bookBranch, true);
   if (event.target.closest("[data-open-booking]")) openBooking();
+  if (event.target.closest("[data-open-branch]")) openBranchDialog(false);
+  if (event.target.closest("[data-change-branch]")) openBranchDialog(true);
   if (event.target.closest("[data-close-booking]")) closeBooking();
+  if (event.target.closest("[data-close-branch]")) closeBranchDialog();
 });
 
 $("#langToggle").addEventListener("click", () => setLanguage(state.lang === "ar" ? "en" : "ar"));
@@ -462,6 +571,8 @@ $("#bookingDate").addEventListener("change", event => { state.date = event.targe
 $("#bookingTime").addEventListener("change", event => { state.time = event.target.value; updateSummary(); });
 $("#bookingDialog").addEventListener("click", event => { if (event.target === $("#bookingDialog")) closeBooking(); });
 $("#bookingDialog").addEventListener("close", () => { document.body.style.overflow = ""; });
+$("#branchDialog").addEventListener("click", event => { if (event.target === $("#branchDialog")) closeBranchDialog(); });
+$("#branchDialog").addEventListener("close", () => { if (!$("#bookingDialog").open) document.body.style.overflow = ""; });
 
 async function init() {
   setTheme(state.theme);
@@ -475,7 +586,7 @@ async function init() {
   observeReveals();
   if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Service worker registration failed", error));
   if (firebaseConfigured) {
-    setInterval(() => { if (!document.hidden) refreshCatalog(true); }, 30000);
+    setInterval(() => { if (!document.hidden) refreshCatalog(true); }, 300000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCatalog(true); });
   }
   if (!firebaseConfigured) document.documentElement.dataset.preview = "true";

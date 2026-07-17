@@ -21,6 +21,17 @@ test("contains the six packages and twenty-one team members", () => {
   assert.equal(new Set(seedCatalog.staff.map(item => item.id)).size, 21);
 });
 
+test("contains two active bookable branches with real contact actions", () => {
+  assert.deepEqual(seedCatalog.branches.map(item => item.id), ["talkha", "mashaya"]);
+  for (const branch of seedCatalog.branches) {
+    assert.ok(branch.nameAr && branch.nameEn && branch.addressAr);
+    assert.match(branch.phone, /^01[0125]\d{8}$/);
+    assert.match(branch.whatsapp, /^201[0125]\d{8}$/);
+    assert.match(branch.mapsUrl, /^https:\/\/www\.google\.com\/maps\//);
+    assert.equal(branch.active, true);
+  }
+});
+
 test("every catalog item has Arabic and English names and editable state", () => {
   for (const item of [...seedCatalog.categories, ...seedCatalog.services, ...seedCatalog.packages, ...seedCatalog.staff]) {
     assert.ok(item.nameAr);

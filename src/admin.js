@@ -1,6 +1,6 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
-import { changeBooking, changeUserRole, currentRole, deleteEntity, enablePush, getCollection, getDashboard, logout, saveEntity, uploadImage, watchAuth } from "./admin-api.js";
+import { changeBooking, currentRole, deleteEntity, enablePush, getCollection, getDashboard, logout, saveEntity, uploadImage, watchAuth } from "./admin-api.js";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -10,37 +10,43 @@ const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&qu
 const state = { user: null, role: null, dashboard: { bookings: [], ledger: [], stats: {} }, collections: new Map(), section: "dashboard", lastBookingCount: null, editor: { collection: "", id: "", preset: {} } };
 
 const fields = {
+  branches: [
+    ["id", "معرّف الفرع بالإنجليزية بدون مسافات (مثال: talkha)", "text", true], ["nameAr", "اسم الفرع بالعربية", "text", true], ["shortNameAr", "الاسم المختصر", "text", true], ["code", "رمز الفرع في كود الحجز", "text", true],
+    ["addressAr", "العنوان الكامل", "textarea", true, null, true], ["phone", "رقم الموبايل", "tel", true], ["secondaryPhone", "رقم إضافي أو أرضي", "tel"], ["whatsapp", "رقم واتساب الدولي", "tel", true],
+    ["mapsUrl", "رابط خرائط Google", "url", true, null, true], ["openingTime", "بداية العمل", "time", true], ["closingTime", "نهاية العمل", "time", true], ["slotMinutes", "الفاصل بين المواعيد", "number", true],
+    ["facebook", "رابط Facebook", "url", false, null, true], ["instagram", "رابط Instagram", "url", false, null, true], ["tiktok", "رابط TikTok", "url", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "متاح للحجز", "boolean"]
+  ],
   categories: [
     ["nameAr", "اسم التصنيف بالعربية", "text", true], ["nameEn", "Category Name in English", "text", true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "الحالة", "boolean"]
   ],
   services: [
     ["nameAr", "اسم الخدمة بالعربية", "text", true], ["nameEn", "Service Name in English", "text", true], ["categoryId", "معرّف التصنيف", "text", true],
-    ["price", "السعر", "number", true], ["duration", "المدة بالدقائق", "number", true], ["startsFrom", "السعر يبدأ من", "boolean"], ["type", "النوع", "select", true, [["service", "خدمة"], ["product", "منتج"]]], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعلة", "boolean"]
+    ["price", "السعر", "number", true], ["duration", "المدة بالدقائق", "number", true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true], ["startsFrom", "السعر يبدأ من", "boolean"], ["type", "النوع", "select", true, [["service", "خدمة"], ["product", "منتج"]]], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعلة", "boolean"]
   ],
   packages: [
     ["nameAr", "اسم الباقة بالعربية", "text", true], ["nameEn", "Package Name in English", "text", true], ["descriptionAr", "الوصف بالعربية", "textarea", false, null, true], ["descriptionEn", "Description in English", "textarea", false, null, true],
-    ["includedServiceIds", "معرّفات الخدمات (بفواصل)", "text", false, null, true], ["originalPrice", "السعر قبل الخصم", "number"], ["price", "السعر بعد الخصم", "number", true], ["duration", "المدة بالدقائق", "number", true],
+    ["includedServiceIds", "معرّفات الخدمات (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true], ["originalPrice", "السعر قبل الخصم", "number"], ["price", "السعر بعد الخصم", "number", true], ["duration", "المدة بالدقائق", "number", true],
     ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["startAt", "بداية العرض", "datetime-local"], ["endAt", "نهاية العرض", "datetime-local"],
     ["status", "الحالة", "select", true, [["active", "نشطة"], ["expired", "منتهية"], ["scheduled", "مجدولة"], ["stopped", "متوقفة"]]], ["badge", "العلامة", "select", false, [["", "بدون"], ["popular", "الأكثر طلبًا"], ["special", "عرض مميز"]]], ["sortOrder", "الترتيب", "number"], ["active", "تظهر في الموقع", "boolean"]
   ],
   offers: [
     ["nameAr", "اسم العرض بالعربية", "text", true], ["nameEn", "Offer Name in English", "text", true], ["descriptionAr", "الوصف بالعربية", "textarea", false, null, true], ["descriptionEn", "Description in English", "textarea", false, null, true],
-    ["oldPrice", "السعر القديم", "number", true], ["newPrice", "السعر الجديد", "number", true], ["duration", "المدة", "number"], ["includedServiceIds", "الخدمات والباقات المشمولة (بفواصل)", "text", false, null, true],
+    ["oldPrice", "السعر القديم", "number", true], ["newPrice", "السعر الجديد", "number", true], ["duration", "المدة", "number"], ["includedServiceIds", "الخدمات والباقات المشمولة (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true],
     ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["showCountdown", "إظهار عداد الانتهاء", "boolean"],
     ["status", "الحالة", "select", true, [["scheduled", "مجدول"], ["active", "نشط"], ["expired", "منتهي"], ["stopped", "متوقف"]]], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]
   ],
   coupons: [
     ["code", "كود الخصم", "text", true], ["nameAr", "اسم الكود بالعربية", "text"], ["nameEn", "Code Name in English", "text"], ["type", "نوع الخصم", "select", true, [["percent", "نسبة مئوية"], ["fixed", "قيمة ثابتة"]]],
     ["value", "نسبة أو قيمة الخصم", "number", true], ["maxDiscount", "الحد الأقصى للخصم", "number"], ["minSubtotal", "الحد الأدنى للحجز", "number"], ["totalUsageLimit", "عدد الاستخدامات الإجمالي", "number"], ["perPhoneLimit", "الاستخدامات لكل هاتف", "number"],
-    ["applicableItemIds", "خدمات/باقات مخصصة (بفواصل)", "text", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["active", "مفعل", "boolean"]
+    ["applicableItemIds", "خدمات/باقات مخصصة (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المسموح بها (فارغ = الكل)", "text", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["active", "مفعل", "boolean"]
   ],
   staff: [
     ["nameAr", "الاسم بالعربية", "text", true], ["nameEn", "Name in English", "text", true], ["specialtyAr", "التخصص بالعربية", "text"], ["specialtyEn", "Specialty in English", "text"],
     ["bioAr", "نبذة بالعربية", "textarea", false, null, true], ["bioEn", "Bio in English", "textarea", false, null, true], ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع الصورة", "file", false, null, true],
-    ["serviceIds", "معرّفات الخدمات التي يقدمها (بفواصل)", "text", false, null, true], ["workDays", "أيام العمل 0-6 (بفواصل)", "text"], ["shiftStart", "بداية الشيفت", "time"], ["shiftEnd", "نهاية الشيفت", "time"], ["breaks", "أوقات الراحة (بفواصل)", "text", false, null, true],
+    ["branchIds", "الفروع التي يعمل بها: talkha,mashaya", "text", true, null, true], ["serviceIds", "معرّفات الخدمات التي يقدمها (بفواصل)", "text", false, null, true], ["workDays", "أيام العمل 0-6 (بفواصل)", "text"], ["shiftStart", "بداية الشيفت", "time"], ["shiftEnd", "نهاية الشيفت", "time"], ["breaks", "أوقات الراحة (بفواصل)", "text", false, null, true],
     ["available", "متاح", "boolean"], ["sortOrder", "ترتيب الظهور", "number"], ["bookingCount", "عدد الحجوزات", "number"], ["revenueTotal", "إجمالي الإيرادات", "number"], ["active", "مفعل", "boolean"]
   ],
-  holidays: [["date", "التاريخ", "date", true], ["reasonAr", "السبب بالعربية", "text"], ["reasonEn", "Reason in English", "text"], ["closed", "مغلق بالكامل", "boolean"]],
+  holidays: [["branchId", "معرّف الفرع (talkha أو mashaya)", "text", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب بالعربية", "text"], ["reasonEn", "Reason in English", "text"], ["closed", "مغلق بالكامل", "boolean"]],
   content: [["type", "النوع", "select", true, [["gallery", "معرض"], ["celebrity", "صور مشاهير"], ["news", "خبر/منشور"]]], ["titleAr", "العنوان بالعربية", "text", true], ["titleEn", "Title in English", "text", true], ["bodyAr", "المحتوى بالعربية", "textarea", false, null, true], ["bodyEn", "Content in English", "textarea", false, null, true], ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["linkUrl", "رابط المنشور", "url", false, null, true], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]],
   translations: [["key", "مفتاح الترجمة", "text", true], ["ar", "النص العربي", "textarea", true, null, true], ["en", "English Text", "textarea", true, null, true], ["active", "مفعل", "boolean"]]
 };
@@ -82,7 +88,7 @@ async function showSection(id) {
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
   if (id === "dashboard" || id === "bookings" || id === "revenue") await loadDashboard();
-  const map = { packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], contact: ["settings"], settings: ["settings"], translations: ["translations"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
+  const map = { packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], services: ["categories", "services"] };
   for (const collection of map[id] || []) await loadCollection(collection, true);
 }
 
@@ -108,23 +114,38 @@ function renderDashboard() {
   $("#revenueMonth").textContent = money(s.monthRevenue);
   $("#revenueTotal").textContent = money(s.totalRevenue);
   $("#revenueLast").textContent = money(s.lastCollected);
-  $("#recentBookings").innerHTML = state.dashboard.bookings.slice(0, 8).map(bookingRowMini).join("") || emptyRow(7);
+  renderBranchFilters();
+  $("#recentBookings").innerHTML = state.dashboard.bookings.slice(0, 8).map(bookingRowMini).join("") || emptyRow(8);
   renderBookings();
   renderRevenue();
 }
 
 function bookingRowMini(item) {
-  return `<tr><td><b>${escapeHtml(item.code)}</b></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><small>${money(item.total)}</small></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br><small>${escapeHtml(item.bookingTime || "")}</small></td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td>${paymentLabel(item.paymentStatus)}</td></tr>`;
+  return `<tr><td><b>${escapeHtml(item.code)}</b></td><td><span class="branch-pill">${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><small>${money(item.total)}</small></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br><small>${escapeHtml(item.bookingTime || "")}</small></td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td>${paymentLabel(item.paymentStatus)}</td></tr>`;
+}
+
+function branchLabel(id) { return ({ talkha: "فرع طلخا", mashaya: "فرع المشاية" })[id] || id || "فرع طلخا"; }
+
+function renderBranchFilters() {
+  const branches = [...new Map(state.dashboard.bookings.map(item => [item.branchId || "talkha", item.branchNameAr || branchLabel(item.branchId)])).entries()];
+  [["#bookingBranchFilter", "كل الفروع"], ["#revenueBranch", "كل الفروع"]].forEach(([selector, allLabel]) => {
+    const select = $(selector);
+    const current = select.value;
+    select.innerHTML = `<option value="all">${allLabel}</option>` + branches.map(([id, name]) => `<option value="${escapeAttr(id)}">${escapeHtml(name)}</option>`).join("");
+    select.value = branches.some(([id]) => id === current) ? current : "all";
+  });
 }
 
 function renderBookings() {
   const query = $("#bookingSearch").value.trim().toLowerCase();
   const filter = $("#bookingStatusFilter").value;
-  const bookings = state.dashboard.bookings.filter(item => (filter === "all" || item.status === filter) && (!query || [item.code, item.customerName, item.phone].some(value => String(value || "").toLowerCase().includes(query))));
+  const branchFilter = $("#bookingBranchFilter").value;
+  const bookings = state.dashboard.bookings.filter(item => (branchFilter === "all" || (item.branchId || "talkha") === branchFilter) && (filter === "all" || item.status === filter) && (!query || [item.code, item.customerName, item.phone, item.branchNameAr].some(value => String(value || "").toLowerCase().includes(query))));
   $("#bookingsTable").innerHTML = bookings.map(item => {
-    const waMessage = encodeURIComponent(`مرحبًا ${item.customer?.firstName || ""}، بخصوص حجزك في مزين مصر فرع طلخا رقم ${item.code}: حالته الآن ${statusLabel(item.status)}.`);
-    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b><select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select><div class="row-actions">${item.paymentStatus === "unpaid" ? `<button class="pay" data-booking-action="markPaid" data-booking-id="${escapeAttr(item.id)}">تم الدفع</button>` : ""}${item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button><button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button><button data-booking-action="completed" data-booking-id="${escapeAttr(item.id)}">إكمال</button><a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
-  }).join("") || emptyRow(8);
+    const branchName = item.branchNameAr || branchLabel(item.branchId);
+    const waMessage = encodeURIComponent(`مرحبًا ${item.customer?.firstName || ""}، بخصوص حجزك في مزين مصر – ${branchName} رقم ${item.code}: حالته الآن ${statusLabel(item.status)}.`);
+    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b><select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select><div class="row-actions">${item.paymentStatus === "unpaid" ? `<button class="pay" data-booking-action="markPaid" data-booking-id="${escapeAttr(item.id)}">تم الدفع</button>` : ""}${item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button><button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button><button data-booking-action="completed" data-booking-id="${escapeAttr(item.id)}">إكمال</button><a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
+  }).join("") || emptyRow(9);
 }
 
 function printReceipt(id) {
@@ -134,7 +155,7 @@ function printReceipt(id) {
   JsBarcode(svg, item.code, { format: "CODE128", displayValue: true, height: 52, fontSize: 13, margin: 4 });
   const lines = (item.items || []).map(line => `<tr><td>${escapeHtml(line.nameAr)}</td><td>${line.qty || 1}</td><td>${money(line.lineTotal ?? line.price)}</td></tr>`).join("");
   const popup = window.open("", "_blank", "width=420,height=700");
-  popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><title>${escapeHtml(item.code)}</title><style>body{font-family:Arial;padding:24px;color:#111}header{text-align:center;border-bottom:2px dashed #333;padding-bottom:14px}img{width:72px}table{width:100%;border-collapse:collapse;margin:18px 0}td,th{padding:8px;border-bottom:1px dashed #aaa;text-align:right}.total{font-size:22px;font-weight:bold;display:flex;justify-content:space-between}.meta{line-height:1.8}svg{max-width:100%}@media print{button{display:none}}</style></head><body><header><img src="/assets/el-mezaen-logo.jpeg"><h2>مزين مصر – فرع طلخا</h2><p>شيك حجز</p>${svg.outerHTML}</header><div class="meta"><b>العميل:</b> ${escapeHtml(item.customerName)}<br><b>الهاتف:</b> ${escapeHtml(item.phone)}<br><b>عدد الأفراد:</b> ${item.partySize || 1}<br><b>العامل:</b> ${escapeHtml(item.staffNameAr)}<br><b>الموعد:</b> ${escapeHtml(item.bookingDate || "طلب منتجات")} ${escapeHtml(item.bookingTime || "")}</div><table><thead><tr><th>البند</th><th>العدد</th><th>السعر</th></tr></thead><tbody>${lines}</tbody></table><p>المجموع الفرعي: ${money(item.subtotal)}</p><p>الخصم: ${money(item.discountAmount)}</p><div class="total"><span>الإجمالي</span><span>${money(item.total)}</span></div><p>حالة الدفع: ${paymentLabel(item.paymentStatus)}</p><button onclick="print()">طباعة</button></body></html>`);
+  popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><title>${escapeHtml(item.code)}</title><style>body{font-family:Arial;padding:24px;color:#111}header{text-align:center;border-bottom:2px dashed #333;padding-bottom:14px}img{width:72px}table{width:100%;border-collapse:collapse;margin:18px 0}td,th{padding:8px;border-bottom:1px dashed #aaa;text-align:right}.total{font-size:22px;font-weight:bold;display:flex;justify-content:space-between}.meta{line-height:1.8}svg{max-width:100%}@media print{button{display:none}}</style></head><body><header><img src="/assets/el-mezaen-logo.jpeg"><h2>مزين مصر – ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</h2><p>شيك حجز</p>${svg.outerHTML}</header><div class="meta"><b>الفرع:</b> ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}<br><b>العميل:</b> ${escapeHtml(item.customerName)}<br><b>الهاتف:</b> ${escapeHtml(item.phone)}<br><b>عدد الأفراد:</b> ${item.partySize || 1}<br><b>العامل:</b> ${escapeHtml(item.staffNameAr)}<br><b>الموعد:</b> ${escapeHtml(item.bookingDate || "طلب منتجات")} ${escapeHtml(item.bookingTime || "")}</div><table><thead><tr><th>البند</th><th>العدد</th><th>السعر</th></tr></thead><tbody>${lines}</tbody></table><p>المجموع الفرعي: ${money(item.subtotal)}</p><p>الخصم: ${money(item.discountAmount)}</p><div class="total"><span>الإجمالي</span><span>${money(item.total)}</span></div><p>حالة الدفع: ${paymentLabel(item.paymentStatus)}</p><button onclick="print()">طباعة</button></body></html>`);
   popup.document.close();
 }
 
@@ -155,10 +176,11 @@ function findScanned() { const code = $("#scannerCode").value.trim().toUpperCase
 function renderRevenue() {
   const from = $("#revenueFrom").value;
   const to = $("#revenueTo").value;
+  const branch = $("#revenueBranch").value;
   const staff = $("#revenueStaff").value;
   const service = $("#revenueService").value.trim();
-  const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (staff === "all" || item.staffId === staff) && (!service || (item.itemIds || []).includes(service)));
-  $("#revenueTable").innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(item.staffId || "—")}</td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td></tr>`).join("") || emptyRow(6);
+  const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || (item.branchId || "talkha") === branch) && (staff === "all" || item.staffId === staff) && (!service || (item.itemIds || []).includes(service)));
+  $("#revenueTable").innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(item.staffId || "—")}</td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td></tr>`).join("") || emptyRow(7);
   const staffIds = [...new Set(state.dashboard.bookings.map(item => item.staffId).filter(Boolean))];
   const current = $("#revenueStaff").value;
   $("#revenueStaff").innerHTML = '<option value="all">كل العاملين</option>' + staffIds.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(id)}</option>`).join("");
@@ -176,7 +198,7 @@ async function loadCollection(collection, refresh = false) {
 
 function renderCollection(collection) {
   const query = document.querySelector(`[data-entity-search="${CSS.escape(collection)}"]`)?.value.trim().toLowerCase() || "";
-  const items = (state.collections.get(collection) || []).filter(item => !query || [item.nameAr, item.nameEn, item.titleAr, item.titleEn, item.specialtyAr, item.code, item.id].some(value => String(value || "").toLowerCase().includes(query)));
+  const items = (state.collections.get(collection) || []).filter(item => !query || [item.nameAr, item.nameEn, item.titleAr, item.titleEn, item.specialtyAr, item.code, item.id].some(value => String(value || "").toLowerCase().includes(query))).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || a.titleAr || a.id || "").localeCompare(String(b.nameAr || b.titleAr || b.id || ""), "ar"));
   if (collection === "settings") { fillSettings(items[0] || {}); return; }
   const targets = $$(`[data-list="${collection}"]`);
   targets.forEach(target => { target.innerHTML = items.map(item => entityCard(collection, item, ["customers", "activityLogs", "users"].includes(collection))).join("") || '<div class="entity-card"><p>لا توجد بيانات.</p></div>'; });
@@ -190,7 +212,12 @@ function renderCollection(collection) {
 
 function entityCard(collection, item, readonly = false) {
   const title = item.nameAr || item.titleAr || item.code || item.date || item.key || item.customerName || item.email || item.action || item.id;
-  const detail = item.nameEn || item.titleEn || item.categoryId || item.specialtyAr || item.reasonAr || item.phone || item.collection || item.role || item.id;
+  const category = collection === "services" ? (state.collections.get("categories") || []).find(value => value.id === item.categoryId) : null;
+  const detail = collection === "services" ? `${category?.nameAr || item.categoryId || "بدون تصنيف"} • ${money(item.price)}${Number(item.duration) ? ` • ${Number(item.duration)} دقيقة` : ""}`
+    : collection === "categories" ? `ترتيب الظهور: ${Number(item.sortOrder || 0)}`
+    : collection === "packages" ? `${money(item.price)}${Number(item.duration) ? ` • ${Number(item.duration)} دقيقة` : ""}`
+    : collection === "offers" ? `${money(item.newPrice)}${item.endAt ? " • عرض محدد المدة" : ""}`
+    : item.addressAr || item.specialtyAr || item.reasonAr || item.bodyAr || item.phone || item.collection || item.role || item.id;
   return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="">` : ""}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}</p>` : ""}${readonly ? "" : `<footer><button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
 }
 
@@ -323,13 +350,13 @@ $("#pushButton").addEventListener("click", async () => { try { await enablePush(
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
 $("#entityForm").addEventListener("submit", saveEditor);
-[$("#scheduleSettings"), $("#contactSettings"), $("#siteSettings")].forEach(form => form.addEventListener("submit", saveSettingsForm));
-$("#roleForm").addEventListener("submit", async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); try { await changeUserRole(data.uid, data.email, data.role); await loadCollection("users", true); toast("تم تحديث الصلاحية. يطلب من المستخدم تسجيل الدخول من جديد."); } catch (error) { toast(error.message, true); } });
+[$("#scheduleSettings"), $("#siteSettings")].forEach(form => form.addEventListener("submit", saveSettingsForm));
 $("#bookingSearch").addEventListener("input", renderBookings);
 $("#bookingStatusFilter").addEventListener("change", renderBookings);
+$("#bookingBranchFilter").addEventListener("change", renderBookings);
 $("#applyRevenueFilter").addEventListener("click", renderRevenue);
-$("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookings.csv", ["code", "customer", "phone", "items", "staff", "date", "time", "subtotal", "discount", "total", "status", "payment"], state.dashboard.bookings.map(item => [item.code, item.customerName, item.phone, (item.serviceNamesAr || []).join(" + "), item.staffNameAr, item.bookingDate, item.bookingTime, item.subtotal, item.discountAmount, item.total, item.status, item.paymentStatus])));
-$("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "booking", "type", "method", "staff", "amount"], state.dashboard.ledger.map(item => [item.dateKey, item.bookingCode, item.type, item.paymentMethod, item.staffId, item.amount])));
+$("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookings.csv", ["code", "branch", "customer", "phone", "items", "staff", "date", "time", "subtotal", "discount", "total", "status", "payment"], state.dashboard.bookings.map(item => [item.code, item.branchNameAr || branchLabel(item.branchId), item.customerName, item.phone, (item.serviceNamesAr || []).join(" + "), item.staffNameAr, item.bookingDate, item.bookingTime, item.subtotal, item.discountAmount, item.total, item.status, item.paymentStatus])));
+$("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "branch", "booking", "type", "method", "staff", "amount"], state.dashboard.ledger.map(item => [item.dateKey, branchLabel(item.branchId), item.bookingCode, item.type, item.paymentMethod, item.staffId, item.amount])));
 $("#openScanner").addEventListener("click", openScanner);
 $("#scannerClose").addEventListener("click", closeScanner);
 $("#findScannedBooking").addEventListener("click", findScanned);
@@ -342,7 +369,7 @@ watchAuth(async user => {
     const role = await currentRole(user);
     if (!role) { await logout(); location.replace("/login/"); return; }
     state.user = user; state.role = role;
-    $("#welcomeText").textContent = `لوحة إدارة الفرع • ${role}`;
+    $("#welcomeText").textContent = `لوحة إدارة مزين مصر • ${role}`;
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
     await loadDashboard();
     setInterval(() => loadDashboard(true), 20000);

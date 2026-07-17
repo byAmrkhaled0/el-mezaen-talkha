@@ -13,6 +13,55 @@ const categories = [
   ["facial-cleaning", "تنظيف بشرة", "Facial Cleansing"]
 ].map(([id, nameAr, nameEn], sortOrder) => ({ id, nameAr, nameEn, active: true, sortOrder }));
 
+const sharedSocial = {
+  facebook: "https://www.facebook.com/profile.php?id=61559147948668",
+  instagram: "https://www.instagram.com/ahmed_elmzin1",
+  tiktok: "https://www.tiktok.com/@ahmedelmzin1"
+};
+
+const branches = [
+  {
+    id: "talkha",
+    code: "TK",
+    nameAr: "فرع طلخا",
+    nameEn: "Talkha Branch",
+    shortNameAr: "طلخا",
+    shortNameEn: "Talkha",
+    addressAr: "المنصورة - طلخا، تقسيم بهاء الشربيني، أمام محل LONDONE للملابس",
+    addressEn: "Bahaa El-Sherbiny Division, opposite LONDONE clothing store, Talkha, Dakahlia",
+    phone: "01093008896",
+    secondaryPhone: "0502535810",
+    whatsapp: "201093008896",
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=%D8%AA%D9%82%D8%B3%D9%8A%D9%85+%D8%A8%D9%87%D8%A7%D8%A1+%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D9%8A%D9%86%D9%8A+%D8%B7%D9%84%D8%AE%D8%A7",
+    openingTime: "11:00",
+    closingTime: "23:00",
+    slotMinutes: 15,
+    ...sharedSocial,
+    active: true,
+    sortOrder: 1
+  },
+  {
+    id: "mashaya",
+    code: "MS",
+    nameAr: "فرع المشاية",
+    nameEn: "El Mashaya Branch",
+    shortNameAr: "المشاية",
+    shortNameEn: "El Mashaya",
+    addressAr: "المنصورة - المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع",
+    addressEn: "Hossam Rabie Street, opposite Al Gezira Club Gate 2, Lower El Mashaya, Mansoura",
+    phone: "01101006961",
+    secondaryPhone: "0502253357",
+    whatsapp: "201101006961",
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=%D8%B4%D8%A7%D8%B1%D8%B9+%D8%AD%D8%B3%D8%A7%D9%85+%D8%B1%D8%A8%D9%8A%D8%B9+%D8%A7%D9%84%D9%85%D8%B4%D8%A7%D9%8A%D8%A9+%D8%A7%D9%84%D8%B3%D9%81%D9%84%D9%8A%D8%A9+%D8%A7%D9%84%D9%85%D9%86%D8%B5%D9%88%D8%B1%D8%A9",
+    openingTime: "11:00",
+    closingTime: "23:00",
+    slotMinutes: 15,
+    ...sharedSocial,
+    active: true,
+    sortOrder: 2
+  }
+];
+
 const s = (id, categoryId, nameAr, nameEn, duration, price, startsFrom = false, type = "service") => ({
   id,
   categoryId,
@@ -178,8 +227,9 @@ const staff = staffNames.map(([nameAr, nameEn], index) => ({
   ][index] || "",
   specialtyAr: index === 8 ? "مساعد حلاق" : "متخصص حلاقة وعناية رجالية",
   specialtyEn: index === 8 ? "Barber Assistant" : "Men's Grooming Specialist",
-  bioAr: "عضو في فريق مزين مصر – فرع طلخا.",
-  bioEn: "A member of the El Mezaen Egypt – Talkha team.",
+  bioAr: "عضو في فريق مزين مصر.",
+  bioEn: "A member of the El Mezaen Egypt team.",
+  branchIds: ["talkha", "mashaya"],
   serviceIds: [],
   workDays: [0, 1, 2, 3, 4, 5, 6],
   shiftStart: "11:00",
@@ -221,22 +271,16 @@ const content = [
 ];
 
 const settings = {
-  businessNameAr: "مزين مصر – فرع طلخا",
-  businessNameEn: "El Mezaen Egypt – Talkha Branch",
-  phone: "01093008896",
-  whatsapp: "201093008896",
-  addressAr: "طلخا، الدقهلية، مصر",
-  addressEn: "Talkha, Dakahlia, Egypt",
+  businessNameAr: "مزين مصر",
+  businessNameEn: "El Mezaen Egypt",
   openingTime: "11:00",
   closingTime: "23:00",
   slotMinutes: 15,
-  facebook: "https://www.facebook.com/profile.php?id=61559147948668",
-  instagram: "https://www.instagram.com/ahmed_elmzin1",
-  tiktok: "https://www.tiktok.com/@ahmedelmzin1",
+  ...sharedSocial,
   aboutAr: "في مزين مصر نؤمن أن الإطلالة القوية تبدأ من التفاصيل. منذ 1995 نجمع بين خبرة السنين، أحدث أساليب الحلاقة والعناية الرجالية، واهتمام حقيقي براحتك لتخرج كل مرة بأفضل نسخة منك.",
   aboutEn: "Since 1995, El Mezaen Egypt has combined trusted experience, modern men's grooming and genuine attention to detail so every visit brings out your best look.",
   currency: "EGP"
 };
 
-export const seedCatalog = { categories, services, packages, staff, offers, coupons, content, settings };
-export const collectionsForSeed = { categories, services, packages, staff, offers, coupons, content };
+export const seedCatalog = { branches, categories, services, packages, staff, offers, coupons, content, settings };
+export const collectionsForSeed = { branches, categories, services, packages, staff, offers, coupons, content };

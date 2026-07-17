@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://muzain.com/مزينمصر/طلخا-6932</loc>
-    <xhtml:link rel="alternate" hreflang="ar-EG" href="https://muzain.com/مزينمصر/طلخا-6932?lang=ar"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://muzain.com/مزينمصر/طلخا-6932?lang=en"/>
+    <loc>https://el-mezaen-talkha.web.app</loc>
+    <xhtml:link rel="alternate" hreflang="ar-EG" href="https://el-mezaen-talkha.web.app?lang=ar"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://el-mezaen-talkha.web.app?lang=en"/>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-  <url><loc>https://muzain.com/services/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://muzain.com/team/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://el-mezaen-talkha.web.app/services/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://el-mezaen-talkha.web.app/team/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>

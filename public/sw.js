@@ -1,4 +1,4 @@
-const CACHE = "el-mezaen-v2";
+const CACHE = "el-mezaen-v47";
 const CORE = ["/", "/manifest.webmanifest", "/assets/icon.svg", "/assets/el-mezaen-logo.jpeg", "/assets/hero-barbershop-cyan.webp"];
 
 self.addEventListener("install", event => {

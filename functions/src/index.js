@@ -9,14 +9,14 @@ import { calculateCoupon, createSlotKeys, minutes, normalizePhone, paymentTransi
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
-const PUBLIC_COLLECTIONS = ["categories", "services", "packages", "staff", "offers", "content", "translations"];
-const ADMIN_COLLECTIONS = ["categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings"];
+const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations"];
+const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings"];
 const ADMIN_ROLES = ["admin", "manager", "receptionist", "accountant"];
 
 const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
 const hash = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
-const bookingCode = () => `MZ-TK-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
 function requireRole(request, roles = ADMIN_ROLES) {
   const role = request.auth?.token?.role;
@@ -28,7 +28,15 @@ function sanitizeText(value, max = 200) { return String(value || "").trim().slic
 
 async function readSettings() {
   const snapshot = await db.doc("settings/public").get();
-  return snapshot.exists ? snapshot.data() : { openingTime: "11:00", closingTime: "23:00", slotMinutes: 15, phone: "01093008896", whatsapp: "201093008896" };
+  return snapshot.exists ? snapshot.data() : { openingTime: "11:00", closingTime: "23:00", slotMinutes: 15 };
+}
+
+async function readBranch(value) {
+  const branchId = sanitizeText(value, 40).toLowerCase();
+  if (!/^[a-z0-9-]{2,40}$/.test(branchId)) throw new HttpsError("invalid-argument", "اختر فرعًا صحيحًا");
+  const snapshot = await db.doc(`branches/${branchId}`).get();
+  if (!snapshot.exists || snapshot.data().active === false) throw new HttpsError("failed-precondition", "الفرع غير متاح للحجز حاليًا");
+  return cleanDoc(snapshot);
 }
 
 export const getCatalog = onCall({ region, cors: true, enforceAppCheck: false }, async () => {
@@ -38,18 +46,19 @@ export const getCatalog = onCall({ region, cors: true, enforceAppCheck: false },
   return payload;
 });
 
-async function fetchPricedItems(lines) {
+async function fetchPricedItems(lines, branchId = "") {
   const refs = lines.map(line => {
     const collection = line.kind === "package" ? "packages" : line.kind === "offer" ? "offers" : "services";
     return db.collection(collection).doc(String(line.id));
   });
   const snapshots = await db.getAll(...refs);
-  const map = new Map(snapshots.filter(item => item.exists).map((item, index) => {
+  const map = new Map(snapshots.flatMap((item, index) => {
+    if (!item.exists) return [];
     const requestedKind = lines[index].kind;
     const data = item.data();
-    return [item.id, { ...data, id: item.id, kind: requestedKind === "product" ? "product" : requestedKind }];
+    return [[item.id, { ...data, id: item.id, kind: requestedKind === "product" ? "product" : requestedKind }]];
   }));
-  return priceItems(lines, map);
+  return priceItems(lines, map, new Date(), branchId);
 }
 
 export const validateCoupon = onCall({ region, cors: true, enforceAppCheck: false }, async request => {
@@ -57,19 +66,23 @@ export const validateCoupon = onCall({ region, cors: true, enforceAppCheck: fals
   const phone = request.data?.phone ? normalizePhone(request.data.phone) : "01000000000";
   const itemIds = Array.isArray(request.data?.itemIds) ? request.data.itemIds.map(String).slice(0, 30) : [];
   if (!code || !itemIds.length) return { valid: false };
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
   const [couponSnap, usageSnap] = await Promise.all([db.doc(`coupons/${code}`).get(), db.doc(`couponUsage/${code}_${hash(phone)}`).get()]);
   if (!couponSnap.exists) return { valid: false };
   const coupon = couponSnap.data();
+  if (branchId && Array.isArray(coupon.branchIds) && coupon.branchIds.length && !coupon.branchIds.includes(branchId)) return { valid: false };
   const prices = await fetchPricedItems(itemIds.map(id => {
     const prefix = id.split("-")[0];
     return { id, kind: prefix === "package" ? "package" : prefix === "offer" ? "offer" : prefix === "product" ? "product" : "service", qty: 1 };
-  }));
+  }), branchId);
   const result = calculateCoupon(coupon, prices, { usageCount: Number(coupon.usageCount || 0), phoneUsageCount: Number(usageSnap.data()?.count || 0) });
   return result.valid ? { valid: true, code, discountType: coupon.type, discountValue: coupon.value, discountAmount: result.discountAmount, discountPercent: result.discountPercent } : { valid: false };
 });
 
 export const createBooking = onCall({ region, cors: true, enforceAppCheck: false, timeoutSeconds: 30 }, async request => {
   const data = request.data || {};
+  const branch = await readBranch(data.branchId);
+  const branchId = branch.id;
   const customer = {
     firstName: sanitizeText(data.customer?.firstName, 50),
     lastName: sanitizeText(data.customer?.lastName, 50),
@@ -80,17 +93,17 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
   let pricedItems;
-  try { pricedItems = await fetchPricedItems(data.items); }
+  try { pricedItems = await fetchPricedItems(data.items, branchId); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   const appointmentItems = pricedItems.filter(item => item.staffRequired);
   const duration = appointmentItems.reduce((sum, item) => sum + item.duration, 0);
   const productOnly = appointmentItems.length === 0;
-  const settings = await readSettings();
+  const settings = { ...await readSettings(), ...branch };
   if (!productOnly) {
     try { validateAppointment({ date: data.bookingDate, time: data.bookingTime, duration, openingTime: settings.openingTime, closingTime: settings.closingTime }); }
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    const holiday = await db.doc(`holidays/${data.bookingDate}`).get();
-    if (holiday.exists && holiday.data()?.closed !== false) throw new HttpsError("failed-precondition", "الفرع مغلق في هذا اليوم");
+    const [branchHoliday, globalHoliday] = await Promise.all([db.doc(`holidays/${branchId}_${data.bookingDate}`).get(), db.doc(`holidays/${data.bookingDate}`).get()]);
+    if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) throw new HttpsError("failed-precondition", "الفرع مغلق في هذا اليوم");
   }
   const requestedStaffId = productOnly ? "none" : sanitizeText(data.staffId || "any", 80);
   let candidates = [];
@@ -98,10 +111,10 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
     if (requestedStaffId === "any") {
       const maxCandidates = Math.max(1, Math.min(21, Math.floor(450 / Math.ceil(Math.max(5, duration) / 5))));
       const snapshot = await db.collection("staff").where("active", "==", true).limit(50).get();
-      candidates = snapshot.docs.map(cleanDoc).filter(member => member.available !== false).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)).slice(0, maxCandidates);
+      candidates = snapshot.docs.map(cleanDoc).filter(member => member.available !== false && (!Array.isArray(member.branchIds) || !member.branchIds.length || member.branchIds.includes(branchId))).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)).slice(0, maxCandidates);
     } else {
       const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
-      if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)];
+      if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)].filter(member => !Array.isArray(member.branchIds) || !member.branchIds.length || member.branchIds.includes(branchId));
     }
     const day = new Date(`${data.bookingDate}T12:00:00`).getDay();
     const appointmentStart = minutes(data.bookingTime);
@@ -119,10 +132,10 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
     });
     if (!candidates.length) throw new HttpsError("failed-precondition", "لا يوجد عضو فريق متاح");
   }
-  const code = bookingCode();
+  const code = bookingCode(branch.code);
   const bookingRef = db.doc(`bookings/${code}`);
   const requestGuardRef = db.doc(`requestGuards/${hash(clientRequestId)}`);
-  const duplicateRef = db.doc(`bookingGuards/${hash(`${customer.phone}|${data.bookingDate || "product"}|${data.bookingTime || clientRequestId}`)}`);
+  const duplicateRef = db.doc(`bookingGuards/${hash(`${branchId}|${customer.phone}|${data.bookingDate || "product"}|${data.bookingTime || clientRequestId}`)}`);
   const customerRef = db.doc(`customers/${hash(customer.phone)}`);
   const couponCode = sanitizeText(data.couponCode, 30).toUpperCase();
   const couponRef = couponCode ? db.doc(`coupons/${couponCode}`) : null;
@@ -137,7 +150,7 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
       let assignedLockRefs = [];
       if (!productOnly) {
         for (const member of candidates) {
-          const keys = createSlotKeys(member.id, data.bookingDate, data.bookingTime, duration);
+          const keys = createSlotKeys(member.id, data.bookingDate, data.bookingTime, duration, 5, branchId);
           const refs = keys.map(key => db.doc(`appointmentLocks/${key}`));
           const locks = [];
           for (const ref of refs) locks.push(await transaction.get(ref));
@@ -145,7 +158,8 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
         }
         if (!assigned) throw new Error("SLOT_UNAVAILABLE");
       }
-      const coupon = baseReads[2]?.exists ? baseReads[2].data() : null;
+      const couponData = baseReads[2]?.exists ? baseReads[2].data() : null;
+      const coupon = couponData && (!Array.isArray(couponData.branchIds) || !couponData.branchIds.length || couponData.branchIds.includes(branchId)) ? couponData : null;
       const couponResult = calculateCoupon(coupon, pricedItems, { usageCount: Number(coupon?.usageCount || 0), phoneUsageCount: Number(baseReads[3]?.data()?.count || 0) });
       const subtotal = pricedItems.reduce((sum, item) => sum + item.lineTotal, 0);
       const discount = couponResult.valid ? couponResult.discountAmount : 0;
@@ -153,6 +167,11 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
       const now = FieldValue.serverTimestamp();
       const record = {
         code,
+        branchId,
+        branchNameAr: branch.nameAr,
+        branchNameEn: branch.nameEn,
+        branchPhone: branch.phone,
+        branchWhatsapp: branch.whatsapp,
         customer,
         customerName: `${customer.firstName} ${customer.lastName}`,
         partySize: Math.max(1, Math.min(10, Number(data.partySize || 1))),
@@ -186,14 +205,14 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
       transaction.create(bookingRef, record);
       transaction.create(requestGuardRef, { bookingId: code, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
       transaction.create(duplicateRef, { bookingId: code, createdAt: now });
-      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
+      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
       if (assigned?.id) transaction.update(db.doc(`staff/${assigned.id}`), { bookingCount: FieldValue.increment(1), updatedAt: now });
-      assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now }));
+      assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now }));
       if (couponResult.valid) {
         transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now });
         transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now }, { merge: true });
       }
-      return { ok: true, bookingCode: code, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, staffId: assigned?.id || null, staffNameAr: assigned?.nameAr || null };
+      return { ok: true, bookingCode: code, branchId, branchNameAr: branch.nameAr, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, staffId: assigned?.id || null, staffNameAr: assigned?.nameAr || null };
     });
   } catch (error) {
     const messages = { DUPLICATE_REQUEST: "تم إرسال هذا الطلب من قبل", DUPLICATE_BOOKING: "يوجد حجز مطابق لهذا الرقم والموعد", SLOT_UNAVAILABLE: "الموعد غير متاح، اختر وقتًا آخر" };
@@ -262,12 +281,15 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.id;
   delete payload.createdAt;
   delete payload.updatedAt;
-  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
+  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
   ["active", "available", "showCountdown", "startsFrom", "closed"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
-  ["serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
+  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
   ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
   if (collection === "coupons") payload.code = sanitizeText(payload.code || raw.id, 30).toUpperCase();
+  if (collection === "branches") {
+    payload.code = sanitizeText(payload.code, 3).toUpperCase();
+  }
   return payload;
 }
 
@@ -279,6 +301,14 @@ export const adminUpsert = onCall({ region }, async request => {
   let id = sanitizeText(request.data?.id || raw.id, 100);
   if (collection === "settings") id = "public";
   if (collection === "coupons") id = sanitizeText(raw.code || id, 30).toUpperCase();
+  if (collection === "branches") id = sanitizeText(raw.id || id, 40).toLowerCase();
+  if (collection === "branches" && !/^[a-z0-9-]{2,40}$/.test(id)) throw new HttpsError("invalid-argument", "معرّف الفرع غير صالح");
+  if (collection === "holidays") {
+    const holidayBranch = sanitizeText(raw.branchId, 40).toLowerCase();
+    const holidayDate = sanitizeText(raw.date, 10);
+    if (!/^[a-z0-9-]{2,40}$/.test(holidayBranch) || !/^\d{4}-\d{2}-\d{2}$/.test(holidayDate)) throw new HttpsError("invalid-argument", "بيانات إجازة الفرع غير صحيحة");
+    id = `${holidayBranch}_${holidayDate}`;
+  }
   if (!id) id = db.collection(collection).doc().id;
   const ref = db.collection(collection).doc(id);
   const before = await ref.get();
@@ -327,7 +357,7 @@ export const updateBooking = onCall({ region }, async request => {
     const ledger = await transaction.get(ledgerRef);
     if (ledger.exists) return { ok: true, idempotent: true, paymentStatus: transition.status };
     const dateKey = new Date().toISOString().slice(0, 10);
-    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, amount: transition.ledgerAmount, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
+    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
     transaction.update(ref, { paymentStatus: transition.status, paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, updatedAt: now });
     if (booking.staffId && booking.staffId !== "none") transaction.update(db.doc(`staff/${booking.staffId}`), { revenueTotal: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
     if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
@@ -362,7 +392,7 @@ export const notifyAdminsOnBooking = onDocumentCreated({ region, document: "book
   if (!tokens.length) return;
   const response = await getMessaging().sendEachForMulticast({
     tokens,
-    notification: { title: "حجز جديد في مزين مصر", body: `${booking.customerName} • ${booking.bookingDate || "طلب منتجات"} ${booking.bookingTime || ""}`.trim() },
+    notification: { title: `حجز جديد • ${booking.branchNameAr || "مزين مصر"}`, body: `${booking.customerName} • ${booking.bookingDate || "طلب منتجات"} ${booking.bookingTime || ""}`.trim() },
     webpush: { fcmOptions: { link: "/admin/" }, notification: { icon: "/assets/el-mezaen-logo.jpeg", badge: "/assets/el-mezaen-logo.jpeg", requireInteraction: true, tag: booking.code } },
     data: { bookingId: event.params.bookingId, type: "new_booking" }
   });

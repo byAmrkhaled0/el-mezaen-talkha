@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const siteUrl = (process.env.SITE_URL || "https://muzain.com/مزينمصر/طلخا-6932").replace(/\/$/, "");
+const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.web.app").replace(/\/$/, "");
 const escaped = siteUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const origin = new URL(siteUrl).origin;
 

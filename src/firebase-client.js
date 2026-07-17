@@ -24,6 +24,7 @@ export async function getCatalog() {
     const fallback = localCatalog();
     return {
       ...remote,
+      branches: remote.branches?.length ? remote.branches : fallback.branches,
       categories: remote.categories?.length ? remote.categories : fallback.categories,
       services: remote.services?.length ? remote.services : fallback.services,
       packages: remote.packages?.length ? remote.packages : fallback.packages,
@@ -46,7 +47,7 @@ export async function validateCoupon(payload) {
     return result.data;
   }
   const coupon = seedCatalog.coupons.find(item => item.code.toUpperCase() === String(payload.code || "").trim().toUpperCase() && item.active);
-  if (!coupon || Number(payload.subtotal || 0) < coupon.minSubtotal) return { valid: false, message: "invalid" };
+  if (!coupon || Number(payload.subtotal || 0) < coupon.minSubtotal || (coupon.branchIds?.length && !coupon.branchIds.includes(payload.branchId))) return { valid: false, message: "invalid" };
   const raw = coupon.type === "percent" ? Number(payload.subtotal) * coupon.value / 100 : coupon.value;
   const discountAmount = Math.min(raw, coupon.maxDiscount || raw);
   return { valid: true, code: coupon.code, discountType: coupon.type, discountValue: coupon.value, discountAmount, discountPercent: Math.round(discountAmount / Number(payload.subtotal) * 10000) / 100 };
@@ -58,12 +59,15 @@ export async function createBooking(payload) {
     return result.data;
   }
   const catalog = localCatalog();
+  const branch = catalog.branches.find(item => item.id === payload.branchId && item.active !== false);
+  if (!branch) throw new Error("اختر الفرع أولًا");
   const indexed = new Map([...catalog.services.map(item => [item.id, item]), ...catalog.packages.map(item => [item.id, item]), ...catalog.offers.map(item => [item.id, item])]);
-  const items = payload.items.map(line => indexed.get(line.id)).filter(Boolean);
+  const items = payload.items.map(line => indexed.get(line.id)).filter(item => item && (!item.branchIds?.length || item.branchIds.includes(branch.id)));
+  if (items.length !== payload.items.length) throw new Error("إحدى الخدمات غير متاحة في الفرع المختار");
   const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0), 0);
-  const coupon = payload.couponCode ? await validateCoupon({ code: payload.couponCode, subtotal, phone: payload.customer.phone, itemIds: payload.items.map(item => item.id) }) : { valid: false, discountAmount: 0 };
+  const coupon = payload.couponCode ? await validateCoupon({ code: payload.couponCode, branchId: branch.id, subtotal, phone: payload.customer.phone, itemIds: payload.items.map(item => item.id) }) : { valid: false, discountAmount: 0 };
   const total = Math.max(0, subtotal - Number(coupon.discountAmount || 0));
-  const code = `MZ-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
+  const code = `MZ-${branch.code || "BR"}-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
   const record = { ...payload, code, subtotal, discountAmount: coupon.discountAmount || 0, total, createdAt: new Date().toISOString() };
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   saved.unshift(record);

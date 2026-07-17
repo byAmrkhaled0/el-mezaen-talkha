@@ -12,17 +12,18 @@ export function minutes(value) {
   return hour * 60 + minute;
 }
 
-export function createSlotKeys(staffId, date, time, duration, step = 5) {
+export function createSlotKeys(staffId, date, time, duration, step = 5, branchId = "") {
   const start = minutes(time);
   const safeDuration = Math.max(step, Number(duration || 0));
   const keys = [];
   for (let cursor = start; cursor < start + safeDuration; cursor += step) {
-    keys.push(`${staffId}_${date}_${String(Math.floor(cursor / 60)).padStart(2, "0")}${String(cursor % 60).padStart(2, "0")}`);
+    const prefix = branchId ? `${branchId}_` : "";
+    keys.push(`${prefix}${staffId}_${date}_${String(Math.floor(cursor / 60)).padStart(2, "0")}${String(cursor % 60).padStart(2, "0")}`);
   }
   return keys;
 }
 
-export function priceItems(lines, docsById, now = new Date()) {
+export function priceItems(lines, docsById, now = new Date(), branchId = "") {
   if (!Array.isArray(lines) || !lines.length || lines.length > 30) throw new Error("INVALID_ITEMS");
   const seen = new Set();
   return lines.map(line => {
@@ -31,6 +32,7 @@ export function priceItems(lines, docsById, now = new Date()) {
     seen.add(id);
     const source = docsById.get(id);
     if (!source || source.active === false) throw new Error("ITEM_UNAVAILABLE");
+    if (branchId && Array.isArray(source.branchIds) && source.branchIds.length && !source.branchIds.includes(branchId)) throw new Error("ITEM_UNAVAILABLE_AT_BRANCH");
     const kind = line.kind === "product" ? "product" : line.kind;
     if (source.kind !== kind && !(source.kind === "service" && kind === "product" && source.type === "product")) throw new Error("INVALID_ITEM_TYPE");
     if (source.status === "expired" || source.status === "stopped") throw new Error("ITEM_UNAVAILABLE");

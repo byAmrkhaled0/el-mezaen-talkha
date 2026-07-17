@@ -1,12 +1,12 @@
 export const translations = {
   ar: {
-    home: "الرئيسية", branch: "فرع طلخا", offers: "العروض", packages: "الباقات", services: "الخدمات", about: "عن مزين",
+    home: "الرئيسية", branch: "فرعا طلخا والمشاية", offers: "العروض", packages: "الباقات", services: "الخدمات", about: "عن مزين",
     team: "الفريق", gallery: "المعرض", contact: "تواصل معنا", bookNow: "احجز الآن", addCart: "إضافة للسلة", callNow: "اتصل الآن", whatsappBranch: "واتساب المحل",
     heroBadge: "منذ 1995 • خبرة تصنع الفارق", heroTitle1: "لوكك يبدأ من", heroTitle2: "مزين مصر",
     heroText: "مش مجرد حلاقة… دي تجربة بتصنع حضورك. اختار خدماتك ومتخصصك وموعدك، وسيب التفاصيل علينا.",
     startBooking: "ابدأ الحجز", exploreServices: "استكشف الخدمات", years: "خبرة منذ 1995", specialists: "+20 متخصص", fastBooking: "حجز سريع وآمن",
     offersTag: "عروض تتحكم بها الإدارة", offersTitle: "عروض مختارة ليك", offersText: "العروض النشطة والمجدولة تظهر هنا تلقائيًا.", noOffers: "لا توجد عروض نشطة حاليًا.",
-    packagesTag: "قيمة أكبر في زيارة واحدة", packagesTitle: "الباقات", packagesText: "الأسعار والمدد كما هي في فرع طلخا.",
+    packagesTag: "قيمة أكبر في زيارة واحدة", packagesTitle: "الباقات", packagesText: "اختار الفرع ثم احجز الباقة المناسبة بسهولة.",
     servicesTag: "كل التفاصيل واضحة", servicesTitle: "الخدمات", servicesText: "اختر خدمة أو أكثر وأضفها إلى سلة الحجز.", all: "الكل",
     from: "يبدأ من", minute: "دقيقة", product: "منتج", package: "باقة", featured: "الأكثر طلبًا", special: "عرض مميز",
     aboutTag: "حكاية خبرة", aboutTitle: "منذ 1995.. نصنع إطلالة تشبهك", aboutText: "في مزين مصر نؤمن أن الإطلالة القوية تبدأ من التفاصيل. نجمع بين خبرة السنين، أحدث أساليب العناية، واهتمام حقيقي براحتك لتخرج كل مرة بأفضل نسخة منك.",
@@ -19,17 +19,18 @@ export const translations = {
     coupon: "كود الخصم", apply: "تطبيق", applying: "جارٍ التحقق...", review: "ملخص الحجز", servicesSelected: "الخدمات المختارة", dateTime: "التاريخ والوقت", staffMember: "عضو الفريق",
     createBooking: "أنشئ حجز", creating: "جارٍ إنشاء الحجز...", next: "التالي", back: "السابق", close: "إغلاق", required: "يرجى استكمال البيانات المطلوبة.",
     successTitle: "تم استلام حجزك بنجاح", successText: "احتفظ بكود الحجز، وسيتواصل معك فريق الفرع عند تأكيد الموعد.", bookingCode: "كود الحجز", whatsapp: "تواصل عبر واتساب", previewNotice: "هذه معاينة محلية. اربط Firebase ليصل الحجز إلى لوحة الإدارة.",
-    footerAbout: "وجهتك للحلاقة والعناية الرجالية في طلخا.", workingHours: "مواعيد العمل", daily: "يوميًا", bookingHelp: "الحجز والاستفسار", admin: "لوحة الإدارة", developedBy: "تم البرمجة بواسطة المهندس عمرو خالد",
+    footerAbout: "وجهتك للحلاقة والعناية الرجالية في طلخا والمشاية.", workingHours: "مواعيد العمل", daily: "يوميًا", bookingHelp: "الحجز والاستفسار", admin: "لوحة الإدارة", developedBy: "تم البرمجة بواسطة المهندس عمرو خالد",
+    chooseBranch: "اختر الفرع", chooseBranchText: "اختر الفرع الأقرب لك، وبعدها كمّل الحجز في خطوات بسيطة.", selectedBranch: "الفرع المختار", changeBranch: "تغيير الفرع", bookBranch: "احجز في هذا الفرع", directions: "الاتجاهات", landline: "الخط الأرضي",
     privacy: "بياناتك تُستخدم لتنفيذ الحجز فقط.", loadError: "تعذر تحميل البيانات. حاول مرة أخرى.", couponInvalid: "كود الخصم غير صالح.", added: "تمت الإضافة للسلة", menu: "القائمة", theme: "تغيير المظهر", language: "تغيير اللغة"
   },
   en: {
-    home: "Home", branch: "Talkha Branch", offers: "Offers", packages: "Packages", services: "Services", about: "About",
+    home: "Home", branch: "Talkha & El Mashaya", offers: "Offers", packages: "Packages", services: "Services", about: "About",
     team: "Team", gallery: "Gallery", contact: "Contact", bookNow: "Book Now", addCart: "Add to Cart", callNow: "Call Now", whatsappBranch: "Shop WhatsApp",
     heroBadge: "Since 1995 • Experience That Shows", heroTitle1: "Your Look Starts at", heroTitle2: "El Mezaen Egypt",
     heroText: "More than a haircut — an experience built around your presence. Choose your services, specialist and time; we will take care of every detail.",
     startBooking: "Start Booking", exploreServices: "Explore Services", years: "Since 1995", specialists: "20+ Specialists", fastBooking: "Fast, Secure Booking",
     offersTag: "Admin-managed offers", offersTitle: "Offers Picked for You", offersText: "Active and scheduled offers appear here automatically.", noOffers: "There are no active offers right now.",
-    packagesTag: "More value in one visit", packagesTitle: "Packages", packagesText: "Prices and durations exactly as listed for the Talkha branch.",
+    packagesTag: "More value in one visit", packagesTitle: "Packages", packagesText: "Choose your branch, then book the package that suits you.",
     servicesTag: "Every detail, upfront", servicesTitle: "Services", servicesText: "Choose one or more services and add them to your booking cart.", all: "All",
     from: "From", minute: "min", product: "Product", package: "Package", featured: "Most Popular", special: "Special Offer",
     aboutTag: "About El Mezaen Egypt", aboutTitle: "Since 1995, Details Make the Look", aboutText: "Talkha's destination for men's grooming, with a focus on hygiene, precision and a result that suits you.",
@@ -42,7 +43,8 @@ export const translations = {
     coupon: "Discount Code", apply: "Apply", applying: "Checking...", review: "Booking Summary", servicesSelected: "Selected Services", dateTime: "Date and Time", staffMember: "Team Member",
     createBooking: "Create Booking", creating: "Creating booking...", next: "Next", back: "Back", close: "Close", required: "Please complete the required information.",
     successTitle: "Your Booking Was Received", successText: "Keep your booking code. The branch team will contact you when the appointment is confirmed.", bookingCode: "Booking Code", whatsapp: "Chat on WhatsApp", previewNotice: "This is a local preview. Connect Firebase to send bookings to the admin dashboard.",
-    footerAbout: "Your men's grooming destination in Talkha.", workingHours: "Working Hours", daily: "Daily", bookingHelp: "Bookings & Enquiries", admin: "Admin Dashboard", developedBy: "Developed by Eng. Amr Khaled",
+    footerAbout: "Your men's grooming destination in Talkha and El Mashaya.", workingHours: "Working Hours", daily: "Daily", bookingHelp: "Bookings & Enquiries", admin: "Admin Dashboard", developedBy: "Developed by Eng. Amr Khaled",
+    chooseBranch: "Choose a Branch", chooseBranchText: "Choose the nearest branch, then complete your booking in a few simple steps.", selectedBranch: "Selected Branch", changeBranch: "Change Branch", bookBranch: "Book This Branch", directions: "Directions", landline: "Landline",
     privacy: "Your details are used only to fulfil your booking.", loadError: "Could not load the data. Please try again.", couponInvalid: "This discount code is not valid.", added: "Added to cart", menu: "Menu", theme: "Change theme", language: "Change language"
   }
 };
