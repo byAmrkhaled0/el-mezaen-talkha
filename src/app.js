@@ -601,13 +601,17 @@ async function submitBooking() {
 
 $("#reviewForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const button = event.currentTarget.querySelector('button[type="submit"]');
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const payload = Object.fromEntries(new FormData(form));
   button.disabled = true;
   try {
-    await submitReview(Object.fromEntries(new FormData(event.currentTarget)));
-    event.currentTarget.reset();
+    await submitReview(payload);
+    form.reset();
+    const fiveStars = form.querySelector('input[name="rating"][value="5"]');
+    if (fiveStars) fiveStars.checked = true;
     showToast(state.lang === "ar" ? "شكرًا! تم إرسال تقييمك للمراجعة" : "Thank you! Your review was submitted");
-  } catch (error) { showToast(error.message || "تعذر إرسال التقييم"); }
+  } catch (error) { console.error("Review submission failed", error); showToast(error?.message || "تعذر إرسال التقييم"); }
   finally { button.disabled = false; }
 });
 

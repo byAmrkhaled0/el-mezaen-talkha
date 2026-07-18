@@ -16,7 +16,7 @@ const escapeHtml = value => { const node = document.createElement("div"); node.t
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
 const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
-const roleDefaults = { worker: ["pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity"), receptionist: ["dashboard", "pos", "bookings", "customers", "reviews"], accountant: ["dashboard", "revenue", "expenses", "payroll"] };
+const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
 const fields = {
   branches: [
@@ -127,27 +127,28 @@ function applyAccess() {
   if (state.role !== "admin") $$('select').forEach(select => [...select.options].forEach(option => { if (["talkha", "mashaya"].includes(option.value) && !state.branchIds.includes(option.value)) option.remove(); }));
 }
 
-function renderPermissionPicker(role = $("#accountRole")?.value || "worker") {
+function renderPermissionPicker(role = $("#accountRole")?.value || "cashier") {
   const selected = new Set(roleDefaults[role] || []);
   $("#permissionPicker").innerHTML = Object.entries(permissionLabels).map(([value, label]) => `<label><input type="checkbox" name="permissions" value="${value}" ${selected.has(value) ? "checked" : ""}> ${label}</label>`).join("");
 }
 
 function renderUserAccounts() {
   const items = state.collections.get("users") || [];
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", worker: "عامل", receptionist: "استقبال", accountant: "محاسب" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div></article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "كاشير (حساب قديم)" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div></article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 async function submitUserAccount(event) {
   event.preventDefault();
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const button = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
   const payload = { name: form.get("name"), email: form.get("email"), password: form.get("password"), role: form.get("role"), permissions: form.getAll("permissions"), branchIds: form.getAll("branchIds") };
   button.disabled = true;
   try {
     await createUserAccount(payload);
-    event.currentTarget.reset();
-    renderPermissionPicker("worker");
-    const talkha = event.currentTarget.querySelector('input[name="branchIds"][value="talkha"]');
+    formElement.reset();
+    renderPermissionPicker("cashier");
+    const talkha = formElement.querySelector('input[name="branchIds"][value="talkha"]');
     if (talkha) talkha.checked = true;
     await loadCollection("users", true);
     renderUserAccounts();

@@ -14,13 +14,13 @@ const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppChe
 const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
-const ADMIN_ROLES = ["admin", "manager", "worker", "receptionist", "accountant"];
+// Keep "worker" only as a legacy cashier role so previously-created accounts still work.
+const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
 const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "reviews", "schedule", "gallery", "celebrities", "posts", "settings", "activity", "users"];
 const ROLE_DEFAULT_PERMISSIONS = {
   manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
-  worker: ["pos", "bookings", "customers"],
-  receptionist: ["dashboard", "pos", "bookings", "customers", "reviews"],
-  accountant: ["dashboard", "revenue", "expenses", "payroll"]
+  cashier: ["dashboard", "pos", "bookings", "customers"],
+  worker: ["dashboard", "pos", "bookings", "customers"]
 };
 const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "marketing", "other"];
@@ -1018,13 +1018,23 @@ export const createAdminUser = onCall({ region, memory: "256MiB", maxInstances: 
   const role = sanitizeText(request.data?.role, 30);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
   const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
-  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "worker", "receptionist", "accountant"].includes(role)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد فرعًا واحدًا على الأقل وباسورد 8 أحرف على الأقل");
+  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "cashier"].includes(role)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد فرعًا واحدًا على الأقل وباسورد 8 أحرف على الأقل");
   const { getAuth } = await import("firebase-admin/auth");
   let user;
   try { user = await getAuth().createUser({ email, password, displayName: name, disabled: false }); }
-  catch (error) { throw new HttpsError("already-exists", error.code === "auth/email-already-exists" ? "البريد مستخدم بالفعل" : "تعذر إنشاء الحساب"); }
-  await getAuth().setCustomUserClaims(user.uid, { role, permissions, branchIds });
-  await db.doc(`users/${user.uid}`).set({ name, email, role, permissions, branchIds, active: true, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  catch (error) {
+    const messages = { "auth/email-already-exists": "البريد مستخدم بالفعل؛ راجع الحسابات الحالية في Firebase Authentication", "auth/invalid-email": "البريد الإلكتروني غير صحيح", "auth/invalid-password": "الباسورد غير صالح؛ استخدم 8 أحرف وأرقام على الأقل", "auth/operation-not-allowed": "فعّل تسجيل الدخول بالبريد والباسورد من Firebase Authentication", "auth/too-many-requests": "محاولات كثيرة؛ انتظر قليلًا ثم أعد المحاولة" };
+    console.error("createAdminUser createUser failed", { code: error.code, message: error.message });
+    throw new HttpsError(error.code === "auth/email-already-exists" ? "already-exists" : "failed-precondition", messages[error.code] || "تعذر إنشاء الحساب داخل Firebase Authentication");
+  }
+  try {
+    await getAuth().setCustomUserClaims(user.uid, { role, permissions, branchIds });
+    await db.doc(`users/${user.uid}`).set({ name, email, role, permissions, branchIds, active: true, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  } catch (error) {
+    await getAuth().deleteUser(user.uid).catch(() => {});
+    console.error("createAdminUser permissions failed", { code: error.code, message: error.message });
+    throw new HttpsError("internal", "تعذر حفظ صلاحيات الحساب؛ لم يتم إنشاء الحساب");
+  }
   return { ok: true, uid: user.uid };
 });
 

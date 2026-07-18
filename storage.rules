@@ -2,7 +2,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function canManageMedia() {
-      return request.auth != null && request.auth.token.role in ['admin', 'manager'];
+      return request.auth != null && (request.auth.token.role == 'admin' || (request.auth.token.role == 'manager' && request.auth.token.permissions is list && request.auth.token.permissions.hasAny(['gallery', 'celebrities', 'posts', 'settings'])));
     }
     match /public/{allPaths=**} {
       allow read: if true;
