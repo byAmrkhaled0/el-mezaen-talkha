@@ -15,6 +15,7 @@ let storage;
 if (configured) {
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
+    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   auth = getAuth(app);

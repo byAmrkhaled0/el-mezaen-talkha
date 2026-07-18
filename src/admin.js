@@ -89,8 +89,9 @@ async function showSection(id) {
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
   if (id === "dashboard" || id === "bookings" || id === "revenue") await loadDashboard();
-  const map = { packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], services: ["categories", "services"] };
+  const map = { revenue: ["services", "staff"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], services: ["categories", "services"] };
   for (const collection of map[id] || []) await loadCollection(collection, true);
+  if (id === "revenue") renderRevenue();
 }
 
 async function loadDashboard(silent = false) {
@@ -128,12 +129,13 @@ function bookingRowMini(item) {
 function branchLabel(id) { return ({ talkha: "فرع طلخا", mashaya: "فرع المشاية" })[id] || id || "فرع طلخا"; }
 
 function renderBranchFilters() {
-  const branches = [...new Map(state.dashboard.bookings.map(item => [item.branchId || "talkha", item.branchNameAr || branchLabel(item.branchId)])).entries()];
+  const branches = new Map([["talkha", "فرع طلخا"], ["mashaya", "فرع المشاية"]]);
+  state.dashboard.bookings.forEach(item => branches.set(item.branchId || "talkha", item.branchNameAr || branchLabel(item.branchId)));
   [["#bookingBranchFilter", "كل الفروع"], ["#revenueBranch", "كل الفروع"]].forEach(([selector, allLabel]) => {
     const select = $(selector);
     const current = select.value;
-    select.innerHTML = `<option value="all">${allLabel}</option>` + branches.map(([id, name]) => `<option value="${escapeAttr(id)}">${escapeHtml(name)}</option>`).join("");
-    select.value = branches.some(([id]) => id === current) ? current : "all";
+    select.innerHTML = `<option value="all">${allLabel}</option>` + [...branches].map(([id, name]) => `<option value="${escapeAttr(id)}">${escapeHtml(name)}</option>`).join("");
+    select.value = branches.has(current) ? current : "all";
   });
 }
 
@@ -175,17 +177,27 @@ function closeScanner() { scanStream?.getTracks().forEach(track => track.stop())
 function findScanned() { const code = $("#scannerCode").value.trim().toUpperCase(); const found = state.dashboard.bookings.find(item => String(item.code).toUpperCase() === code); if (!found) return toast("لم يتم العثور على الحجز", true); closeScanner(); $("#bookingSearch").value = found.code; renderBookings(); document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); toast("تم فتح الحجز"); }
 
 function renderRevenue() {
+  const serviceSelect = $("#revenueService");
+  const selectedService = serviceSelect.value || "all";
+  const services = (state.collections.get("services") || []).filter(item => item.active !== false);
+  serviceSelect.innerHTML = '<option value="all">كل الخدمات</option>' + services.map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.nameAr || item.id)}</option>`).join("");
+  serviceSelect.value = services.some(item => item.id === selectedService) ? selectedService : "all";
+
+  const staffSelect = $("#revenueStaff");
+  const selectedStaff = staffSelect.value || "all";
+  const staffMembers = (state.collections.get("staff") || []).filter(item => item.active !== false);
+  const bookingStaff = new Map(state.dashboard.bookings.filter(item => item.staffId).map(item => [item.staffId, item.staffNameAr || item.staffId]));
+  staffMembers.forEach(item => bookingStaff.set(item.id, item.nameAr || item.id));
+  staffSelect.innerHTML = '<option value="all">كل العاملين</option>' + [...bookingStaff].map(([id, name]) => `<option value="${escapeAttr(id)}">${escapeHtml(name)}</option>`).join("");
+  staffSelect.value = bookingStaff.has(selectedStaff) ? selectedStaff : "all";
+
   const from = $("#revenueFrom").value;
   const to = $("#revenueTo").value;
   const branch = $("#revenueBranch").value;
-  const staff = $("#revenueStaff").value;
-  const service = $("#revenueService").value.trim();
-  const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || (item.branchId || "talkha") === branch) && (staff === "all" || item.staffId === staff) && (!service || (item.itemIds || []).includes(service)));
-  $("#revenueTable").innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(item.staffId || "—")}</td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td></tr>`).join("") || emptyRow(7);
-  const staffIds = [...new Set(state.dashboard.bookings.map(item => item.staffId).filter(Boolean))];
-  const current = $("#revenueStaff").value;
-  $("#revenueStaff").innerHTML = '<option value="all">كل العاملين</option>' + staffIds.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(id)}</option>`).join("");
-  $("#revenueStaff").value = staffIds.includes(current) ? current : "all";
+  const staff = staffSelect.value;
+  const service = serviceSelect.value;
+  const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || (item.branchId || "talkha") === branch) && (staff === "all" || item.staffId === staff) && (service === "all" || (item.itemIds || []).includes(service)));
+  $("#revenueTable").innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td></tr>`).join("") || emptyRow(7);
 }
 
 async function loadCollection(collection, refresh = false) {
