@@ -1,6 +1,6 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
-import { changeBooking, createPosOrder, currentRole, deleteEntity, enablePush, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, secureDeleteRecord, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { changeBooking, createPosOrder, createUserAccount, currentAccess, deleteEntity, enablePush, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, secureDeleteRecord, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -14,7 +14,9 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
+const roleDefaults = { worker: ["pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity"), receptionist: ["dashboard", "pos", "bookings", "customers", "reviews"], accountant: ["dashboard", "revenue", "expenses", "payroll"] };
 
 const fields = {
   branches: [
@@ -105,17 +107,53 @@ function setTheme(theme) {
 }
 
 async function showSection(id) {
+  if (state.role !== "admin" && !state.permissions.has(id)) return toast("لا تملك صلاحية هذا القسم", true);
   state.section = id;
   $$('.admin-section').forEach(section => section.classList.toggle("active", section.id === id));
   $$('[data-section]').forEach(button => button.classList.toggle("active", button.dataset.section === id));
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
   if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id)) await loadDashboard();
-  const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], services: ["categories", "services"] };
+  const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
   for (const collection of map[id] || []) await loadCollection(collection, true);
   if (id === "revenue") renderRevenue();
   if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id)) await loadBusiness();
   if (id === "pos") renderPos();
+  if (id === "users") renderUserAccounts();
+}
+
+function applyAccess() {
+  $$('[data-section]').forEach(button => { button.hidden = state.role !== "admin" && !state.permissions.has(button.dataset.section); });
+  if (state.role !== "admin") $$('select').forEach(select => [...select.options].forEach(option => { if (["talkha", "mashaya"].includes(option.value) && !state.branchIds.includes(option.value)) option.remove(); }));
+}
+
+function renderPermissionPicker(role = $("#accountRole")?.value || "worker") {
+  const selected = new Set(roleDefaults[role] || []);
+  $("#permissionPicker").innerHTML = Object.entries(permissionLabels).map(([value, label]) => `<label><input type="checkbox" name="permissions" value="${value}" ${selected.has(value) ? "checked" : ""}> ${label}</label>`).join("");
+}
+
+function renderUserAccounts() {
+  const items = state.collections.get("users") || [];
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", worker: "عامل", receptionist: "استقبال", accountant: "محاسب" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div></article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+}
+
+async function submitUserAccount(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  const form = new FormData(event.currentTarget);
+  const payload = { name: form.get("name"), email: form.get("email"), password: form.get("password"), role: form.get("role"), permissions: form.getAll("permissions"), branchIds: form.getAll("branchIds") };
+  button.disabled = true;
+  try {
+    await createUserAccount(payload);
+    event.currentTarget.reset();
+    renderPermissionPicker("worker");
+    const talkha = event.currentTarget.querySelector('input[name="branchIds"][value="talkha"]');
+    if (talkha) talkha.checked = true;
+    await loadCollection("users", true);
+    renderUserAccounts();
+    toast("تم إنشاء الحساب وتطبيق الصلاحيات");
+  } catch (error) { toast(error.message || "تعذر إنشاء الحساب", true); }
+  finally { button.disabled = false; }
 }
 
 async function loadDashboard(silent = false) {
@@ -745,6 +783,10 @@ $("#expenseCategory").addEventListener("change", toggleExpenseInventory);
 $("#refreshPayroll").addEventListener("click", () => loadBusiness());
 $("#payrollMonth").addEventListener("change", () => loadBusiness());
 $("#exportPayroll").addEventListener("click", () => exportCsv(`el-mezaen-payroll-${state.business.month}.csv`, ["العامل", "الإيراد", "التارجت", "الأساسي", "نسبة الزيادة", "الزيادة", "الراتب", "الحالة"], (state.business.payroll || []).map(item => [item.nameAr, item.revenue, item.monthlyTarget, item.baseSalary, item.targetBonusPercent, item.bonus, item.payment?.netSalary ?? item.netSalary, item.payment ? "تم الصرف" : "لم يصرف"])));
+$("#accountRole").addEventListener("change", event => renderPermissionPicker(event.target.value));
+$("#userAccountForm").addEventListener("submit", submitUserAccount);
+$("#refreshUsers").addEventListener("click", async () => { await loadCollection("users", true); renderUserAccounts(); });
+renderPermissionPicker();
 
 let deferredInstallPrompt = null;
 window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstallPrompt = event; $("#installAdmin").hidden = false; });
@@ -761,12 +803,14 @@ if ("serviceWorker" in navigator && location.protocol !== "http:") navigator.ser
 watchAuth(async user => {
   if (!user) { location.replace("/login/"); return; }
   try {
-    const role = await currentRole(user);
-    if (!role) { await logout(); location.replace("/login/"); return; }
-    state.user = user; state.role = role;
-    $("#welcomeText").textContent = `لوحة إدارة مزين مصر • ${role}`;
+    const access = await currentAccess(user);
+    if (!access.role) { await logout(); location.replace("/login/"); return; }
+    state.user = user; state.role = access.role; state.permissions = new Set(access.role === "admin" ? Object.keys(permissionLabels).concat("users") : access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
+    $("#welcomeText").textContent = `لوحة إدارة مزين مصر • ${access.role}`;
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
-    await loadDashboard();
-    setInterval(() => loadDashboard(true), 20000);
+    applyAccess();
+    const firstSection = state.role === "admin" ? "dashboard" : ([...state.permissions].find(value => $(`#${value}`)) || "pos");
+    await showSection(firstSection);
+    setInterval(() => { if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(state.section)) loadDashboard(true); }, 20000);
   } catch { location.replace("/login/"); }
 });

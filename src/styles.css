@@ -220,6 +220,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 [dir="rtl"] .toast { translate: 50% 30px; }
 .toast.show { opacity: 1; translate: -50% 0; }
 [dir="rtl"] .toast.show { translate: 50% 0; }
+.network-status{position:fixed;z-index:160;top:0;inset-inline:0;padding:9px 16px;text-align:center;font-weight:800;background:#ffd166;color:#241900;box-shadow:0 4px 18px #0005}.network-status.online{background:#39d98a;color:#032315}
 
 .booking-dialog { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; padding: 18px; background: rgba(0, 0, 0, .78); color: var(--text); backdrop-filter: blur(10px); }
 .booking-dialog:not([open]) { display: none; }

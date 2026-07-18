@@ -8,6 +8,8 @@ export const firebaseConfigured = Boolean(config.projectId && !String(config.pro
 let functions;
 let app;
 let analyticsPromise;
+const CATALOG_CACHE_KEY = "mz-public-catalog-v2";
+const CATALOG_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
 if (firebaseConfigured) {
   app = initializeApp(config);
@@ -32,13 +34,28 @@ function localCatalog() {
   return structuredClone(seedCatalog);
 }
 
+function readCatalogCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(CATALOG_CACHE_KEY) || "null");
+    if (!cached?.data || Date.now() - Number(cached.savedAt || 0) > CATALOG_CACHE_MAX_AGE) return null;
+    return structuredClone(cached.data);
+  } catch { return null; }
+}
+
+function saveCatalogCache(data) {
+  try { localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data })); }
+  catch (error) { console.debug("Catalog cache is unavailable", error?.message || error); }
+}
+
 export async function getCatalog() {
   if (!firebaseConfigured) return { ...localCatalog(), preview: true };
+  const cached = readCatalogCache();
+  if (navigator.onLine === false && cached) return { ...cached, offline: true, cached: true };
   try {
-    const result = await httpsCallable(functions, "getCatalog")({});
+    const result = await httpsCallable(functions, "getCatalog", { timeout: 15000 })({});
     const remote = result.data || {};
     const fallback = localCatalog();
-    return {
+    const catalog = {
       ...remote,
       branches: remote.branches?.length ? remote.branches : fallback.branches,
       categories: remote.categories?.length ? remote.categories : fallback.categories,
@@ -53,7 +70,13 @@ export async function getCatalog() {
       settings: { ...fallback.settings, ...(remote.settings || {}) },
       preview: !remote.services?.length || !remote.packages?.length
     };
+    saveCatalogCache(catalog);
+    return catalog;
   } catch (error) {
+    if (cached) {
+      console.warn("Using the last saved catalog until the connection returns.", error?.code || error?.message || error);
+      return { ...cached, offline: true, cached: true };
+    }
     console.warn("Firebase catalog is not available yet; using the bundled catalog.", error?.code || error?.message || error);
     return { ...localCatalog(), preview: true };
   }
@@ -72,6 +95,7 @@ export async function validateCoupon(payload) {
 }
 
 export async function createBooking(payload) {
+  if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت. بيانات الحجز محفوظة على جهازك؛ اتصل ثم اضغط تأكيد الحجز.");
   if (firebaseConfigured) {
     const result = await httpsCallable(functions, "createBooking")(payload);
     return result.data;
@@ -95,6 +119,7 @@ export async function createBooking(payload) {
 }
 
 export async function getCustomerBooking(payload) {
+  if (navigator.onLine === false) throw new Error("مراجعة الحجز تحتاج اتصالًا بالإنترنت");
   if (firebaseConfigured) return (await httpsCallable(functions, "getCustomerBooking")(payload)).data;
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   const booking = saved.find(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
@@ -103,6 +128,7 @@ export async function getCustomerBooking(payload) {
 }
 
 export async function cancelCustomerBooking(payload) {
+  if (navigator.onLine === false) throw new Error("إلغاء الحجز يحتاج اتصالًا بالإنترنت");
   if (firebaseConfigured) return (await httpsCallable(functions, "cancelCustomerBooking")(payload)).data;
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   const index = saved.findIndex(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
@@ -115,6 +141,7 @@ export async function cancelCustomerBooking(payload) {
 export async function submitReview(payload) {
   const review = { name: String(payload.name || "").trim(), bookingCode: String(payload.bookingCode || "").trim(), rating: Math.max(1, Math.min(5, Number(payload.rating || 5))), comment: String(payload.comment || "").trim() };
   if (!review.name || !review.comment) throw new Error("بيانات التقييم غير مكتملة");
+  if (navigator.onLine === false) throw new Error("إرسال التقييم يحتاج اتصالًا بالإنترنت");
   if (firebaseConfigured) return (await httpsCallable(functions, "submitReview")(review)).data;
   const saved = JSON.parse(localStorage.getItem("mz-preview-reviews") || "[]");
   saved.unshift({ ...review, status: "pending", createdAt: new Date().toISOString() });

@@ -10,13 +10,26 @@ initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
 const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
-const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck };
+const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 80, maxInstances: 100, timeoutSeconds: 30 };
+const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
-const ADMIN_ROLES = ["admin", "manager", "receptionist", "accountant"];
+const ADMIN_ROLES = ["admin", "manager", "worker", "receptionist", "accountant"];
+const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "reviews", "schedule", "gallery", "celebrities", "posts", "settings", "activity", "users"];
+const ROLE_DEFAULT_PERMISSIONS = {
+  manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
+  worker: ["pos", "bookings", "customers"],
+  receptionist: ["dashboard", "pos", "bookings", "customers", "reviews"],
+  accountant: ["dashboard", "revenue", "expenses", "payroll"]
+};
+const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
+const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.CATALOG_CACHE_MS || 60_000)));
+let catalogCache = null;
+let catalogCacheExpiresAt = 0;
+let catalogLoadPromise = null;
 
 const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
@@ -56,6 +69,41 @@ function requireRole(request, roles = ADMIN_ROLES) {
   return role;
 }
 
+function permissionsFor(request) {
+  const role = requireRole(request);
+  if (role === "admin") return new Set(ALL_PERMISSIONS);
+  const claimed = Array.isArray(request.auth?.token?.permissions) ? request.auth.token.permissions : ROLE_DEFAULT_PERMISSIONS[role] || [];
+  return new Set(claimed.filter(value => ALL_PERMISSIONS.includes(value)));
+}
+
+function hasPermission(request, permission) { return permissionsFor(request).has(permission); }
+function contentPermission(type) { return type === "gallery" ? "gallery" : type === "celebrity" ? "celebrities" : "posts"; }
+function branchesFor(request) {
+  const role = requireRole(request);
+  if (role === "admin") return [];
+  return [...new Set((Array.isArray(request.auth?.token?.branchIds) ? request.auth.token.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))];
+}
+function canAccessBranch(request, branchId) {
+  if (request.auth?.token?.role === "admin") return true;
+  const allowed = branchesFor(request);
+  return Boolean(branchId && allowed.includes(String(branchId).toLowerCase()));
+}
+function requireBranchAccess(request, branchId) {
+  if (!canAccessBranch(request, branchId)) throw new HttpsError("permission-denied", "هذا الحساب غير مصرح له بهذا الفرع");
+}
+function itemInAllowedBranch(item, allowedBranches) {
+  if (!allowedBranches.length) return true;
+  if (item.branchId) return allowedBranches.includes(String(item.branchId).toLowerCase());
+  if (item.lastBranchId) return allowedBranches.includes(String(item.lastBranchId).toLowerCase());
+  if (Array.isArray(item.branchIds) && item.branchIds.length) return item.branchIds.some(value => allowedBranches.includes(String(value).toLowerCase()));
+  return true;
+}
+function requirePermission(request, permission) {
+  const role = requireRole(request);
+  if (role !== "admin" && !permissionsFor(request).has(permission)) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
+  return role;
+}
+
 function requireRecentAdmin(request) {
   requireRole(request, ["admin"]);
   if (!isRecentAuthentication(request.auth?.token?.auth_time)) throw new HttpsError("unauthenticated", "أعد إدخال باسورد الأدمن لتأكيد الحذف");
@@ -76,7 +124,7 @@ async function readBranch(value) {
   return cleanDoc(snapshot);
 }
 
-export const getCatalog = onCall(publicOptions, async () => {
+async function loadCatalog() {
   const [results, drinksSnapshot, publicSettings] = await Promise.all([
     Promise.all(PUBLIC_COLLECTIONS.map(name => db.collection(name).where("active", "==", true).limit(500).get())),
     db.collection("drinks").limit(200).get(),
@@ -93,6 +141,16 @@ export const getCatalog = onCall(publicOptions, async () => {
   }).sort((a, b) => a.sortOrder - b.sortOrder);
   payload.settings = publicSettings;
   return payload;
+}
+
+export const getCatalog = onCall(catalogOptions, async () => {
+  if (catalogCache && Date.now() < catalogCacheExpiresAt) return catalogCache;
+  catalogLoadPromise ||= loadCatalog().then(payload => {
+    catalogCache = payload;
+    catalogCacheExpiresAt = Date.now() + CATALOG_CACHE_MS;
+    return payload;
+  }).finally(() => { catalogLoadPromise = null; });
+  return await catalogLoadPromise;
 });
 
 async function fetchPricedItems(lines, branchId = "") {
@@ -321,18 +379,19 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
 });
 
 export const submitReview = onCall(publicOptions, async request => {
-  await enforceRateLimit(request, "review", 3, 24 * 60 * 60 * 1000);
   const name = sanitizeText(request.data?.name, 60);
   const comment = sanitizeText(request.data?.comment, 500);
   const bookingCodeValue = sanitizeText(request.data?.bookingCode, 40).toUpperCase();
   const rating = Math.max(1, Math.min(5, Math.round(Number(request.data?.rating || 5))));
-  if (!name || !comment) throw new HttpsError("invalid-argument", "بيانات التقييم غير مكتملة");
+  if (!name || !comment) throw new HttpsError("invalid-argument", "اكتب الاسم والتقييم قبل الإرسال");
+  if (comment.length < 3) throw new HttpsError("invalid-argument", "اكتب تعليقًا أوضح من فضلك");
   let verifiedBooking = null;
   if (bookingCodeValue) {
     const booking = await db.doc(`bookings/${bookingCodeValue}`).get();
     if (!booking.exists) throw new HttpsError("not-found", "كود الحجز غير صحيح");
     verifiedBooking = booking.data();
   }
+  await enforceRateLimit(request, "review_v2", 10, 60 * 60 * 1000, bookingCodeValue || name.toLowerCase());
   const ref = db.collection("reviews").doc();
   await ref.set({ name, comment, rating, bookingCode: bookingCodeValue || null, verified: Boolean(verifiedBooking), branchId: verifiedBooking?.branchId || null, status: "pending", active: false, createdAt: FieldValue.serverTimestamp() });
   return { ok: true, id: ref.id };
@@ -378,15 +437,20 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
 });
 
 export const getAdminDashboard = onCall({ region }, async request => {
-  requireRole(request);
+  const access = permissionsFor(request);
+  if (!["dashboard", "bookings", "revenue", "expenses", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية لوحة المتابعة");
+  const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
+  const canRevenue = access.has("dashboard") || access.has("revenue");
+  const canExpenses = access.has("dashboard") || access.has("expenses");
   const [bookingsSnap, ledgerSnap, expensesSnap] = await Promise.all([
-    db.collection("bookings").orderBy("createdAt", "desc").limit(500).get(),
-    db.collection("revenueLedger").orderBy("createdAt", "desc").limit(1000).get(),
-    db.collection("expenses").orderBy("createdAt", "desc").limit(1000).get()
+    canBookings ? db.collection("bookings").orderBy("createdAt", "desc").limit(500).get() : { docs: [] },
+    canRevenue ? db.collection("revenueLedger").orderBy("createdAt", "desc").limit(1000).get() : { docs: [] },
+    canExpenses ? db.collection("expenses").orderBy("createdAt", "desc").limit(1000).get() : { docs: [] }
   ]);
-  const bookings = bookingsSnap.docs.map(cleanDoc);
-  const ledger = ledgerSnap.docs.map(cleanDoc);
-  const expenses = expensesSnap.docs.map(cleanDoc);
+  const allowedBranches = branchesFor(request);
+  const bookings = bookingsSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
+  const ledger = ledgerSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
+  const expenses = expensesSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
   const today = businessDateParts().dateKey;
   const month = today.slice(0, 7);
   const revenue = period => ledger.filter(item => !period || String(item.dateKey || "").startsWith(period)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -418,13 +482,27 @@ export const getAdminCollection = onCall({ region }, async request => {
   const collection = sanitizeText(request.data?.collection, 40);
   const allowed = [...ADMIN_COLLECTIONS, "customers", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
   if (!allowed.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
-  if (collection === "users" && role !== "admin") throw new HttpsError("permission-denied", "صلاحية المدير مطلوبة");
+  const permission = COLLECTION_PERMISSIONS[collection];
+  const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "customers", "drinks", "inventoryItems"].includes(collection);
+  const operationsReadable = (hasPermission(request, "revenue") || hasPermission(request, "payroll")) && ["services", "staff"].includes(collection);
+  const scheduleReadable = hasPermission(request, "schedule") && collection === "settings";
+  const contentReadable = collection === "content" && ["gallery", "celebrities", "posts"].some(value => hasPermission(request, value));
+  if (role !== "admin" && permission && !hasPermission(request, permission) && !posReadable && !operationsReadable && !scheduleReadable && !contentReadable) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   if (collection === "settings") {
     const snapshot = await db.doc("settings/public").get();
     return { items: snapshot.exists ? [cleanDoc(snapshot)] : [] };
   }
   const snapshot = await db.collection(collection).limit(Math.min(500, Number(request.data?.limit || 200))).get();
-  return { items: snapshot.docs.map(cleanDoc) };
+  let items = snapshot.docs.map(cleanDoc);
+  const allowedBranches = branchesFor(request);
+  if (role !== "admin" && collection !== "users") items = items.filter(item => itemInAllowedBranch(item, allowedBranches));
+  if (role !== "admin" && collection === "users") items = [];
+  if ((posReadable || operationsReadable) && !hasPermission(request, permission)) {
+    if (collection === "staff") items = items.map(({ baseSalary, monthlyTarget, targetBonusPercent, revenueTotal, ...item }) => item);
+    if (collection === "inventoryItems") items = items.map(({ costPrice, minStock, ...item }) => item);
+  }
+  if (role !== "admin" && collection === "content") items = items.filter(item => hasPermission(request, contentPermission(item.type)));
+  return { items };
 });
 
 function normalizeAdminPayload(collection, raw) {
@@ -470,10 +548,16 @@ function normalizeAdminPayload(collection, raw) {
 }
 
 export const adminUpsert = onCall({ region }, async request => {
-  requireRole(request, ["admin", "manager"]);
   const collection = sanitizeText(request.data?.collection, 40);
-  if (!ADMIN_COLLECTIONS.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   const raw = request.data?.data || {};
+  requirePermission(request, collection === "content" ? contentPermission(raw.type) : COLLECTION_PERMISSIONS[collection] || "settings");
+  if (!ADMIN_COLLECTIONS.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
+  if (request.auth.token.role !== "admin") {
+    const allowedBranches = branchesFor(request);
+    if (raw.branchId) requireBranchAccess(request, raw.branchId);
+    if (Array.isArray(raw.branchIds)) raw.branchIds = raw.branchIds.filter(value => allowedBranches.includes(String(value).toLowerCase()));
+    if (Array.isArray(raw.branchIds) && !raw.branchIds.length && ["services", "packages", "offers", "staff", "content"].includes(collection)) raw.branchIds = allowedBranches;
+  }
   let id = sanitizeText(request.data?.id || raw.id, 100);
   if (collection === "settings") id = "public";
   if (collection === "coupons") id = sanitizeText(raw.code || id, 30).toUpperCase();
@@ -495,17 +579,22 @@ export const adminUpsert = onCall({ region }, async request => {
 });
 
 export const adminDelete = onCall({ region }, async request => {
-  requireRole(request, ["admin", "manager"]);
   const collection = sanitizeText(request.data?.collection, 40);
   const id = sanitizeText(request.data?.id, 100);
   if (!ADMIN_COLLECTIONS.includes(collection) || collection === "settings" || !id) throw new HttpsError("invalid-argument", "طلب حذف غير صالح");
+  const target = await db.collection(collection).doc(id).get();
+  if (request.auth.token.role !== "admin" && target.exists && !itemInAllowedBranch(target.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
+  if (collection === "content") {
+    requirePermission(request, contentPermission(target.data()?.type));
+  } else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
   await db.collection(collection).doc(id).delete();
   await db.collection("activityLogs").add({ action: "delete", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   return { ok: true };
 });
 
 export const getBusinessDashboard = onCall({ region }, async request => {
-  requireRole(request);
+  const access = permissionsFor(request);
+  if (!["pos", "expenses", "inventory", "drinks", "payroll", "reviews"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية بيانات التشغيل");
   const currentMonth = businessDateParts().month;
   const month = sanitizeText(request.data?.month || currentMonth, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
@@ -519,56 +608,58 @@ export const getBusinessDashboard = onCall({ region }, async request => {
     db.collection("reviews").limit(500).get(),
     db.collection("bookings").limit(5000).get()
   ]);
-  const bookings = new Map(bookingsSnapshot.docs.map(snapshot => [snapshot.id, cleanDoc(snapshot)]));
-  const ledger = ledgerSnapshot.docs.map(cleanDoc).filter(item => String(item.dateKey || "").startsWith(month)).map(item => {
+  const allowedBranches = branchesFor(request);
+  const bookings = new Map(bookingsSnapshot.docs.map(snapshot => [snapshot.id, cleanDoc(snapshot)]).filter(([, item]) => itemInAllowedBranch(item, allowedBranches)));
+  const ledger = ledgerSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && String(item.dateKey || "").startsWith(month)).map(item => {
     const booking = bookings.get(item.bookingId || item.bookingCode);
     const breakdown = item.revenueBreakdown || calculateRevenueBreakdown(booking?.items || [], item.amount);
     return { ...item, revenueBreakdown: breakdown };
   });
-  const inventory = inventorySnapshot.docs.map(cleanDoc).filter(item => item.category !== "drink").sort((a, b) => String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
-  const drinks = drinksSnapshot.docs.map(cleanDoc).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const inventory = inventorySnapshot.docs.map(cleanDoc).filter(item => item.category !== "drink" && itemInAllowedBranch(item, allowedBranches)).sort((a, b) => String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const drinks = drinksSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
   const inventoryById = new Map(inventory.map(item => [item.id, item]));
-  const expenses = expensesSnapshot.docs.map(cleanDoc).filter(item => String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
+  const expenses = expensesSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
   const payrollPayments = new Map(payrollSnapshot.docs.map(snapshot => [snapshot.data().staffId, cleanDoc(snapshot)]));
-  const payroll = staffSnapshot.docs.map(snapshot => {
-    const staff = cleanDoc(snapshot);
+  const payroll = staffSnapshot.docs.map(snapshot => cleanDoc(snapshot)).filter(item => itemInAllowedBranch(item, allowedBranches)).map(staff => {
     const revenue = ledger.filter(item => item.staffId === staff.id).reduce((sum, item) => sum + Number(item.revenueBreakdown?.services || 0), 0);
     return { ...staff, ...calculatePayroll({ ...staff, revenue }), payment: payrollPayments.get(staff.id) || null };
   }).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const grossRevenue = ledger.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const reviews = reviewsSnapshot.docs.map(cleanDoc).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const reviews = reviewsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const productPurchaseCost = expenses.filter(item => item.category === "inventory" && item.inventoryCategory !== "drink").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const drinkRevenue = ledger.reduce((sum, item) => sum + Number(item.revenueBreakdown?.drinks || 0), 0);
+  const posOnly = access.has("pos") && !access.has("inventory");
   return {
     month,
-    payroll,
-    expenses,
-    inventory,
-    drinks,
-    reviews,
+    payroll: access.has("payroll") ? payroll : [],
+    expenses: access.has("expenses") ? expenses : [],
+    inventory: access.has("inventory") ? inventory : posOnly ? inventory.map(({ costPrice, minStock, ...item }) => item) : [],
+    drinks: access.has("drinks") || access.has("pos") ? drinks : [],
+    reviews: access.has("reviews") ? reviews : [],
     stats: {
-      grossRevenue,
-      totalExpenses,
-      netProfit: grossRevenue - totalExpenses,
-      inventoryValue: inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0),
-      productPurchaseCost,
-      drinkRevenue,
+      grossRevenue: access.has("expenses") || access.has("payroll") ? grossRevenue : 0,
+      totalExpenses: access.has("expenses") || access.has("payroll") ? totalExpenses : 0,
+      netProfit: access.has("expenses") ? grossRevenue - totalExpenses : 0,
+      inventoryValue: access.has("inventory") ? inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0) : 0,
+      productPurchaseCost: access.has("inventory") || access.has("expenses") ? productPurchaseCost : 0,
+      drinkRevenue: access.has("drinks") ? drinkRevenue : 0,
       drinkCount: drinks.filter(item => item.active !== false).length,
-      productStockValue: inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0),
-      productLowStock: inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length,
-      lowStockCount: inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length,
-      pendingReviews: reviews.filter(item => item.active !== true).length
+      productStockValue: access.has("inventory") ? inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0) : 0,
+      productLowStock: access.has("inventory") ? inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length : 0,
+      lowStockCount: access.has("inventory") ? inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length : 0,
+      pendingReviews: access.has("reviews") ? reviews.filter(item => item.active !== true).length : 0
     }
   };
 });
 
 export const recordExpense = onCall({ region }, async request => {
-  requireRole(request, ["admin", "manager", "accountant"]);
+  requirePermission(request, "expenses");
   const amount = Number(request.data?.amount || 0);
   const category = sanitizeText(request.data?.category, 30);
   const description = sanitizeText(request.data?.description, 200);
   const branchId = sanitizeText(request.data?.branchId || "talkha", 40).toLowerCase();
+  requireBranchAccess(request, branchId);
   const dateKey = sanitizeText(request.data?.dateKey || businessDateParts().dateKey, 10);
   const inventoryItemId = sanitizeText(request.data?.inventoryItemId, 100);
   const stockQuantity = Math.max(0, Number(request.data?.stockQuantity || 0));
@@ -592,8 +683,9 @@ export const recordExpense = onCall({ region }, async request => {
 });
 
 export const createPosOrder = onCall({ region }, async request => {
-  requireRole(request, ["admin", "manager", "receptionist"]);
+  requirePermission(request, "pos");
   const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
   const customer = {
     firstName: sanitizeText(request.data?.customer?.firstName, 50),
     lastName: sanitizeText(request.data?.customer?.lastName, 50),
@@ -672,7 +764,7 @@ export const createPosOrder = onCall({ region }, async request => {
 });
 
 export const recordPayrollPayment = onCall({ region }, async request => {
-  requireRole(request, ["admin"]);
+  requirePermission(request, "payroll");
   const month = sanitizeText(request.data?.month, 7);
   const staffId = sanitizeText(request.data?.staffId, 100);
   const adjustment = Number(request.data?.adjustment || 0);
@@ -680,6 +772,7 @@ export const recordPayrollPayment = onCall({ region }, async request => {
   const [staffSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("revenueLedger").limit(5000).get()]);
   if (!staffSnapshot.exists) throw new HttpsError("not-found", "العامل غير موجود");
   const staff = staffSnapshot.data();
+  if (!itemInAllowedBranch(staff, branchesFor(request))) throw new HttpsError("permission-denied", "العامل تابع لفرع آخر");
   const revenue = ledgerSnapshot.docs.map(snapshot => snapshot.data()).filter(item => item.staffId === staffId && String(item.dateKey || "").startsWith(month)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const calculated = calculatePayroll({ ...staff, revenue, adjustment });
   if (calculated.netSalary <= 0) throw new HttpsError("failed-precondition", "حدد الراتب الأساسي للعامل من قسم فريق العمل أولًا");
@@ -857,9 +950,10 @@ export const updateBooking = onCall({ region }, async request => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
     const booking = snapshot.data();
+    requireBranchAccess(request, booking.branchId);
     const now = FieldValue.serverTimestamp();
     if (["pending", "confirmed", "rejected", "cancelled", "completed"].includes(action)) {
-      if (!["admin", "manager", "receptionist"].includes(role)) throw new HttpsError("permission-denied", "لا تملك صلاحية تعديل حالة الحجز");
+      requirePermission(request, "bookings");
       const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
       if (!["rejected", "cancelled"].includes(action) && booking.inventoryReleased && (booking.items || []).some(item => item.kind === "inventory")) throw new HttpsError("failed-precondition", "لا يمكن إعادة فتح الحجز بعد رجوع المشروبات للمخزون؛ أنشئ طلبًا جديدًا");
       if (["rejected", "cancelled"].includes(action)) {
@@ -876,7 +970,7 @@ export const updateBooking = onCall({ region }, async request => {
       return { ok: true, status: action };
     }
     let transition;
-    if (!["admin", "manager", "accountant"].includes(role)) throw new HttpsError("permission-denied", "لا تملك صلاحية تعديل الدفع");
+    requirePermission(request, "revenue");
     try { transition = paymentTransition(booking, action, request.data?.paymentMethod || booking.paymentMethod || "cash"); }
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
     if (!transition.changed) return { ok: true, idempotent: true, paymentStatus: transition.status };
@@ -898,7 +992,7 @@ export const registerPushToken = onCall({ region }, async request => {
   requireRole(request);
   const token = sanitizeText(request.data?.token, 4096);
   if (!token) throw new HttpsError("invalid-argument", "Token required");
-  await db.doc(`pushTokens/${hash(token)}`).set({ token, uid: request.auth.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.doc(`pushTokens/${hash(token)}`).set({ token, uid: request.auth.uid, role: request.auth.token.role, branchIds: branchesFor(request), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true };
 });
 
@@ -906,18 +1000,39 @@ export const setUserRole = onCall({ region }, async request => {
   requireRole(request, ["admin"]);
   const uid = sanitizeText(request.data?.uid, 128);
   const role = sanitizeText(request.data?.role, 30);
+  const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
+  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
   if (!uid || !ADMIN_ROLES.includes(role)) throw new HttpsError("invalid-argument", "بيانات الصلاحية غير صحيحة");
+  if (role !== "admin" && !branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا الحساب");
   const { getAuth } = await import("firebase-admin/auth");
-  await getAuth().setCustomUserClaims(uid, { role });
-  await db.doc(`users/${uid}`).set({ role, email: sanitizeText(request.data?.email, 200), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await getAuth().setCustomUserClaims(uid, { role, permissions, branchIds });
+  await db.doc(`users/${uid}`).set({ role, permissions, branchIds, email: sanitizeText(request.data?.email, 200), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true };
+});
+
+export const createAdminUser = onCall({ region, memory: "256MiB", maxInstances: 10 }, async request => {
+  requireRole(request, ["admin"]);
+  const name = sanitizeText(request.data?.name, 80);
+  const email = sanitizeText(request.data?.email, 200).toLowerCase();
+  const password = String(request.data?.password || "");
+  const role = sanitizeText(request.data?.role, 30);
+  const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
+  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
+  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "worker", "receptionist", "accountant"].includes(role)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد فرعًا واحدًا على الأقل وباسورد 8 أحرف على الأقل");
+  const { getAuth } = await import("firebase-admin/auth");
+  let user;
+  try { user = await getAuth().createUser({ email, password, displayName: name, disabled: false }); }
+  catch (error) { throw new HttpsError("already-exists", error.code === "auth/email-already-exists" ? "البريد مستخدم بالفعل" : "تعذر إنشاء الحساب"); }
+  await getAuth().setCustomUserClaims(user.uid, { role, permissions, branchIds });
+  await db.doc(`users/${user.uid}`).set({ name, email, role, permissions, branchIds, active: true, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true, uid: user.uid };
 });
 
 export const notifyAdminsOnBooking = onDocumentCreated({ region, document: "bookings/{bookingId}" }, async event => {
   const booking = event.data?.data();
   if (!booking) return;
   const snapshot = await db.collection("pushTokens").limit(500).get();
-  const tokens = snapshot.docs.map(doc => doc.data().token).filter(Boolean);
+  const tokens = snapshot.docs.map(doc => doc.data()).filter(item => item.token && (item.role === "admin" || (Array.isArray(item.branchIds) && item.branchIds.includes(booking.branchId)))).map(item => item.token);
   if (!tokens.length) return;
   const response = await getMessaging().sendEachForMulticast({
     tokens,

@@ -38,6 +38,7 @@
         <button data-section="posts">▤ الأخبار والمنشورات</button>
         <button data-section="settings">⚙ إعدادات الموقع</button>
         <button data-section="activity">☷ سجل الأنشطة</button>
+        <button data-section="users">♟ حسابات العاملين والصلاحيات</button>
       </nav>
     </aside>
     <main class="admin-main">
@@ -130,6 +131,22 @@
       <section class="admin-section" id="posts"><content-panel data-type="news" data-title="الأخبار والمنشورات"></content-panel></section>
       <section class="admin-section" id="settings"><article class="admin-panel"><div class="panel-head"><div><h2>إعدادات الموقع</h2><p>الاسم والنبذة والعملة. النسخة البديلة تُحفظ تلقائيًا بدون خانات إضافية.</p></div></div><form class="settings-form cols" id="siteSettings"><label>اسم النشاط<input name="businessNameAr"></label><label class="full">نبذة عن مزين<textarea name="aboutAr"></textarea></label><label>العملة<input name="currency" value="EGP"></label><button class="small-button primary">حفظ الإعدادات</button></form></article></section>
       <section class="admin-section" id="activity"><entity-panel data-collection="activityLogs" data-title="سجل الأنشطة" data-readonly="true"></entity-panel></section>
+      <section class="admin-section" id="users">
+        <div class="two-panels access-panels">
+          <article class="admin-panel"><div class="panel-head"><div><h2>إنشاء حساب عامل أو مدير</h2><p>الأدمن فقط هو من ينشئ الحساب ويحدد الأقسام التي يمكن فتحها.</p></div></div>
+            <form class="settings-form" id="userAccountForm">
+              <label>الاسم<input name="name" required maxlength="80" autocomplete="off"></label>
+              <label>البريد الإلكتروني<input name="email" type="email" required autocomplete="off"></label>
+              <label>الباسورد المؤقت<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+              <label>نوع الحساب<select name="role" id="accountRole"><option value="worker">عامل</option><option value="manager">مدير</option><option value="receptionist">استقبال</option><option value="accountant">محاسب</option></select></label>
+              <fieldset class="permission-picker full"><legend>الفروع المسموح بها</legend><div><label><input type="checkbox" name="branchIds" value="talkha" checked> فرع طلخا</label><label><input type="checkbox" name="branchIds" value="mashaya"> فرع المشاية</label></div></fieldset>
+              <fieldset class="permission-picker full"><legend>صلاحيات الحساب</legend><div id="permissionPicker"></div></fieldset>
+              <button class="small-button primary" type="submit">إنشاء الحساب</button>
+            </form>
+          </article>
+          <article class="admin-panel"><div class="panel-head"><div><h2>الحسابات الحالية</h2><p>تظهر الصلاحيات المسجلة لكل حساب.</p></div><button class="small-button" id="refreshUsers" type="button">تحديث</button></div><div class="entity-grid" id="userAccountsList"></div></article>
+        </div>
+      </section>
     </main>
   </div>
 

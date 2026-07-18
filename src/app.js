@@ -79,6 +79,16 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 2300);
 }
 
+function updateNetworkStatus(announce = false) {
+  const banner = $("#networkStatus");
+  const online = navigator.onLine !== false;
+  banner.hidden = online && !announce;
+  banner.classList.toggle("online", online);
+  banner.textContent = online ? "عاد الاتصال بالإنترنت" : "أنت أوفلاين: يمكنك تصفح البيانات المحفوظة، والتأكيد النهائي للحجز يحتاج إنترنت";
+  if (online && announce) setTimeout(() => { banner.hidden = true; }, 2500);
+  if (online && announce && firebaseConfigured) refreshCatalog(true);
+}
+
 function setTheme(theme) {
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
@@ -539,6 +549,7 @@ async function applyCouponCode() {
 }
 
 async function submitBooking() {
+  if (navigator.onLine === false) { updateNetworkStatus(); showToast("اتصل بالإنترنت لتأكيد الحجز؛ اختياراتك محفوظة"); return; }
   const form = $("#customerForm");
   if (!form.reportValidity()) { showToast(t("required", state.lang)); return; }
   const button = $("#nextStep");
@@ -561,7 +572,7 @@ async function submitBooking() {
       partySize: Number($("#partySize").value || 1),
       couponCode: state.coupon?.code || $("#couponCode").value.trim() || null,
       locale: state.lang,
-      clientRequestId: crypto.randomUUID()
+      clientRequestId: sessionStorage.getItem("mz-booking-request-id") || (() => { const id = crypto.randomUUID(); sessionStorage.setItem("mz-booking-request-id", id); return id; })()
     });
     $("#successCode").textContent = result.bookingCode;
     JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
@@ -575,6 +586,7 @@ async function submitBooking() {
     $("#successWhatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     trackEvent("booking_completed", { branch_id: state.branchId, value: Number(result.total || 0), currency: "EGP" });
     state.cart = [];
+    sessionStorage.removeItem("mz-booking-request-id");
     saveCart();
     renderCart();
     goToStep(5);
@@ -719,6 +731,7 @@ async function init() {
   const siteUrl = globalThis.__SITE_URL__ || $("#canonical").href || location.origin;
   $("#canonical").href = siteUrl;
   await refreshCatalog(false);
+  updateNetworkStatus();
   saveCart();
   observeReveals();
   if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Service worker registration failed", error));
@@ -728,5 +741,8 @@ async function init() {
   }
   if (!firebaseConfigured) document.documentElement.dataset.preview = "true";
 }
+
+window.addEventListener("offline", () => updateNetworkStatus());
+window.addEventListener("online", () => updateNetworkStatus(true));
 
 init();

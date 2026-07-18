@@ -40,17 +40,36 @@ export async function currentRole(user) {
   return token.claims.role || null;
 }
 
+export async function currentAccess(user) {
+  const token = await user.getIdTokenResult(true);
+  return { role: token.claims.role || null, permissions: Array.isArray(token.claims.permissions) ? token.claims.permissions : [], branchIds: Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [] };
+}
+
 export async function logout() { if (auth) await signOut(auth); }
 
 async function call(name, data = {}) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
-  const result = await httpsCallable(functions, name)(data);
+  if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت");
+  const result = await httpsCallable(functions, name, { timeout: 30000 })(data);
   return result.data;
 }
 
-export const getDashboard = () => call("getAdminDashboard");
-export const getBusinessDashboard = month => call("getBusinessDashboard", { month });
-export const getCollection = (collection, limit = 300) => call("getAdminCollection", { collection, limit });
+async function readCall(name, data = {}) {
+  let lastError;
+  for (const delay of [0, 500, 1500]) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    try { return await call(name, data); }
+    catch (error) {
+      lastError = error;
+      if (!String(error?.code || "").match(/unavailable|deadline-exceeded|internal/)) throw error;
+    }
+  }
+  throw lastError;
+}
+
+export const getDashboard = () => readCall("getAdminDashboard");
+export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
+export const getCollection = (collection, limit = 300) => readCall("getAdminCollection", { collection, limit });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
 export const secureDeleteRecord = (kind, id) => call("adminSecureDelete", { kind, id });
@@ -58,7 +77,8 @@ export const changeBooking = (id, action, paymentMethod) => call("updateBooking"
 export const createPosOrder = payload => call("createPosOrder", payload);
 export const recordExpense = payload => call("recordExpense", payload);
 export const recordPayrollPayment = payload => call("recordPayrollPayment", payload);
-export const changeUserRole = (uid, email, role) => call("setUserRole", { uid, email, role });
+export const changeUserRole = (uid, email, role, permissions = [], branchIds = []) => call("setUserRole", { uid, email, role, permissions, branchIds });
+export const createUserAccount = payload => call("createAdminUser", payload);
 
 export async function verifyAdminPassword(password) {
   const user = auth?.currentUser;

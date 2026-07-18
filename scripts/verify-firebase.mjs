@@ -21,7 +21,7 @@ assert.match(firestoreRules, /match \/\{document=\*\*\}/);
 assert.doesNotMatch(firestoreRules, /allow\s+(?:read|write)(?:,\s*(?:read|write))*:\s*if\s+true/);
 assert.match(storageRules, /request\.auth\.token\.role in \['admin', 'manager'\]/);
 assert.match(storageRules, /request\.resource\.contentType\.matches/);
-for (const name of ["getCatalog", "createBooking", "validateCoupon", "getAdminDashboard", "getBusinessDashboard", "recordExpense", "createPosOrder", "updateBooking", "adminUpsert", "adminDelete", "adminSecureDelete", "submitReview", "registerPushToken"]) {
+for (const name of ["getCatalog", "createBooking", "validateCoupon", "getAdminDashboard", "getBusinessDashboard", "recordExpense", "createPosOrder", "updateBooking", "adminUpsert", "adminDelete", "adminSecureDelete", "submitReview", "registerPushToken", "createAdminUser", "setUserRole", "notifyAdminsOnBooking"]) {
   assert.match(functionsSource, new RegExp(`export const ${name}\\b`), `Missing Firebase Function: ${name}`);
 }
 assert.match(envExample, /ENFORCE_APP_CHECK=false/);
