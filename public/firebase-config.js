@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copy your Firebase Web App settings here before production deployment.
  * Firebase Web configuration is public by design; security is enforced by
  * Authentication, Cloud Functions, Firestore Rules and Storage Rules.
@@ -13,8 +13,9 @@ window.__FIREBASE_CONFIG__ = {
   measurementId: "G-1ZEQLZGMP1"
 };
 window.__VAPID_KEY__ = "BJTbVSNi4UEmQ-xb8E_lROtSH7fsFiMb4tnCdOUOQUCD-L1SxDgAg-1UYEvsDptUGBiUGtYIv9R8y5au2hsODnM";
-// ضع مفتاح reCAPTCHA Enterprise الخاص بـ Firebase App Check هنا، ثم فعّل
-// ENFORCE_APP_CHECK في Cloud Functions بعد التأكد من وصول التوكنات بنجاح.
-window.__APP_CHECK_SITE_KEY__ = "";
+// ط¶ط¹ ظ…ظپطھط§ط­ reCAPTCHA Enterprise ط§ظ„ط®ط§طµ ط¨ظ€ Firebase App Check ظ‡ظ†ط§طŒ ط«ظ… ظپط¹ظ‘ظ„
+// ENFORCE_APP_CHECK ظپظٹ Cloud Functions ط¨ط¹ط¯ ط§ظ„طھط£ظƒط¯ ظ…ظ† ظˆطµظˆظ„ ط§ظ„طھظˆظƒظ†ط§طھ ط¨ظ†ط¬ط§ط­.
+window.__APP_CHECK_SITE_KEY__ = "6LeiMlotAAAAAK3dnS6sA0uwUGdA2VTAFS2-8Bra";
 window.__USE_EMULATORS__ = false;
 window.__SITE_URL__ = "https://el-mezaen-talkha.vercel.app";
+
