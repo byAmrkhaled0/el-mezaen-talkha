@@ -1,6 +1,9 @@
-@import "@fontsource/tajawal/400.css";
-@import "@fontsource/tajawal/700.css";
-@import "@fontsource/alexandria/700.css";
+@import "@fontsource/tajawal/arabic-400.css";
+@import "@fontsource/tajawal/latin-400.css";
+@import "@fontsource/tajawal/arabic-700.css";
+@import "@fontsource/tajawal/latin-700.css";
+@import "@fontsource/alexandria/arabic-700.css";
+@import "@fontsource/alexandria/latin-700.css";
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -10%, rgba(34,211,238,.18), transparent 34rem), #020811; color: #f4fbff; font-family: "Tajawal", sans-serif; }
 .login-page { min-height: 100dvh; }

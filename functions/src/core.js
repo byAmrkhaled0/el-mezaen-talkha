@@ -11,6 +11,40 @@ export function isRecentAuthentication(authTime, nowSeconds = Math.floor(Date.no
   return Number.isFinite(value) && value > 0 && nowSeconds >= value && nowSeconds - value <= maxAgeSeconds;
 }
 
+export function isValidDateKey(value) {
+  const dateKey = String(value || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === dateKey;
+}
+
+export function normalizeExpenseInput(data = {}, { defaultDate = "", categories = [] } = {}) {
+  const amount = Number(data.amount);
+  const category = String(data.category || "").trim().slice(0, 30);
+  const description = String(data.description || "").trim().slice(0, 200);
+  const notes = String(data.notes || "").trim().slice(0, 500);
+  const branchId = String(data.branchId || "").trim().toLowerCase().slice(0, 40);
+  const dateKey = String(data.dateKey || defaultDate).trim().slice(0, 10);
+  const inventoryItemId = category === "inventory" ? String(data.inventoryItemId || "").trim().slice(0, 100) : "";
+  const stockQuantity = category === "inventory" ? Number(data.stockQuantity || 0) : 0;
+  const paymentMethod = String(data.paymentMethod || "cash").trim().slice(0, 30);
+  const idempotencyKey = String(data.idempotencyKey || "").trim().slice(0, 100);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) throw new Error("INVALID_EXPENSE_AMOUNT");
+  if (!categories.includes(category)) throw new Error("INVALID_EXPENSE_CATEGORY");
+  if (!description) throw new Error("INVALID_EXPENSE_DESCRIPTION");
+  if (!/^[a-z0-9-]{2,40}$/.test(branchId) || branchId === "all") throw new Error("INVALID_EXPENSE_BRANCH");
+  if (!isValidDateKey(dateKey)) throw new Error("INVALID_EXPENSE_DATE");
+  if (!Number.isFinite(stockQuantity) || stockQuantity < 0 || stockQuantity > 1_000_000) throw new Error("INVALID_STOCK_QUANTITY");
+  if (inventoryItemId && stockQuantity <= 0) throw new Error("INVALID_STOCK_QUANTITY");
+  if (!["cash", "vodafone_cash", "instapay", "other"].includes(paymentMethod)) throw new Error("INVALID_PAYMENT_METHOD");
+  if (idempotencyKey && !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new Error("INVALID_IDEMPOTENCY_KEY");
+  return { amount, category, kind: category === "inventory" ? "purchase" : "expense", description, notes, branchId, dateKey, inventoryItemId, stockQuantity, paymentMethod, idempotencyKey };
+}
+
+export function isDrinkAvailableAtBranch(drink, branchId) {
+  return Boolean(drink && drink.active !== false && [branchId, "all"].includes(String(drink.branchId || "").toLowerCase()));
+}
+
 export function calculatePayroll({ baseSalary = 0, monthlyTarget = 0, targetBonusPercent = 0, revenue = 0, adjustment = 0 } = {}) {
   const base = Math.max(0, Number(baseSalary || 0));
   const target = Math.max(0, Number(monthlyTarget || 0));

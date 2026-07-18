@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isRecentAuthentication, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
@@ -12,6 +12,23 @@ test("requires a recent administrator authentication for destructive actions", (
   assert.equal(isRecentAuthentication(1_000, 1_301), false);
   assert.equal(isRecentAuthentication(undefined, 1_100), false);
   assert.equal(isRecentAuthentication(1_200, 1_100), false);
+});
+
+test("validates and normalizes financial expense input", () => {
+  const value = normalizeExpenseInput({ amount: "250.50", category: "inventory", description: "شراء أدوات", notes: "فاتورة 15", branchId: "TALKHA", dateKey: "2026-07-18", inventoryItemId: "comb-1", stockQuantity: "5", paymentMethod: "cash", idempotencyKey: "12345678-1234-1234-1234-123456789012" }, { categories: ["inventory", "electricity"] });
+  assert.equal(value.amount, 250.5);
+  assert.equal(value.kind, "purchase");
+  assert.equal(value.branchId, "talkha");
+  assert.equal(value.stockQuantity, 5);
+  assert.equal(isValidDateKey("2026-02-29"), false);
+  assert.throws(() => normalizeExpenseInput({ amount: 0, category: "electricity", description: "فاتورة", branchId: "talkha", dateKey: "2026-07-18" }, { categories: ["electricity"] }), /INVALID_EXPENSE_AMOUNT/);
+  assert.throws(() => normalizeExpenseInput({ amount: 10, category: "electricity", description: "", branchId: "talkha", dateKey: "2026-07-18" }, { categories: ["electricity"] }), /INVALID_EXPENSE_DESCRIPTION/);
+});
+
+test("allows active global drinks at either branch", () => {
+  assert.equal(isDrinkAvailableAtBranch({ active: true, branchId: "all" }, "talkha"), true);
+  assert.equal(isDrinkAvailableAtBranch({ active: true, branchId: "talkha" }, "mashaya"), false);
+  assert.equal(isDrinkAvailableAtBranch({ active: false, branchId: "all" }, "mashaya"), false);
 });
 
 test("calculates target bonus and final monthly salary", () => {

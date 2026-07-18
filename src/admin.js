@@ -1,6 +1,6 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
-import { changeBooking, createPosOrder, createUserAccount, currentAccess, deleteEntity, enablePush, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, secureDeleteRecord, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { changeBooking, createPosOrder, createUserAccount, currentAccess, deleteEntity, enablePush, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, secureDeleteRecord, updateExpense, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -14,7 +14,7 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
@@ -61,7 +61,7 @@ const fields = {
     ["costPrice", "سعر التكلفة", "number", true], ["sellingPrice", "سعر البيع", "number", true], ["stockQty", "الرصيد الحالي", "number", true], ["minStock", "حد تنبيه النقص", "number"], ["unit", "الوحدة", "text"], ["sortOrder", "الترتيب", "number"], ["active", "متاح", "boolean"]
   ],
   drinks: [
-    ["nameAr", "اسم المشروب", "text", true], ["type", "النوع", "select", true, [["hot", "ساخن"], ["cold", "بارد"], ["soft-drink", "مشروب غازي"], ["other", "أخرى"]]], ["branchId", "الفرع", "branch-select", true],
+    ["nameAr", "اسم المشروب", "text", true], ["type", "النوع", "select", true, [["hot", "ساخن"], ["cold", "بارد"], ["soft-drink", "مشروب غازي"], ["other", "أخرى"]]], ["branchId", "الفرع", "drink-branch-select", true],
     ["price", "سعر البيع", "number", true], ["drinkOptions", "اختيارات تحضير المشروب بفواصل (مثال: سادة، مظبوط، زيادة)", "text", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "متاح في الحجز", "boolean"]
   ],
   reviews: [["name", "اسم العميل", "text", true], ["rating", "التقييم من 5", "number", true], ["comment", "التعليق", "textarea", true, null, true], ["bookingCode", "كود الحجز", "text"], ["status", "حالة التقييم", "select", true, [["pending", "بانتظار المراجعة"], ["published", "منشور"], ["rejected", "مرفوض"]]], ["featured", "تقييم مميز ومثبت", "boolean"], ["adminReply", "رد الإدارة", "textarea", false, null, true]],
@@ -273,12 +273,41 @@ function renderRevenue() {
   const staff = staffSelect.value;
   const service = serviceSelect.value;
   const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || (item.branchId || "talkha") === branch) && (staff === "all" || item.staffId === staff) && (service === "all" || (item.itemIds || []).includes(service)));
-  $("#revenueTable").innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>${state.role === "admin" ? `<div class="row-actions"><button class="delete" data-secure-delete-revenue="${escapeAttr(item.id)}" data-secure-delete-label="عملية ${item.type === "refund" ? "الاسترداد" : "الدفع"} للحجز ${escapeAttr(item.bookingCode)}">حذف</button></div>` : "—"}</td></tr>`).join("") || emptyRow(8);
+  $("#revenueTable").innerHTML = rows.map(item => {
+    const breakdown = item.revenueBreakdown || {};
+    const details = [`خدمات: ${money(breakdown.services)}`, `بضاعة: ${money(breakdown.products)}`, `مشروبات: ${money(breakdown.drinks)}`].join("<br>");
+    return `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td><small>${details}</small></td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>${state.role === "admin" ? `<div class="row-actions"><button class="delete" data-secure-delete-revenue="${escapeAttr(item.id)}" data-secure-delete-label="عملية ${item.type === "refund" ? "الاسترداد" : "الدفع"} للحجز ${escapeAttr(item.bookingCode)}">حذف</button></div>` : "—"}</td></tr>`;
+  }).join("") || emptyRow(9);
 }
 
-function expenseLabel(value) { if (value === "inventory") return "شراء بضاعة"; return ({ electricity: "كهرباء", water: "مياه", rent: "إيجار", salary: "راتب", maintenance: "صيانة", marketing: "تسويق", other: "أخرى" })[value] || value || "—"; }
+function expenseLabel(value) { if (value === "inventory") return "مشتريات / شراء مخزون"; return ({ electricity: "كهرباء", water: "مياه", rent: "إيجار", salary: "رواتب", maintenance: "صيانة", tools: "أدوات ومستلزمات", marketing: "تسويق", other: "بند آخر" })[value] || value || "—"; }
 function inventoryCategory(value) { return ({ product: "بضاعة", supply: "مستلزم" })[value] || value || "صنف"; }
 function drinkType(value) { return ({ hot: "ساخن", cold: "بارد", "soft-drink": "مشروب غازي", other: "أخرى" })[value] || "أخرى"; }
+
+function renderExpenses() {
+  if (!$("#expensesTable")) return;
+  const from = $("#expenseFrom")?.value || "";
+  const to = $("#expenseTo")?.value || "";
+  const branch = $("#expenseBranchFilter")?.value || "all";
+  const category = $("#expenseCategoryFilter")?.value || "all";
+  const items = (state.business.expenses || []).filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || item.branchId === branch) && (category === "all" || item.category === category));
+  $("#expensesTable").innerHTML = items.map(item => {
+    const label = item.description || expenseLabel(item.category);
+    const editButton = item.payrollPaymentId ? "" : `<button type="button" data-edit-expense="${escapeAttr(item.id)}">تعديل</button>`;
+    const deleteButton = state.role === "admin" ? `<button type="button" class="delete" data-secure-delete-expense="${escapeAttr(item.id)}" data-secure-delete-label="الحركة المالية ${escapeAttr(label)}">حذف</button>` : "";
+    return `<tr><td data-label="التاريخ">${escapeHtml(item.dateKey)}</td><td data-label="الحركة"><span class="status-pill">${item.kind === "purchase" || item.category === "inventory" ? "مشتريات" : "مصروف"}</span></td><td data-label="التصنيف">${escapeHtml(expenseLabel(item.category))}</td><td data-label="الفرع">${escapeHtml(branchLabel(item.branchId))}</td><td data-label="البيان">${escapeHtml(label)}${item.notes ? `<br><small>${escapeHtml(item.notes)}</small>` : ""}</td><td data-label="الدفع">${escapeHtml(paymentMethod(item.paymentMethod))}</td><td data-label="المسجل">${escapeHtml(item.createdByName || item.createdByEmail || item.createdBy || "—")}</td><td data-label="القيمة"><b>${money(item.amount)}</b></td><td data-label="إجراء"><div class="row-actions">${editButton}${deleteButton || "—"}</div></td></tr>`;
+  }).join("") || emptyRow(9);
+}
+
+function refreshExpenseInventoryOptions() {
+  if (!$("#expenseInventoryItem")) return;
+  const current = $("#expenseInventoryItem").value;
+  const branchId = $("#expenseBranch")?.value || "talkha";
+  const inventory = state.business.inventory || state.collections.get("inventoryItems") || [];
+  const filtered = inventory.filter(item => item.branchId === branchId);
+  $("#expenseInventoryItem").innerHTML = '<option value="">شراء عام بدون إضافة رصيد</option>' + filtered.map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.nameAr)} • ${escapeHtml(inventoryCategory(item.category))}</option>`).join("");
+  $("#expenseInventoryItem").value = filtered.some(item => item.id === current) ? current : "";
+}
 
 function renderBusiness() {
   const s = state.business.stats || {};
@@ -291,14 +320,8 @@ function renderBusiness() {
   if ($("#productLowStock")) $("#productLowStock").textContent = Number(s.productLowStock || 0);
   if ($("#drinkRevenue")) $("#drinkRevenue").textContent = money(s.drinkRevenue);
   if ($("#drinkCount")) $("#drinkCount").textContent = Number(s.drinkCount || 0);
-  if ($("#expensesTable")) $("#expensesTable").innerHTML = (state.business.expenses || []).map(item => `<tr><td>${escapeHtml(item.dateKey)}</td><td>${escapeHtml(expenseLabel(item.category, item.inventoryCategory))}</td><td>${escapeHtml(branchLabel(item.branchId))}</td><td>${escapeHtml(item.description || "—")}</td><td><b>${money(item.amount)}</b></td><td>${state.role === "admin" ? `<button class="small-button danger" data-secure-delete-expense="${escapeAttr(item.id)}" data-secure-delete-label="المصروف ${escapeAttr(item.description || expenseLabel(item.category, item.inventoryCategory))}">حذف</button>` : "—"}</td></tr>`).join("") || emptyRow(6);
-  const inventory = state.business.inventory || state.collections.get("inventoryItems") || [];
-  if ($("#expenseInventoryItem")) {
-    const current = $("#expenseInventoryItem").value;
-    const filteredInventory = inventory;
-    $("#expenseInventoryItem").innerHTML = '<option value="">شراء عام بدون إضافة رصيد</option>' + filteredInventory.map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.nameAr)} • ${escapeHtml(inventoryCategory(item.category))} • ${escapeHtml(branchLabel(item.branchId))}</option>`).join("");
-    $("#expenseInventoryItem").value = filteredInventory.some(item => item.id === current) ? current : "";
-  }
+  renderExpenses();
+  refreshExpenseInventoryOptions();
   renderPayroll();
   if (state.section === "pos") renderPos();
   if (state.section === "inventory") renderCollection("inventoryItems");
@@ -320,7 +343,7 @@ function posCatalogItems() {
   const services = (state.collections.get("services") || []).filter(item => item.active !== false && (!item.branchIds?.length || item.branchIds.includes(branchId))).map(item => ({ id: item.id, kind: item.type === "product" ? "product" : "service", section: item.type === "product" ? "product" : "service", categoryId: item.categoryId || "", nameAr: item.nameAr, price: Number(item.price || 0), category: item.type === "product" ? "بضاعة" : categories.get(item.categoryId) || "بدون تصنيف" }));
   const packages = (state.collections.get("packages") || []).filter(item => item.active !== false && item.status !== "expired" && (!item.branchIds?.length || item.branchIds.includes(branchId))).map(item => ({ id: item.id, kind: "package", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), category: "باقة" }));
   const inventory = (state.business.inventory || state.collections.get("inventoryItems") || []).filter(item => item.active !== false && item.category === "product" && item.branchId === branchId).map(item => ({ id: item.id, kind: "inventory", section: "product", categoryId: "", nameAr: item.nameAr, price: Number(item.sellingPrice || 0), stockQty: Number(item.stockQty || 0), category: inventoryCategory(item.category) }));
-  const drinks = (state.business.drinks || state.collections.get("drinks") || []).filter(item => item.active !== false && item.branchId === branchId).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: drinkType(item.type) }));
+  const drinks = (state.business.drinks || state.collections.get("drinks") || []).filter(item => item.active !== false && [branchId, "all"].includes(item.branchId)).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: `${drinkType(item.type)}${item.branchId === "all" ? " • كل الفروع" : ""}` }));
   return [...services, ...packages, ...inventory, ...drinks];
 }
 
@@ -387,10 +410,13 @@ async function submitPosOrder(event) {
   event.preventDefault();
   if (!state.posCart.length) return toast("أضف خدمة أو منتجًا للشيك", true);
   const button = $("#posSubmit");
+  if (button.disabled) return;
   button.disabled = true;
+  state.posIdempotencyKey ||= crypto.randomUUID();
   try {
-    const result = await createPosOrder({ branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart, discountAmount: Number($("#posDiscount").value || 0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
+    const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart, discountAmount: Number($("#posDiscount").value || 0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
     state.posCart = [];
+    state.posIdempotencyKey = "";
     $("#posDiscount").value = "0";
     await Promise.all([loadDashboard(), loadBusiness(true)]);
     renderPos();
@@ -412,22 +438,67 @@ function toggleExpenseInventory() {
   const visible = $("#expenseCategory").value === "inventory";
   $("#expenseInventoryWrap").hidden = !visible;
   $("#expenseQuantityWrap").hidden = !visible;
+  if (!visible) { $("#expenseInventoryItem").value = ""; const qty = $('#expenseForm [name="stockQuantity"]'); if (qty) qty.value = "0"; }
+}
+
+function resetExpenseForm() {
+  const form = $("#expenseForm");
+  form.reset();
+  form.dataset.idempotencyKey = "";
+  form.dataset.submitting = "";
+  state.editingExpenseId = "";
+  $("#expenseDate").value = cairoDateKey();
+  $("#expenseFormTitle").textContent = "تسجيل مصروف أو عملية شراء";
+  $("#expenseSubmit").textContent = "تسجيل الحركة";
+  $("#expenseCancelEdit").hidden = true;
+  toggleExpenseInventory();
+  refreshExpenseInventoryOptions();
+}
+
+function startExpenseEdit(id) {
+  const item = (state.business.expenses || []).find(value => value.id === id);
+  if (!item) return toast("المصروف غير موجود أو تم حذفه", true);
+  if (item.payrollPaymentId) return toast("عدّل عملية الراتب من قسم الرواتب", true);
+  const form = $("#expenseForm");
+  state.editingExpenseId = id;
+  form.elements.category.value = item.category || "other";
+  form.elements.amount.value = Number(item.amount || 0);
+  form.elements.branchId.value = item.branchId || "talkha";
+  form.elements.dateKey.value = item.dateKey || cairoDateKey();
+  form.elements.description.value = item.description || "";
+  form.elements.paymentMethod.value = item.paymentMethod || "cash";
+  form.elements.notes.value = item.notes || "";
+  toggleExpenseInventory();
+  refreshExpenseInventoryOptions();
+  form.elements.inventoryItemId.value = item.inventoryItemId || "";
+  form.elements.stockQuantity.value = Number(item.stockQuantity || 0);
+  $("#expenseFormTitle").textContent = "تعديل الحركة المالية";
+  $("#expenseSubmit").textContent = "حفظ التعديل";
+  $("#expenseCancelEdit").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function submitExpense(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const button = form.querySelector('button[type="submit"]');
+  const button = form.querySelector('button[type="submit"], button:not([type])');
+  if (!button || form.dataset.submitting === "true") return;
+  if (!form.reportValidity()) return;
+  form.dataset.submitting = "true";
   button.disabled = true;
   try {
-    await recordExpense(Object.fromEntries(new FormData(form)));
-    form.reset();
-    $("#expenseDate").value = cairoDateKey();
-    toggleExpenseInventory();
+    const payload = Object.fromEntries(new FormData(form));
+    if (state.editingExpenseId) await updateExpense({ ...payload, id: state.editingExpenseId });
+    else {
+      form.dataset.idempotencyKey ||= crypto.randomUUID();
+      await recordExpense({ ...payload, idempotencyKey: form.dataset.idempotencyKey });
+    }
+    const wasEditing = Boolean(state.editingExpenseId);
+    resetExpenseForm();
     await Promise.all([loadDashboard(), loadBusiness(true)]);
-    toast("تم تسجيل المصروف وتحديث صافي الربح");
+    toast(wasEditing ? "تم تعديل الحركة وتحديث الحسابات" : "تم تسجيل الحركة وخصمها من صافي دخل الفرع");
   } catch (error) { toast(error.message || "تعذر تسجيل المصروف", true); }
-  finally { button.disabled = false; }
+  finally { form.dataset.submitting = ""; button.disabled = false; }
 }
 
 async function paySalary(staffId) {
@@ -557,6 +628,7 @@ function renderField([name, label, type, required = false, options = null, full 
     return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="" ${!scope ? "selected" : ""}>كل الفروع</option><option value="talkha" ${scope === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${scope === "mashaya" ? "selected" : ""}>فرع المشاية</option><option value="talkha,mashaya" ${scope === "talkha,mashaya" || scope === "mashaya,talkha" ? "selected" : ""}>طلخا والمشاية</option></select></label>`;
   }
   if (type === "branch-select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="talkha" ${value === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${value === "mashaya" ? "selected" : ""}>فرع المشاية</option></select></label>`;
+  if (type === "drink-branch-select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="talkha" ${value === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${value === "mashaya" ? "selected" : ""}>فرع المشاية</option>${state.role === "admin" ? `<option value="all" ${value === "all" ? "selected" : ""}>كل الفروع</option>` : ""}</select></label>`;
   if (type === "boolean") return `<label class="${className}">${label}<select name="${name}"><option value="true" ${value !== false ? "selected" : ""}>نعم</option><option value="false" ${value === false ? "selected" : ""}>لا</option></select></label>`;
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
   const inputType = type === "video-file" ? "file" : type;
@@ -644,6 +716,7 @@ async function submitSecureDelete(event) {
     await verifyAdminPassword(password);
     await secureDeleteRecord(pending.kind, pending.id);
     closeSecureDelete();
+    if (pending.kind === "expense" && state.editingExpenseId === pending.id) resetExpenseForm();
     await loadDashboard();
     if (pending.kind === "expense") await loadBusiness(true);
     if (state.collections.has("customers")) await loadCollection("customers", true);
@@ -680,12 +753,16 @@ function fillSettings(item) {
 
 async function saveSettingsForm(event) {
   event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"], button:not([type])');
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
   const payload = Object.fromEntries(new FormData(event.currentTarget));
   const existing = (state.collections.get("settings") || [])[0] || {};
   if (payload.businessNameAr != null) payload.businessNameEn = existing.businessNameEn || payload.businessNameAr;
   if (payload.aboutAr != null) payload.aboutEn = existing.aboutEn || payload.aboutAr;
   try { await saveEntity("settings", "public", payload); await loadCollection("settings", true); toast("تم حفظ الإعدادات"); }
   catch (error) { toast(error.message || "تعذر الحفظ", true); }
+  finally { if (button) button.disabled = false; }
 }
 
 function exportCsv(filename, headers, rows) {
@@ -726,6 +803,7 @@ document.addEventListener("click", async event => {
   const deleteBooking = event.target.closest("[data-secure-delete-booking]"); if (deleteBooking) openSecureDelete("booking", deleteBooking.dataset.secureDeleteBooking, deleteBooking.dataset.secureDeleteLabel);
   const deleteRevenue = event.target.closest("[data-secure-delete-revenue]"); if (deleteRevenue) openSecureDelete("revenue", deleteRevenue.dataset.secureDeleteRevenue, deleteRevenue.dataset.secureDeleteLabel);
   const deleteExpense = event.target.closest("[data-secure-delete-expense]"); if (deleteExpense) openSecureDelete("expense", deleteExpense.dataset.secureDeleteExpense, deleteExpense.dataset.secureDeleteLabel);
+  const editExpense = event.target.closest("[data-edit-expense]"); if (editExpense) startExpenseEdit(editExpense.dataset.editExpense);
   const posAdd = event.target.closest("[data-pos-add]"); if (posAdd) addPosItem(posAdd.dataset.posAdd, posAdd.dataset.posKind);
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
   const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; renderCollection("services"); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -735,10 +813,12 @@ document.addEventListener("click", async event => {
 document.addEventListener("input", event => {
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
   if (event.target.id === "posItemSearch" || event.target.id === "posDiscount") event.target.id === "posItemSearch" ? renderPos() : renderPosCart();
-  if (event.target.matches("[data-pos-qty]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posQty && item.kind === event.target.dataset.posKind); if (line) { line.qty = Math.max(1, Number(event.target.value || 1)); renderPosCart(); } }
+  if (event.target.matches("[data-pos-qty]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posQty && item.kind === event.target.dataset.posKind); if (line) { const catalogItem = posCatalogItems().find(item => item.id === line.id && item.kind === line.kind); const max = line.kind === "inventory" ? Math.max(1, Number(catalogItem?.stockQty || 1)) : 20; line.qty = Math.max(1, Math.min(max, Math.floor(Number(event.target.value || 1)))); renderPosCart(); } }
 });
 document.addEventListener("change", event => {
   if (event.target.matches("[data-pos-option]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posOption && item.kind === event.target.dataset.posKind); if (line) { line.option = event.target.value; renderPosCart(); } }
+  if (["expenseFrom", "expenseTo", "expenseBranchFilter", "expenseCategoryFilter"].includes(event.target.id)) renderExpenses();
+  if (event.target.id === "expenseBranch") refreshExpenseInventoryOptions();
 });
 
 function closeAdminMenu() {
@@ -766,7 +846,7 @@ $("#bookingStatusFilter").addEventListener("change", renderBookings);
 $("#bookingBranchFilter").addEventListener("change", renderBookings);
 $("#applyRevenueFilter").addEventListener("click", renderRevenue);
 $("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookings.csv", ["code", "branch", "customer", "phone", "items", "staff", "date", "time", "subtotal", "discount", "total", "status", "payment"], state.dashboard.bookings.map(item => [item.code, item.branchNameAr || branchLabel(item.branchId), item.customerName, item.phone, (item.serviceNamesAr || []).join(" + "), item.staffNameAr, item.bookingDate, item.bookingTime, item.subtotal, item.discountAmount, item.total, item.status, item.paymentStatus])));
-$("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "branch", "booking", "type", "method", "staff", "amount"], state.dashboard.ledger.map(item => [item.dateKey, branchLabel(item.branchId), item.bookingCode, item.type, item.paymentMethod, item.staffId, item.amount])));
+$("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "branch", "booking", "type", "method", "staff", "services", "products", "drinks", "amount"], state.dashboard.ledger.map(item => [item.dateKey, branchLabel(item.branchId), item.bookingCode, item.type, item.paymentMethod, item.staffId, item.revenueBreakdown?.services || 0, item.revenueBreakdown?.products || 0, item.revenueBreakdown?.drinks || 0, item.amount])));
 $("#openScanner").addEventListener("click", openScanner);
 $("#scannerClose").addEventListener("click", closeScanner);
 $("#findScannedBooking").addEventListener("click", findScanned);
@@ -781,6 +861,8 @@ $("#serviceCategoryFilter").addEventListener("change", () => renderCollection("s
 $("#posCustomer").addEventListener("change", event => selectPosCustomer(event.target.value));
 $("#expenseForm").addEventListener("submit", submitExpense);
 $("#expenseCategory").addEventListener("change", toggleExpenseInventory);
+$("#expenseCancelEdit").addEventListener("click", resetExpenseForm);
+$("#clearExpenseFilters").addEventListener("click", () => { $("#expenseFrom").value = ""; $("#expenseTo").value = ""; $("#expenseBranchFilter").value = "all"; $("#expenseCategoryFilter").value = "all"; renderExpenses(); });
 $("#refreshPayroll").addEventListener("click", () => loadBusiness());
 $("#payrollMonth").addEventListener("change", () => loadBusiness());
 $("#exportPayroll").addEventListener("click", () => exportCsv(`el-mezaen-payroll-${state.business.month}.csv`, ["العامل", "الإيراد", "التارجت", "الأساسي", "نسبة الزيادة", "الزيادة", "الراتب", "الحالة"], (state.business.payroll || []).map(item => [item.nameAr, item.revenue, item.monthlyTarget, item.baseSalary, item.targetBonusPercent, item.bonus, item.payment?.netSalary ?? item.netSalary, item.payment ? "تم الصرف" : "لم يصرف"])));

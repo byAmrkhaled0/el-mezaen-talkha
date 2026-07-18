@@ -1,8 +1,8 @@
-const VERSION = "v55";
+const VERSION = "v56";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
 const CORE = [
-  "/", "/admin/", "/login/", "/manifest.webmanifest", "/admin-manifest.webmanifest",
+  "/", "/manifest.webmanifest", "/admin-manifest.webmanifest",
   "/assets/el-mezaen-mark-v2.webp", "/assets/icon-192.png", "/assets/icon-512.png",
   "/assets/icon-maskable-512.png", "/assets/apple-touch-icon.png", "/assets/hero-barbershop-cyan.webp"
 ];
@@ -15,7 +15,7 @@ async function put(cacheName, request, response) {
 }
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(STATIC_CACHE).then(cache => cache.addAll(CORE)));
+  event.waitUntil(caches.open(STATIC_CACHE).then(cache => Promise.allSettled(CORE.map(url => cache.add(url)))));
   self.skipWaiting();
 });
 
@@ -29,6 +29,17 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.hostname.includes("googleapis.com") || url.hostname.includes("cloudfunctions.net")) return;
+
+  const sensitiveNavigation = request.mode === "navigate" && (url.pathname.startsWith("/admin") || url.pathname.startsWith("/login"));
+  if (sensitiveNavigation) {
+    event.respondWith(fetch(request).catch(() => new Response('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>غير متصل</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#020811;color:#f4fbff;font-family:system-ui;text-align:center}main{max-width:420px}a{color:#22d3ee}</style><main><h1>الاتصال بالإنترنت مطلوب</h1><p>لوحة الإدارة والعمليات المالية لا تعرض بيانات محفوظة قديمة أثناء انقطاع الإنترنت.</p><a href="/admin/">إعادة المحاولة</a></main>', { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } })));
+    return;
+  }
+
+  if (url.pathname === "/firebase-config.js") {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).then(async response => {

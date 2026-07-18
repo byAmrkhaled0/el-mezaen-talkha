@@ -2,9 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isRecentAuthentication, minutes, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
@@ -12,6 +13,7 @@ const region = "europe-west1";
 const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 80, maxInstances: 100, timeoutSeconds: 30 };
 const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
+const adminOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 40, maxInstances: 50, timeoutSeconds: 30 };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 // Keep "worker" only as a legacy cashier role so previously-created accounts still work.
@@ -23,7 +25,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
   worker: ["dashboard", "pos", "bookings", "customers"]
 };
 const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
-const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "marketing", "other"];
+const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
 const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.CATALOG_CACHE_MS || 60_000)));
@@ -93,10 +95,15 @@ function requireBranchAccess(request, branchId) {
 }
 function itemInAllowedBranch(item, allowedBranches) {
   if (!allowedBranches.length) return true;
-  if (item.branchId) return allowedBranches.includes(String(item.branchId).toLowerCase());
+  if (item.branchId) return item.branchId === "all" || allowedBranches.includes(String(item.branchId).toLowerCase());
   if (item.lastBranchId) return allowedBranches.includes(String(item.lastBranchId).toLowerCase());
   if (Array.isArray(item.branchIds) && item.branchIds.length) return item.branchIds.some(value => allowedBranches.includes(String(value).toLowerCase()));
   return true;
+}
+
+function invalidateCatalogCache() {
+  catalogCache = null;
+  catalogCacheExpiresAt = 0;
 }
 function requirePermission(request, permission) {
   const role = requireRole(request);
@@ -110,6 +117,35 @@ function requireRecentAdmin(request) {
 }
 
 function sanitizeText(value, max = 200) { return String(value || "").trim().slice(0, max); }
+
+function validatePayloadSize(value, maxBytes = 32 * 1024) {
+  let bytes = 0;
+  try { bytes = Buffer.byteLength(JSON.stringify(value || {}), "utf8"); }
+  catch { throw new HttpsError("invalid-argument", "بيانات الحفظ غير صالحة"); }
+  if (bytes > maxBytes) throw new HttpsError("invalid-argument", "حجم البيانات أكبر من المسموح");
+}
+
+function managedStoragePath(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.hostname === "firebasestorage.googleapis.com") {
+      const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+      if (!match || decodeURIComponent(match[1]) !== getStorage().bucket().name) return "";
+      return decodeURIComponent(match[2]);
+    }
+    if (url.hostname === "storage.googleapis.com") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.shift() !== getStorage().bucket().name) return "";
+      return decodeURIComponent(parts.join("/"));
+    }
+  } catch { return ""; }
+  return "";
+}
+
+async function deleteManagedMedia(record, except = new Set()) {
+  const paths = [...new Set([record?.imageUrl, record?.videoUrl].map(managedStoragePath).filter(path => path && !except.has(path)))];
+  await Promise.all(paths.map(path => getStorage().bucket().file(path).delete({ ignoreNotFound: true }).catch(error => console.warn("Managed media cleanup failed", { path, code: error.code }))));
+}
 
 async function readSettings() {
   const snapshot = await db.doc("settings/public").get();
@@ -137,7 +173,8 @@ async function loadCatalog() {
     if (item.active === false || !Number.isFinite(price) || price < 0 || !item.branchId) return [];
     const nameAr = sanitizeText(item.nameAr, 100);
     if (!nameAr) return [];
-    return [{ id: snapshot.id, nameAr, nameEn: sanitizeText(item.nameEn || item.nameAr, 100), type: DRINK_TYPES.includes(item.type) ? item.type : "other", price, drinkOptions: normalizeDrinkOptions(item.drinkOptions), branchIds: [sanitizeText(item.branchId, 40)], maxQty: 20, active: true, sortOrder: Number(item.sortOrder || 0) }];
+    const drinkBranch = sanitizeText(item.branchId, 40).toLowerCase();
+    return [{ id: snapshot.id, nameAr, nameEn: sanitizeText(item.nameEn || item.nameAr, 100), type: DRINK_TYPES.includes(item.type) ? item.type : "other", price, drinkOptions: normalizeDrinkOptions(item.drinkOptions), branchId: drinkBranch, branchIds: drinkBranch === "all" ? [] : [drinkBranch], maxQty: 20, active: true, sortOrder: Number(item.sortOrder || 0) }];
   }).sort((a, b) => a.sortOrder - b.sortOrder);
   payload.settings = publicSettings;
   return payload;
@@ -172,7 +209,7 @@ function priceDrinkSnapshots(snapshots, lines, branchId) {
   return snapshots.map((snapshot, index) => {
     const source = snapshot.data() || {};
     const line = lines[index];
-    if (!snapshot.exists || source.active === false || source.branchId !== branchId) throw new Error("DRINK_UNAVAILABLE");
+    if (!snapshot.exists || !isDrinkAvailableAtBranch(source, branchId)) throw new Error("DRINK_UNAVAILABLE");
     const nameAr = sanitizeText(source.nameAr, 100);
     if (!nameAr) throw new Error("DRINK_UNAVAILABLE");
     const unitPrice = Number(source.price || 0);
@@ -436,7 +473,7 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
   return { ok: true };
 });
 
-export const getAdminDashboard = onCall({ region }, async request => {
+export const getAdminDashboard = onCall(adminOptions, async request => {
   const access = permissionsFor(request);
   if (!["dashboard", "bookings", "revenue", "expenses", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية لوحة المتابعة");
   const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
@@ -477,7 +514,7 @@ export const getAdminDashboard = onCall({ region }, async request => {
   };
 });
 
-export const getAdminCollection = onCall({ region }, async request => {
+export const getAdminCollection = onCall(adminOptions, async request => {
   const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
   const allowed = [...ADMIN_COLLECTIONS, "customers", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
@@ -547,14 +584,16 @@ function normalizeAdminPayload(collection, raw) {
   return payload;
 }
 
-export const adminUpsert = onCall({ region }, async request => {
+export const adminUpsert = onCall(adminOptions, async request => {
   const collection = sanitizeText(request.data?.collection, 40);
   const raw = request.data?.data || {};
+  validatePayloadSize(raw);
   requirePermission(request, collection === "content" ? contentPermission(raw.type) : COLLECTION_PERMISSIONS[collection] || "settings");
   if (!ADMIN_COLLECTIONS.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   if (request.auth.token.role !== "admin") {
     const allowedBranches = branchesFor(request);
     if (raw.branchId) requireBranchAccess(request, raw.branchId);
+    if (typeof raw.branchIds === "string") raw.branchIds = raw.branchIds.split(",").map(value => value.trim()).filter(Boolean);
     if (Array.isArray(raw.branchIds)) raw.branchIds = raw.branchIds.filter(value => allowedBranches.includes(String(value).toLowerCase()));
     if (Array.isArray(raw.branchIds) && !raw.branchIds.length && ["services", "packages", "offers", "staff", "content"].includes(collection)) raw.branchIds = allowedBranches;
   }
@@ -572,45 +611,59 @@ export const adminUpsert = onCall({ region }, async request => {
   if (!id) id = db.collection(collection).doc().id;
   const ref = db.collection(collection).doc(id);
   const before = await ref.get();
+  if (request.auth.token.role !== "admin" && before.exists && !itemInAllowedBranch(before.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   const payload = normalizeAdminPayload(collection, raw);
   await ref.set({ ...payload, updatedAt: FieldValue.serverTimestamp(), ...(before.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
   await db.collection("activityLogs").add({ action: before.exists ? "update" : "create", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) invalidateCatalogCache();
+  if (before.exists && ["content", "staff", "packages", "offers"].includes(collection)) {
+    const keep = new Set([payload.imageUrl, payload.videoUrl].map(managedStoragePath).filter(Boolean));
+    await deleteManagedMedia(before.data(), keep);
+  }
   return { ok: true, id };
 });
 
-export const adminDelete = onCall({ region }, async request => {
+export const adminDelete = onCall(adminOptions, async request => {
+  const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
   const id = sanitizeText(request.data?.id, 100);
   if (!ADMIN_COLLECTIONS.includes(collection) || collection === "settings" || !id) throw new HttpsError("invalid-argument", "طلب حذف غير صالح");
   const target = await db.collection(collection).doc(id).get();
-  if (request.auth.token.role !== "admin" && target.exists && !itemInAllowedBranch(target.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
+  if (role !== "admin" && target.exists && !itemInAllowedBranch(target.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   if (collection === "content") {
     requirePermission(request, contentPermission(target.data()?.type));
   } else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
   await db.collection(collection).doc(id).delete();
   await db.collection("activityLogs").add({ action: "delete", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) invalidateCatalogCache();
+  if (target.exists && ["content", "staff", "packages", "offers"].includes(collection)) await deleteManagedMedia(target.data());
   return { ok: true };
 });
 
-export const getBusinessDashboard = onCall({ region }, async request => {
+export const getBusinessDashboard = onCall(adminOptions, async request => {
   const access = permissionsFor(request);
   if (!["pos", "expenses", "inventory", "drinks", "payroll", "reviews"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية بيانات التشغيل");
   const currentMonth = businessDateParts().month;
   const month = sanitizeText(request.data?.month || currentMonth, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
-  const [staffSnapshot, ledgerSnapshot, expensesSnapshot, inventorySnapshot, drinksSnapshot, payrollSnapshot, reviewsSnapshot, bookingsSnapshot] = await Promise.all([
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextMonthDate = new Date(Date.UTC(year, monthNumber, 1));
+  const nextMonth = `${nextMonthDate.getUTCFullYear()}-${String(nextMonthDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const [staffSnapshot, ledgerSnapshot, expensesSnapshot, inventorySnapshot, drinksSnapshot, payrollSnapshot, reviewsSnapshot] = await Promise.all([
     db.collection("staff").limit(200).get(),
-    db.collection("revenueLedger").limit(5000).get(),
-    db.collection("expenses").limit(3000).get(),
+    db.collection("revenueLedger").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get(),
+    db.collection("expenses").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get(),
     db.collection("inventoryItems").limit(500).get(),
     db.collection("drinks").limit(300).get(),
     db.collection("payrollPayments").where("month", "==", month).limit(300).get(),
-    db.collection("reviews").limit(500).get(),
-    db.collection("bookings").limit(5000).get()
+    db.collection("reviews").limit(500).get()
   ]);
   const allowedBranches = branchesFor(request);
-  const bookings = new Map(bookingsSnapshot.docs.map(snapshot => [snapshot.id, cleanDoc(snapshot)]).filter(([, item]) => itemInAllowedBranch(item, allowedBranches)));
-  const ledger = ledgerSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && String(item.dateKey || "").startsWith(month)).map(item => {
+  const rawLedger = ledgerSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
+  const legacyBookingIds = [...new Set(rawLedger.filter(item => !item.revenueBreakdown).map(item => item.bookingId || item.bookingCode).filter(Boolean))].slice(0, 300);
+  const legacyBookingSnapshots = legacyBookingIds.length ? await db.getAll(...legacyBookingIds.map(id => db.doc(`bookings/${id}`))) : [];
+  const bookings = new Map(legacyBookingSnapshots.filter(snapshot => snapshot.exists).map(snapshot => [snapshot.id, cleanDoc(snapshot)]).filter(([, item]) => itemInAllowedBranch(item, allowedBranches)));
+  const ledger = rawLedger.map(item => {
     const booking = bookings.get(item.bookingId || item.bookingCode);
     const breakdown = item.revenueBreakdown || calculateRevenueBreakdown(booking?.items || [], item.amount);
     return { ...item, revenueBreakdown: breakdown };
@@ -653,37 +706,91 @@ export const getBusinessDashboard = onCall({ region }, async request => {
   };
 });
 
-export const recordExpense = onCall({ region }, async request => {
+export const recordExpense = onCall(adminOptions, async request => {
   requirePermission(request, "expenses");
-  const amount = Number(request.data?.amount || 0);
-  const category = sanitizeText(request.data?.category, 30);
-  const description = sanitizeText(request.data?.description, 200);
-  const branchId = sanitizeText(request.data?.branchId || "talkha", 40).toLowerCase();
-  requireBranchAccess(request, branchId);
-  const dateKey = sanitizeText(request.data?.dateKey || businessDateParts().dateKey, 10);
-  const inventoryItemId = sanitizeText(request.data?.inventoryItemId, 100);
-  const stockQuantity = Math.max(0, Number(request.data?.stockQuantity || 0));
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000 || !EXPENSE_CATEGORIES.includes(category) || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new HttpsError("invalid-argument", "بيانات المصروف غير صحيحة");
-  const expenseRef = db.collection("expenses").doc();
-  const inventoryRef = category === "inventory" && inventoryItemId ? db.doc(`inventoryItems/${inventoryItemId}`) : null;
+  let input;
+  try { input = normalizeExpenseInput(request.data, { defaultDate: businessDateParts().dateKey, categories: EXPENSE_CATEGORIES }); }
+  catch (error) {
+    const messages = { INVALID_EXPENSE_AMOUNT: "قيمة المصروف يجب أن تكون أكبر من صفر", INVALID_EXPENSE_CATEGORY: "اختر تصنيفًا صحيحًا", INVALID_EXPENSE_DESCRIPTION: "اكتب بيان المصروف", INVALID_EXPENSE_BRANCH: "اختر فرعًا صحيحًا", INVALID_EXPENSE_DATE: "تاريخ المصروف غير صحيح", INVALID_STOCK_QUANTITY: "كمية المخزون غير صحيحة", INVALID_PAYMENT_METHOD: "طريقة الدفع غير صحيحة", INVALID_IDEMPOTENCY_KEY: "تعذر تأمين العملية؛ حدّث الصفحة وحاول مرة أخرى" };
+    throw new HttpsError("invalid-argument", messages[error.message] || "بيانات المصروف غير صحيحة");
+  }
+  requireBranchAccess(request, input.branchId);
+  if (input.dateKey > businessDateParts().dateKey) throw new HttpsError("invalid-argument", "لا يمكن تسجيل مصروف بتاريخ مستقبلي");
+  const expenseRef = input.idempotencyKey ? db.doc(`expenses/expense_${hash(`${request.auth.uid}|${input.idempotencyKey}`)}`) : db.collection("expenses").doc();
+  const inventoryRef = input.inventoryItemId ? db.doc(`inventoryItems/${input.inventoryItemId}`) : null;
   const activityRef = db.collection("activityLogs").doc();
-  await db.runTransaction(async transaction => {
+  return db.runTransaction(async transaction => {
+    const existingExpense = await transaction.get(expenseRef);
+    if (existingExpense.exists) {
+      if (existingExpense.data().createdBy !== request.auth.uid) throw new HttpsError("already-exists", "تعذر تأمين العملية؛ استخدم محاولة جديدة");
+      return { ok: true, id: expenseRef.id, idempotent: true };
+    }
     const inventorySnapshot = inventoryRef ? await transaction.get(inventoryRef) : null;
     if (inventoryRef && !inventorySnapshot.exists) throw new HttpsError("not-found", "صنف المخزون غير موجود");
-    transaction.create(expenseRef, { amount, category, description, branchId, dateKey, inventoryItemId: inventoryRef ? inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? stockQuantity : 0, paymentMethod: sanitizeText(request.data?.paymentMethod || "cash", 30), createdAt: FieldValue.serverTimestamp(), createdBy: request.auth.uid });
-    if (inventorySnapshot?.exists && stockQuantity > 0) {
+    if (inventorySnapshot?.exists && inventorySnapshot.data().branchId !== input.branchId) throw new HttpsError("failed-precondition", "صنف المخزون تابع لفرع آخر");
+    const now = FieldValue.serverTimestamp();
+    transaction.create(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: inventoryRef ? input.inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? input.stockQuantity : 0, createdAt: now, createdBy: request.auth.uid, createdByEmail: request.auth.token.email || "", createdByName: request.auth.token.name || request.auth.token.email || request.auth.uid });
+    if (inventorySnapshot?.exists && input.stockQuantity > 0) {
       const oldQuantity = Math.max(0, Number(inventorySnapshot.data().stockQty || 0));
       const oldCost = Math.max(0, Number(inventorySnapshot.data().costPrice || 0));
-      const weightedCost = (oldQuantity * oldCost + amount) / (oldQuantity + stockQuantity);
-      transaction.update(inventoryRef, { stockQty: FieldValue.increment(stockQuantity), costPrice: Math.round(weightedCost * 100) / 100, updatedAt: FieldValue.serverTimestamp() });
+      const weightedCost = (oldQuantity * oldCost + input.amount) / (oldQuantity + input.stockQuantity);
+      transaction.update(inventoryRef, { stockQty: FieldValue.increment(input.stockQuantity), costPrice: Math.round(weightedCost * 100) / 100, updatedAt: now });
+      transaction.create(db.doc(`stockMovements/purchase_${expenseRef.id}`), { inventoryItemId: input.inventoryItemId, branchId: input.branchId, expenseId: expenseRef.id, quantity: input.stockQuantity, amount: input.amount, type: "purchase", dateKey: input.dateKey, createdAt: now, createdBy: request.auth.uid });
     }
-    transaction.set(activityRef, { action: "record-expense", collection: "expenses", entityId: expenseRef.id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { action: input.kind === "purchase" ? "record-purchase" : "record-expense", collection: "expenses", entityId: expenseRef.id, branchId: input.branchId, amount: input.amount, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    return { ok: true, id: expenseRef.id };
   });
-  return { ok: true, id: expenseRef.id };
 });
 
-export const createPosOrder = onCall({ region }, async request => {
+export const updateExpense = onCall(adminOptions, async request => {
+  requirePermission(request, "expenses");
+  const id = sanitizeText(request.data?.id, 100);
+  if (!id) throw new HttpsError("invalid-argument", "المصروف المطلوب تعديله غير محدد");
+  let input;
+  try { input = normalizeExpenseInput(request.data, { defaultDate: businessDateParts().dateKey, categories: EXPENSE_CATEGORIES }); }
+  catch { throw new HttpsError("invalid-argument", "راجع قيمة المصروف والبيان والتاريخ والفرع وطريقة الدفع"); }
+  requireBranchAccess(request, input.branchId);
+  if (input.dateKey > businessDateParts().dateKey) throw new HttpsError("invalid-argument", "لا يمكن تسجيل مصروف بتاريخ مستقبلي");
+  const expenseRef = db.doc(`expenses/${id}`);
+  const activityRef = db.collection("activityLogs").doc();
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(expenseRef);
+    if (!snapshot.exists) throw new HttpsError("not-found", "المصروف غير موجود");
+    const before = snapshot.data();
+    requireBranchAccess(request, before.branchId);
+    if (before.payrollPaymentId) throw new HttpsError("failed-precondition", "مصروف الراتب يُعدّل من عملية صرف الراتب المرتبطة به");
+    const oldRef = before.inventoryItemId ? db.doc(`inventoryItems/${before.inventoryItemId}`) : null;
+    const newRef = input.inventoryItemId ? db.doc(`inventoryItems/${input.inventoryItemId}`) : null;
+    const refs = [...new Map([oldRef, newRef].filter(Boolean).map(ref => [ref.path, ref])).values()];
+    const inventorySnapshots = refs.length ? await transaction.getAll(...refs) : [];
+    const inventoryByPath = new Map(inventorySnapshots.map(item => [item.ref.path, item]));
+    if (newRef && !inventoryByPath.get(newRef.path)?.exists) throw new HttpsError("not-found", "صنف المخزون غير موجود");
+    if (newRef && inventoryByPath.get(newRef.path).data().branchId !== input.branchId) throw new HttpsError("failed-precondition", "صنف المخزون تابع لفرع آخر");
+    const now = FieldValue.serverTimestamp();
+    for (const ref of refs) {
+      const item = inventoryByPath.get(ref.path);
+      if (!item?.exists) continue;
+      const oldQty = oldRef?.path === ref.path ? Math.max(0, Number(before.stockQuantity || 0)) : 0;
+      const newQty = newRef?.path === ref.path ? input.stockQuantity : 0;
+      const currentQty = Math.max(0, Number(item.data().stockQty || 0));
+      const nextQty = currentQty - oldQty + newQty;
+      if (nextQty < 0) throw new HttpsError("failed-precondition", "لا يمكن تعديل الكمية بعد بيع جزء من المخزون؛ احذف العملية وأعد تسجيلها بعد مراجعة الرصيد");
+      const currentAsset = currentQty * Math.max(0, Number(item.data().costPrice || 0));
+      const nextAsset = Math.max(0, currentAsset - (oldQty ? Number(before.amount || 0) : 0) + (newQty ? input.amount : 0));
+      transaction.update(ref, { stockQty: nextQty, ...(nextQty > 0 ? { costPrice: Math.round(nextAsset / nextQty * 100) / 100 } : {}), updatedAt: now });
+    }
+    transaction.set(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: newRef ? input.inventoryItemId : null, inventoryCategory: newRef ? inventoryByPath.get(newRef.path).data().category || null : null, stockQuantity: newRef ? input.stockQuantity : 0, updatedAt: now, updatedBy: request.auth.uid, updatedByEmail: request.auth.token.email || "" }, { merge: true });
+    transaction.delete(db.doc(`stockMovements/purchase_${id}`));
+    if (newRef && input.stockQuantity > 0) transaction.set(db.doc(`stockMovements/purchase_${id}`), { inventoryItemId: input.inventoryItemId, branchId: input.branchId, expenseId: id, quantity: input.stockQuantity, amount: input.amount, type: "purchase", dateKey: input.dateKey, updatedAt: now, createdBy: before.createdBy || request.auth.uid });
+    transaction.set(activityRef, { action: "update-expense", collection: "expenses", entityId: id, branchId: input.branchId, before: { amount: before.amount || 0, category: before.category || "other", branchId: before.branchId || "" }, after: { amount: input.amount, category: input.category, branchId: input.branchId }, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    return { ok: true, id };
+  });
+});
+
+export const createPosOrder = onCall(adminOptions, async request => {
   requirePermission(request, "pos");
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين الطلب؛ حدّث الصفحة وحاول مرة أخرى");
   const branch = await readBranch(request.data?.branchId);
   requireBranchAccess(request, branch.id);
   const customer = {
@@ -724,8 +831,11 @@ export const createPosOrder = onCall({ region }, async request => {
   const inventoryRefs = inventoryLines.map(line => db.doc(`inventoryItems/${sanitizeText(line.id, 100)}`));
   const drinkRefs = drinkLines.map(line => db.doc(`drinks/${sanitizeText(line.id, 100)}`));
   const activityRef = db.collection("activityLogs").doc();
+  const idempotencyRef = db.doc(`posOrderGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
   const { dateKey, time } = businessDateParts();
   return db.runTransaction(async transaction => {
+    const existingGuard = await transaction.get(idempotencyRef);
+    if (existingGuard.exists) return { ok: true, bookingCode: existingGuard.data().bookingCode, total: existingGuard.data().total, paymentStatus: existingGuard.data().paymentStatus, idempotent: true };
     const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
     const inventoryItems = inventorySnapshots.map((snapshot, index) => {
       if (!snapshot.exists || snapshot.data().active === false || snapshot.data().category === "supply") throw new HttpsError("failed-precondition", "أحد أصناف البضاعة غير متاح للبيع");
@@ -758,12 +868,13 @@ export const createPosOrder = onCall({ region }, async request => {
       transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
     });
+    transaction.create(idempotencyRef, { bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", branchId: branch.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
     transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid" };
   });
 });
 
-export const recordPayrollPayment = onCall({ region }, async request => {
+export const recordPayrollPayment = onCall(adminOptions, async request => {
   requirePermission(request, "payroll");
   const month = sanitizeText(request.data?.month, 7);
   const staffId = sanitizeText(request.data?.staffId, 100);
@@ -922,16 +1033,22 @@ async function deleteExpensePermanently(id, request) {
     const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
     if (inventoryRef && related.get(inventoryRef.path)?.exists && Number(expense.stockQuantity || 0) > 0) {
       const item = related.get(inventoryRef.path).data();
-      transaction.update(inventoryRef, { stockQty: Math.max(0, Number(item.stockQty || 0) - Number(expense.stockQuantity || 0)), updatedAt: FieldValue.serverTimestamp() });
+      const currentQty = Math.max(0, Number(item.stockQty || 0));
+      const removedQty = Number(expense.stockQuantity || 0);
+      if (currentQty < removedQty) throw new HttpsError("failed-precondition", "لا يمكن حذف الشراء بعد بيع جزء من كميته؛ راجع رصيد الصنف أولًا");
+      const nextQty = currentQty - removedQty;
+      const nextAsset = Math.max(0, currentQty * Math.max(0, Number(item.costPrice || 0)) - Number(expense.amount || 0));
+      transaction.update(inventoryRef, { stockQty: nextQty, ...(nextQty > 0 ? { costPrice: Math.round(nextAsset / nextQty * 100) / 100 } : {}), updatedAt: FieldValue.serverTimestamp() });
+      transaction.delete(db.doc(`stockMovements/purchase_${id}`));
     }
     if (payrollRef && related.get(payrollRef.path)?.exists) transaction.delete(payrollRef);
     transaction.delete(expenseRef);
-    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, branchId: expense.branchId || "", amount: expense.amount || 0, category: expense.category || "other", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
 
-export const adminSecureDelete = onCall({ region }, async request => {
+export const adminSecureDelete = onCall(adminOptions, async request => {
   requireRecentAdmin(request);
   const kind = sanitizeText(request.data?.kind, 30);
   const id = sanitizeText(request.data?.id, 100);
@@ -941,7 +1058,7 @@ export const adminSecureDelete = onCall({ region }, async request => {
   return deleteExpensePermanently(id, request);
 });
 
-export const updateBooking = onCall({ region }, async request => {
+export const updateBooking = onCall(adminOptions, async request => {
   const role = requireRole(request);
   const id = sanitizeText(request.data?.id, 100);
   const action = sanitizeText(request.data?.action, 30);
@@ -988,7 +1105,7 @@ export const updateBooking = onCall({ region }, async request => {
   });
 });
 
-export const registerPushToken = onCall({ region }, async request => {
+export const registerPushToken = onCall(adminOptions, async request => {
   requireRole(request);
   const token = sanitizeText(request.data?.token, 4096);
   if (!token) throw new HttpsError("invalid-argument", "Token required");
@@ -996,7 +1113,7 @@ export const registerPushToken = onCall({ region }, async request => {
   return { ok: true };
 });
 
-export const setUserRole = onCall({ region }, async request => {
+export const setUserRole = onCall(adminOptions, async request => {
   requireRole(request, ["admin"]);
   const uid = sanitizeText(request.data?.uid, 128);
   const role = sanitizeText(request.data?.role, 30);
@@ -1010,7 +1127,7 @@ export const setUserRole = onCall({ region }, async request => {
   return { ok: true };
 });
 
-export const createAdminUser = onCall({ region, memory: "256MiB", maxInstances: 10 }, async request => {
+export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concurrency: 10, maxInstances: 10 }, async request => {
   requireRole(request, ["admin"]);
   const name = sanitizeText(request.data?.name, 80);
   const email = sanitizeText(request.data?.email, 200).toLowerCase();

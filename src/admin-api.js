@@ -50,8 +50,27 @@ export async function logout() { if (auth) await signOut(auth); }
 async function call(name, data = {}) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
   if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت");
-  const result = await httpsCallable(functions, name, { timeout: 30000 })(data);
-  return result.data;
+  try {
+    const result = await httpsCallable(functions, name, { timeout: 30000 })(data);
+    return result.data;
+  } catch (error) {
+    const code = String(error?.code || "").replace(/^functions\//, "");
+    const original = String(error?.message || "");
+    if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw new Error(original, { cause: error });
+    const messages = {
+      unauthenticated: "انتهت جلسة الدخول؛ سجّل الدخول مرة أخرى",
+      "permission-denied": original.toLowerCase().includes("app check") ? "تعذر التحقق من حماية التطبيق؛ حدّث الصفحة ثم حاول مرة أخرى" : "لا تملك صلاحية تنفيذ هذه العملية",
+      "invalid-argument": "راجع البيانات المدخلة ثم حاول مرة أخرى",
+      "failed-precondition": "لا يمكن تنفيذ العملية بحالتها الحالية",
+      "not-found": "السجل المطلوب غير موجود أو تم حذفه",
+      "already-exists": "تم تسجيل هذه العملية من قبل",
+      "resource-exhausted": "محاولات كثيرة؛ انتظر قليلًا ثم حاول مرة أخرى",
+      unavailable: "الخدمة غير متاحة مؤقتًا؛ تحقق من الإنترنت وحاول مرة أخرى",
+      "deadline-exceeded": "استغرقت العملية وقتًا أطول من اللازم؛ تحقق من النتيجة قبل إعادة المحاولة",
+      internal: "حدث خطأ داخل الخادم؛ لم يتم تأكيد حفظ العملية"
+    };
+    throw new Error(messages[code] || "تعذر تنفيذ العملية الآن", { cause: error });
+  }
 }
 
 async function readCall(name, data = {}) {
@@ -76,6 +95,7 @@ export const secureDeleteRecord = (kind, id) => call("adminSecureDelete", { kind
 export const changeBooking = (id, action, paymentMethod) => call("updateBooking", { id, action, paymentMethod });
 export const createPosOrder = payload => call("createPosOrder", payload);
 export const recordExpense = payload => call("recordExpense", payload);
+export const updateExpense = payload => call("updateExpense", payload);
 export const recordPayrollPayment = payload => call("recordPayrollPayment", payload);
 export const changeUserRole = (uid, email, role, permissions = [], branchIds = []) => call("setUserRole", { uid, email, role, permissions, branchIds });
 export const createUserAccount = payload => call("createAdminUser", payload);
@@ -106,8 +126,9 @@ async function optimizeImage(file) {
 }
 
 export async function uploadImage(file, folder = "content") {
-  if (!file || !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) throw new Error("INVALID_IMAGE");
+  if (!file || !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error("اختر صورة JPG أو PNG أو WebP أو AVIF بحد أقصى 10MB قبل الضغط");
   const optimized = await optimizeImage(file);
+  if (optimized.size >= 5 * 1024 * 1024) throw new Error("تعذر ضغط الصورة لأقل من 5MB؛ اختر صورة أصغر");
   const safeName = optimized.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, optimized, { contentType: optimized.type, cacheControl: "public,max-age=31536000,immutable" });
@@ -116,7 +137,7 @@ export async function uploadImage(file, folder = "content") {
 
 export async function uploadVideo(file, folder = "content") {
   const allowed = ["video/mp4", "video/webm"];
-  if (!file || !allowed.includes(file.type) || file.size > 30 * 1024 * 1024) throw new Error("INVALID_VIDEO");
+  if (!file || !allowed.includes(file.type) || file.size >= 30 * 1024 * 1024) throw new Error("اختر فيديو MP4 أو WebM أقل من 30MB");
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });

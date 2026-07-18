@@ -47,13 +47,23 @@ function saveCatalogCache(data) {
   catch (error) { console.debug("Catalog cache is unavailable", error?.message || error); }
 }
 
+async function callFunction(name, payload = {}, timeout = 30000) {
+  try { return (await httpsCallable(functions, name, { timeout })(payload)).data; }
+  catch (error) {
+    const code = String(error?.code || "").replace(/^functions\//, "");
+    const original = String(error?.message || "");
+    if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw new Error(original, { cause: error });
+    const messages = { unauthenticated: "انتهت الجلسة؛ حدّث الصفحة", "permission-denied": "تعذر التحقق من حماية الموقع؛ حدّث الصفحة ثم حاول مرة أخرى", "invalid-argument": "راجع البيانات المدخلة", "failed-precondition": "لا يمكن تنفيذ الطلب بهذه البيانات", "not-found": "لم يتم العثور على البيانات المطلوبة", "already-exists": "تم إرسال هذا الطلب من قبل", "resource-exhausted": "محاولات كثيرة؛ انتظر قليلًا ثم حاول مرة أخرى", unavailable: "الخدمة غير متاحة مؤقتًا", "deadline-exceeded": "الاتصال بطيء؛ تحقق من النتيجة قبل إعادة المحاولة", internal: "حدث خطأ في الخادم؛ حاول مرة أخرى لاحقًا" };
+    throw new Error(messages[code] || "تعذر الاتصال بالخدمة الآن", { cause: error });
+  }
+}
+
 export async function getCatalog() {
   if (!firebaseConfigured) return { ...localCatalog(), preview: true };
   const cached = readCatalogCache();
   if (navigator.onLine === false && cached) return { ...cached, offline: true, cached: true };
   try {
-    const result = await httpsCallable(functions, "getCatalog", { timeout: 15000 })({});
-    const remote = result.data || {};
+    const remote = await callFunction("getCatalog", {}, 15000) || {};
     const fallback = localCatalog();
     const catalog = {
       ...remote,
@@ -74,18 +84,17 @@ export async function getCatalog() {
     return catalog;
   } catch (error) {
     if (cached) {
-      console.warn("Using the last saved catalog until the connection returns.", error?.code || error?.message || error);
+      console.debug("Using the last saved catalog until the connection returns.", error?.code || error?.message || error);
       return { ...cached, offline: true, cached: true };
     }
-    console.warn("Firebase catalog is not available yet; using the bundled catalog.", error?.code || error?.message || error);
+    console.debug("Firebase catalog is not available yet; using the bundled catalog.", error?.code || error?.message || error);
     return { ...localCatalog(), preview: true };
   }
 }
 
 export async function validateCoupon(payload) {
   if (firebaseConfigured) {
-    const result = await httpsCallable(functions, "validateCoupon")(payload);
-    return result.data;
+    return await callFunction("validateCoupon", payload, 15000);
   }
   const coupon = seedCatalog.coupons.find(item => item.code.toUpperCase() === String(payload.code || "").trim().toUpperCase() && item.active);
   if (!coupon || Number(payload.subtotal || 0) < coupon.minSubtotal || (coupon.branchIds?.length && !coupon.branchIds.includes(payload.branchId))) return { valid: false, message: "invalid" };
@@ -97,8 +106,7 @@ export async function validateCoupon(payload) {
 export async function createBooking(payload) {
   if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت. بيانات الحجز محفوظة على جهازك؛ اتصل ثم اضغط تأكيد الحجز.");
   if (firebaseConfigured) {
-    const result = await httpsCallable(functions, "createBooking")(payload);
-    return result.data;
+    return await callFunction("createBooking", payload, 30000);
   }
   const catalog = localCatalog();
   const branch = catalog.branches.find(item => item.id === payload.branchId && item.active !== false);
@@ -120,7 +128,7 @@ export async function createBooking(payload) {
 
 export async function getCustomerBooking(payload) {
   if (navigator.onLine === false) throw new Error("مراجعة الحجز تحتاج اتصالًا بالإنترنت");
-  if (firebaseConfigured) return (await httpsCallable(functions, "getCustomerBooking")(payload)).data;
+  if (firebaseConfigured) return await callFunction("getCustomerBooking", payload, 15000);
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   const booking = saved.find(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
   if (!booking) throw new Error("لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
@@ -129,7 +137,7 @@ export async function getCustomerBooking(payload) {
 
 export async function cancelCustomerBooking(payload) {
   if (navigator.onLine === false) throw new Error("إلغاء الحجز يحتاج اتصالًا بالإنترنت");
-  if (firebaseConfigured) return (await httpsCallable(functions, "cancelCustomerBooking")(payload)).data;
+  if (firebaseConfigured) return await callFunction("cancelCustomerBooking", payload, 20000);
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   const index = saved.findIndex(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
   if (index < 0) throw new Error("لم نجد الحجز");
@@ -142,7 +150,7 @@ export async function submitReview(payload) {
   const review = { name: String(payload.name || "").trim(), bookingCode: String(payload.bookingCode || "").trim(), rating: Math.max(1, Math.min(5, Number(payload.rating || 5))), comment: String(payload.comment || "").trim() };
   if (!review.name || !review.comment) throw new Error("بيانات التقييم غير مكتملة");
   if (navigator.onLine === false) throw new Error("إرسال التقييم يحتاج اتصالًا بالإنترنت");
-  if (firebaseConfigured) return (await httpsCallable(functions, "submitReview")(review)).data;
+  if (firebaseConfigured) return await callFunction("submitReview", review, 20000);
   const saved = JSON.parse(localStorage.getItem("mz-preview-reviews") || "[]");
   saved.unshift({ ...review, status: "pending", createdAt: new Date().toISOString() });
   localStorage.setItem("mz-preview-reviews", JSON.stringify(saved.slice(0, 30)));

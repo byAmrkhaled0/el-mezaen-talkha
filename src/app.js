@@ -6,11 +6,13 @@ import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const readJson = (key, fallback) => { try { const value = JSON.parse(localStorage.getItem(key) || "null"); return value ?? fallback; } catch { return fallback; } };
+const readArray = key => { const value = readJson(key, []); return Array.isArray(value) ? value : []; };
 const state = {
   lang: getLang(),
   theme: localStorage.getItem("mz-theme") === "light" ? "light" : "dark",
   catalog: { branches: [], categories: [], services: [], packages: [], staff: [], offers: [], drinks: [], content: [], translations: [], reviews: [], settings: {} },
-  cart: JSON.parse(localStorage.getItem("mz-cart") || "[]"),
+  cart: readArray("mz-cart"),
   category: "all",
   step: 1,
   staffId: "any",
@@ -387,7 +389,7 @@ async function refreshCatalog(silent = true) {
     return true;
   } catch (error) {
     if (!silent) showToast(t("loadError", state.lang));
-    console.error("Catalog refresh failed", error);
+    console.debug("Catalog refresh failed", error?.message || error);
     return false;
   }
 }
@@ -591,7 +593,7 @@ async function submitBooking() {
     renderCart();
     goToStep(5);
   } catch (error) {
-    console.error("Booking failed", error);
+    console.debug("Booking failed", error?.message || error);
     showToast(error?.message || t("loadError", state.lang));
   } finally {
     button.disabled = false;
@@ -611,7 +613,7 @@ $("#reviewForm").addEventListener("submit", async event => {
     const fiveStars = form.querySelector('input[name="rating"][value="5"]');
     if (fiveStars) fiveStars.checked = true;
     showToast(state.lang === "ar" ? "شكرًا! تم إرسال تقييمك للمراجعة" : "Thank you! Your review was submitted");
-  } catch (error) { console.error("Review submission failed", error); showToast(error?.message || "تعذر إرسال التقييم"); }
+  } catch (error) { console.debug("Review submission failed", error?.message || error); showToast(error?.message || "تعذر إرسال التقييم"); }
   finally { button.disabled = false; }
 });
 
@@ -738,7 +740,7 @@ async function init() {
   updateNetworkStatus();
   saveCart();
   observeReveals();
-  if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Service worker registration failed", error));
+  if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.debug("Service worker registration failed", error?.message || error));
   if (firebaseConfigured) {
     setInterval(() => { if (!document.hidden) refreshCatalog(true); }, 300000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCatalog(true); });

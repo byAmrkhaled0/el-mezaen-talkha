@@ -19,12 +19,13 @@ assert.match(config, /projectId:\s*"el-mezaen-talkha"/);
 assert.match(config, /__SITE_URL__\s*=\s*"https:\/\/el-mezaen-talkha\.vercel\.app"/);
 assert.match(firestoreRules, /match \/\{document=\*\*\}/);
 assert.doesNotMatch(firestoreRules, /allow\s+(?:read|write)(?:,\s*(?:read|write))*:\s*if\s+true/);
-assert.match(storageRules, /request\.auth\.token\.role in \['admin', 'manager'\]/);
+assert.match(storageRules, /request\.auth\.token\.role\s*==\s*'admin'/);
 assert.match(storageRules, /request\.resource\.contentType\.matches/);
-for (const name of ["getCatalog", "createBooking", "validateCoupon", "getAdminDashboard", "getBusinessDashboard", "recordExpense", "createPosOrder", "updateBooking", "adminUpsert", "adminDelete", "adminSecureDelete", "submitReview", "registerPushToken", "createAdminUser", "setUserRole", "notifyAdminsOnBooking"]) {
+for (const name of ["getCatalog", "createBooking", "validateCoupon", "getAdminDashboard", "getBusinessDashboard", "recordExpense", "updateExpense", "createPosOrder", "updateBooking", "adminUpsert", "adminDelete", "adminSecureDelete", "submitReview", "registerPushToken", "createAdminUser", "setUserRole", "notifyAdminsOnBooking"]) {
   assert.match(functionsSource, new RegExp(`export const ${name}\\b`), `Missing Firebase Function: ${name}`);
 }
-assert.match(envExample, /ENFORCE_APP_CHECK=false/);
+assert.match(envExample, /ENFORCE_APP_CHECK=true/);
+assert.match(functionsSource, /const adminOptions\s*=\s*\{[^}]*enforceAppCheck:/);
 
 const warnings = [];
 if (/__VAPID_KEY__\s*=\s*""/.test(config)) warnings.push("VAPID Key ما زال فارغًا: إشعارات المتصفح لن تعمل قبل إضافته.");
