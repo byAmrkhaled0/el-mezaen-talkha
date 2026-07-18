@@ -1048,13 +1048,33 @@ async function deleteExpensePermanently(id, request) {
   });
 }
 
+async function deleteUserAccountPermanently(uid, request) {
+  if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "لا يمكنك حذف حساب الأدمن المستخدم حاليًا");
+  const userRef = db.doc(`users/${uid}`);
+  const userSnapshot = await userRef.get();
+  if (!userSnapshot.exists) throw new HttpsError("not-found", "حساب العامل غير موجود");
+  const user = userSnapshot.data() || {};
+  if (user.role === "admin") throw new HttpsError("permission-denied", "لا يمكن حذف حساب أدمن من شاشة العاملين");
+  const { getAuth } = await import("firebase-admin/auth");
+  try { await getAuth().deleteUser(uid); }
+  catch (error) { if (error.code !== "auth/user-not-found") throw new HttpsError("internal", "تعذر حذف الحساب من Firebase Authentication"); }
+  const tokenSnapshots = await db.collection("pushTokens").where("uid", "==", uid).limit(500).get();
+  const batch = db.batch();
+  batch.delete(userRef);
+  tokenSnapshots.docs.forEach(snapshot => batch.delete(snapshot.ref));
+  batch.set(db.collection("activityLogs").doc(), { action: "secure-delete-user", collection: "users", entityId: uid, deletedUserEmail: sanitizeText(user.email, 200), deletedUserName: sanitizeText(user.name, 80), deletedUserRole: sanitizeText(user.role, 30), userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  await batch.commit();
+  return { ok: true };
+}
+
 export const adminSecureDelete = onCall(adminOptions, async request => {
   requireRecentAdmin(request);
   const kind = sanitizeText(request.data?.kind, 30);
   const id = sanitizeText(request.data?.id, 100);
-  if (!id || !["booking", "revenue", "expense"].includes(kind)) throw new HttpsError("invalid-argument", "طلب الحذف غير صالح");
+  if (!id || !["booking", "revenue", "expense", "user"].includes(kind)) throw new HttpsError("invalid-argument", "طلب الحذف غير صالح");
   if (kind === "booking") return deleteBookingPermanently(id, request);
   if (kind === "revenue") return deleteRevenuePermanently(id, request);
+  if (kind === "user") return deleteUserAccountPermanently(id, request);
   return deleteExpensePermanently(id, request);
 });
 

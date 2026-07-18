@@ -34,3 +34,14 @@ test("sensitive pages are network-only and never cached by the service worker", 
   assert.doesNotMatch(core, /\/admin\//);
   assert.doesNotMatch(core, /\/login/);
 });
+
+test("worker accounts have admin-only secure deletion", async () => {
+  const [admin, functionsSource] = await Promise.all([read("src/admin.js"), read("functions/src/index.js")]);
+
+  assert.match(admin, /data-secure-delete-user/);
+  assert.match(admin, /openSecureDelete\("user"/);
+  assert.match(functionsSource, /deleteUserAccountPermanently/);
+  assert.match(functionsSource, /getAuth\(\)\.deleteUser\(uid\)/);
+  assert.match(functionsSource, /secure-delete-user/);
+  assert.match(functionsSource, /لا يمكنك حذف حساب الأدمن المستخدم حاليًا/);
+});

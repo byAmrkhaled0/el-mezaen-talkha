@@ -134,7 +134,7 @@ function renderPermissionPicker(role = $("#accountRole")?.value || "cashier") {
 
 function renderUserAccounts() {
   const items = state.collections.get("users") || [];
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "كاشير (حساب قديم)" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div></article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "كاشير (حساب قديم)" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 async function submitUserAccount(event) {
@@ -719,8 +719,9 @@ async function submitSecureDelete(event) {
     if (pending.kind === "expense" && state.editingExpenseId === pending.id) resetExpenseForm();
     await loadDashboard();
     if (pending.kind === "expense") await loadBusiness(true);
+    if (pending.kind === "user") { await loadCollection("users", true); renderUserAccounts(); }
     if (state.collections.has("customers")) await loadCollection("customers", true);
-    toast(pending.kind === "booking" ? "تم حذف الحجز وتحديث بيانات العميل والإيرادات" : pending.kind === "expense" ? "تم حذف المصروف وتحديث صافي الربح" : "تم حذف عملية الإيراد وتحديث الحسابات");
+    toast(pending.kind === "booking" ? "تم حذف الحجز وتحديث بيانات العميل والإيرادات" : pending.kind === "expense" ? "تم حذف المصروف وتحديث صافي الربح" : pending.kind === "user" ? "تم حذف حساب العامل وصلاحياته نهائيًا" : "تم حذف عملية الإيراد وتحديث الحسابات");
   } catch (error) { toast(secureDeleteError(error), true); }
   finally { $("#secureDeleteConfirm").disabled = false; }
 }
@@ -803,6 +804,7 @@ document.addEventListener("click", async event => {
   const deleteBooking = event.target.closest("[data-secure-delete-booking]"); if (deleteBooking) openSecureDelete("booking", deleteBooking.dataset.secureDeleteBooking, deleteBooking.dataset.secureDeleteLabel);
   const deleteRevenue = event.target.closest("[data-secure-delete-revenue]"); if (deleteRevenue) openSecureDelete("revenue", deleteRevenue.dataset.secureDeleteRevenue, deleteRevenue.dataset.secureDeleteLabel);
   const deleteExpense = event.target.closest("[data-secure-delete-expense]"); if (deleteExpense) openSecureDelete("expense", deleteExpense.dataset.secureDeleteExpense, deleteExpense.dataset.secureDeleteLabel);
+  const deleteUser = event.target.closest("[data-secure-delete-user]"); if (deleteUser) openSecureDelete("user", deleteUser.dataset.secureDeleteUser, deleteUser.dataset.secureDeleteLabel);
   const editExpense = event.target.closest("[data-edit-expense]"); if (editExpense) startExpenseEdit(editExpense.dataset.editExpense);
   const posAdd = event.target.closest("[data-pos-add]"); if (posAdd) addPosItem(posAdd.dataset.posAdd, posAdd.dataset.posKind);
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
