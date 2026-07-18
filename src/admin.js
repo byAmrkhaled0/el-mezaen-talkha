@@ -1,6 +1,7 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
-import { changeBooking, currentRole, deleteEntity, enablePush, getCollection, getDashboard, logout, saveEntity, uploadImage, watchAuth } from "./admin-api.js";
+import { changeBooking, currentRole, deleteEntity, enablePush, getCollection, getDashboard, logout, saveEntity, uploadImage, uploadVideo, watchAuth } from "./admin-api.js";
+import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -17,38 +18,37 @@ const fields = {
     ["facebook", "رابط Facebook", "url", false, null, true], ["instagram", "رابط Instagram", "url", false, null, true], ["tiktok", "رابط TikTok", "url", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "متاح للحجز", "boolean"]
   ],
   categories: [
-    ["nameAr", "اسم التصنيف بالعربية", "text", true], ["nameEn", "Category Name in English", "text", true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "الحالة", "boolean"]
+    ["nameAr", "اسم التصنيف", "text", true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "الحالة", "boolean"]
   ],
   services: [
-    ["nameAr", "اسم الخدمة بالعربية", "text", true], ["nameEn", "Service Name in English", "text", true], ["categoryId", "معرّف التصنيف", "text", true],
-    ["price", "السعر", "number", true], ["duration", "المدة بالدقائق", "number", true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true], ["startsFrom", "السعر يبدأ من", "boolean"], ["type", "النوع", "select", true, [["service", "خدمة"], ["product", "منتج"]]], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعلة", "boolean"]
+    ["nameAr", "اسم الخدمة", "text", true], ["categoryId", "التصنيف", "category-select", true],
+    ["price", "السعر", "number", true], ["duration", "المدة بالدقائق", "number", true], ["branchIds", "تظهر في", "branch-scope", false, null, true], ["startsFrom", "السعر يبدأ من", "boolean"], ["type", "النوع", "select", true, [["service", "خدمة"], ["product", "منتج"]]], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعلة", "boolean"]
   ],
   packages: [
-    ["nameAr", "اسم الباقة بالعربية", "text", true], ["nameEn", "Package Name in English", "text", true], ["descriptionAr", "الوصف بالعربية", "textarea", false, null, true], ["descriptionEn", "Description in English", "textarea", false, null, true],
-    ["includedServiceIds", "معرّفات الخدمات (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true], ["originalPrice", "السعر قبل الخصم", "number"], ["price", "السعر بعد الخصم", "number", true], ["duration", "المدة بالدقائق", "number", true],
+    ["nameAr", "اسم الباقة", "text", true], ["descriptionAr", "الوصف", "textarea", false, null, true],
+    ["includedServiceIds", "معرّفات الخدمات (بفواصل)", "text", false, null, true], ["branchIds", "تظهر في", "branch-scope", false, null, true], ["originalPrice", "السعر قبل الخصم", "number"], ["price", "السعر بعد الخصم", "number", true], ["duration", "المدة بالدقائق", "number", true],
     ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["startAt", "بداية العرض", "datetime-local"], ["endAt", "نهاية العرض", "datetime-local"],
     ["status", "الحالة", "select", true, [["active", "نشطة"], ["expired", "منتهية"], ["scheduled", "مجدولة"], ["stopped", "متوقفة"]]], ["badge", "العلامة", "select", false, [["", "بدون"], ["popular", "الأكثر طلبًا"], ["special", "عرض مميز"]]], ["sortOrder", "الترتيب", "number"], ["active", "تظهر في الموقع", "boolean"]
   ],
   offers: [
-    ["nameAr", "اسم العرض بالعربية", "text", true], ["nameEn", "Offer Name in English", "text", true], ["descriptionAr", "الوصف بالعربية", "textarea", false, null, true], ["descriptionEn", "Description in English", "textarea", false, null, true],
-    ["oldPrice", "السعر القديم", "number", true], ["newPrice", "السعر الجديد", "number", true], ["duration", "المدة", "number"], ["includedServiceIds", "الخدمات والباقات المشمولة (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المتاحة: talkha,mashaya (فارغ = الكل)", "text", false, null, true],
+    ["nameAr", "اسم العرض", "text", true], ["descriptionAr", "الوصف", "textarea", false, null, true],
+    ["oldPrice", "السعر القديم", "number", true], ["newPrice", "السعر الجديد", "number", true], ["duration", "المدة", "number"], ["includedServiceIds", "الخدمات والباقات المشمولة (بفواصل)", "text", false, null, true], ["branchIds", "يظهر في", "branch-scope", false, null, true],
     ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["showCountdown", "إظهار عداد الانتهاء", "boolean"],
     ["status", "الحالة", "select", true, [["scheduled", "مجدول"], ["active", "نشط"], ["expired", "منتهي"], ["stopped", "متوقف"]]], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]
   ],
   coupons: [
-    ["code", "كود الخصم", "text", true], ["nameAr", "اسم الكود بالعربية", "text"], ["nameEn", "Code Name in English", "text"], ["type", "نوع الخصم", "select", true, [["percent", "نسبة مئوية"], ["fixed", "قيمة ثابتة"]]],
+    ["code", "كود الخصم", "text", true], ["nameAr", "اسم الكود", "text"], ["type", "نوع الخصم", "select", true, [["percent", "نسبة مئوية"], ["fixed", "قيمة ثابتة"]]],
     ["value", "نسبة أو قيمة الخصم", "number", true], ["maxDiscount", "الحد الأقصى للخصم", "number"], ["minSubtotal", "الحد الأدنى للحجز", "number"], ["totalUsageLimit", "عدد الاستخدامات الإجمالي", "number"], ["perPhoneLimit", "الاستخدامات لكل هاتف", "number"],
-    ["applicableItemIds", "خدمات/باقات مخصصة (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المسموح بها (فارغ = الكل)", "text", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["active", "مفعل", "boolean"]
+    ["applicableItemIds", "خدمات/باقات مخصصة (بفواصل)", "text", false, null, true], ["branchIds", "الفروع المسموح بها", "branch-scope", false, null, true], ["startAt", "تاريخ البداية", "datetime-local"], ["endAt", "تاريخ النهاية", "datetime-local"], ["active", "مفعل", "boolean"]
   ],
   staff: [
-    ["nameAr", "الاسم بالعربية", "text", true], ["nameEn", "Name in English", "text", true], ["specialtyAr", "التخصص بالعربية", "text"], ["specialtyEn", "Specialty in English", "text"],
-    ["bioAr", "نبذة بالعربية", "textarea", false, null, true], ["bioEn", "Bio in English", "textarea", false, null, true], ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع الصورة", "file", false, null, true],
-    ["branchIds", "الفروع التي يعمل بها: talkha,mashaya", "text", true, null, true], ["serviceIds", "معرّفات الخدمات التي يقدمها (بفواصل)", "text", false, null, true], ["workDays", "أيام العمل 0-6 (بفواصل)", "text"], ["shiftStart", "بداية الشيفت", "time"], ["shiftEnd", "نهاية الشيفت", "time"], ["breaks", "أوقات الراحة (بفواصل)", "text", false, null, true],
+    ["nameAr", "الاسم", "text", true], ["specialtyAr", "التخصص", "text"],
+    ["bioAr", "نبذة", "textarea", false, null, true], ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع الصورة", "file", false, null, true],
+    ["branchIds", "يعمل في", "branch-scope", false, null, true], ["serviceIds", "معرّفات الخدمات التي يقدمها (بفواصل)", "text", false, null, true], ["workDays", "أيام العمل 0-6 (بفواصل)", "text"], ["shiftStart", "بداية الشيفت", "time"], ["shiftEnd", "نهاية الشيفت", "time"], ["breaks", "أوقات الراحة (بفواصل)", "text", false, null, true],
     ["available", "متاح", "boolean"], ["sortOrder", "ترتيب الظهور", "number"], ["bookingCount", "عدد الحجوزات", "number"], ["revenueTotal", "إجمالي الإيرادات", "number"], ["active", "مفعل", "boolean"]
   ],
-  holidays: [["branchId", "معرّف الفرع (talkha أو mashaya)", "text", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب بالعربية", "text"], ["reasonEn", "Reason in English", "text"], ["closed", "مغلق بالكامل", "boolean"]],
-  content: [["type", "النوع", "select", true, [["gallery", "معرض"], ["celebrity", "صور مشاهير"], ["news", "خبر/منشور"]]], ["titleAr", "العنوان بالعربية", "text", true], ["titleEn", "Title in English", "text", true], ["bodyAr", "المحتوى بالعربية", "textarea", false, null, true], ["bodyEn", "Content in English", "textarea", false, null, true], ["imageUrl", "رابط الصورة", "url", false, null, true], ["imageFile", "رفع صورة", "file", false, null, true], ["linkUrl", "رابط المنشور", "url", false, null, true], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]],
-  translations: [["key", "مفتاح الترجمة", "text", true], ["ar", "النص العربي", "textarea", true, null, true], ["en", "English Text", "textarea", true, null, true], ["active", "مفعل", "boolean"]]
+  holidays: [["branchId", "الفرع", "branch-select", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب", "text"], ["closed", "مغلق بالكامل", "boolean"]],
+  content: [["type", "النوع", "select", true, [["gallery", "معرض"], ["celebrity", "صور مشاهير"], ["news", "خبر/منشور"]]], ["titleAr", "العنوان", "text", true], ["bodyAr", "المحتوى", "textarea", false, null, true], ["branchIds", "يظهر في", "branch-scope", false, null, true], ["mediaType", "نوع الوسائط", "select", true, [["image", "صورة"], ["video", "فيديو"]]], ["imageUrl", "رابط الصورة أو غلاف الفيديو", "url", false, null, true], ["imageFile", "رفع صورة أو غلاف", "file", false, null, true], ["videoUrl", "رابط YouTube أو Facebook أو TikTok أو MP4", "url", false, null, true], ["videoFile", "رفع فيديو MP4 أو WebM (بحد أقصى 30MB)", "video-file", false, null, true], ["linkUrl", "رابط المنشور الأصلي", "url", false, null, true], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]],
 };
 
 const sectionTitles = Object.fromEntries($$('[data-section]').map(button => [button.dataset.section, button.textContent.trim().replace(/^[^\s]+\s/, "")]));
@@ -62,7 +62,8 @@ function setupPanels() {
   });
   $$('content-panel').forEach(panel => {
     const type = panel.dataset.type;
-    panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>الصور لا تعرض أسماء أشخاص غير مؤكدة.</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
+    const hint = type === "news" ? "أضف صورة أو فيديو، وحدد الفرع الذي يظهر فيه المنشور." : "حدد الفرع وارفع صورة واضحة ومحسنة للهاتف.";
+    panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
   });
 }
 
@@ -218,7 +219,13 @@ function entityCard(collection, item, readonly = false) {
     : collection === "packages" ? `${money(item.price)}${Number(item.duration) ? ` • ${Number(item.duration)} دقيقة` : ""}`
     : collection === "offers" ? `${money(item.newPrice)}${item.endAt ? " • عرض محدد المدة" : ""}`
     : item.addressAr || item.specialtyAr || item.reasonAr || item.bodyAr || item.phone || item.collection || item.role || item.id;
-  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="">` : ""}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}</p>` : ""}${readonly ? "" : `<footer><button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
+  const contentPreview = collection === "content" ? `<div class="entity-media">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="">` : `<span>${isVideoContent(item) ? "▶" : "▧"}</span>`}${isVideoContent(item) ? '<b>فيديو</b>' : ""}</div><p class="entity-branch">${branchScopeLabel(item.branchIds)}</p>` : "";
+  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}</p>` : ""}${readonly ? "" : `<footer><button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
+}
+
+function branchScopeLabel(ids) {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 1) return "كل الفروع";
+  return branchLabel(ids[0]);
 }
 
 function openEditor(collection, id = "", preset = {}) {
@@ -228,7 +235,13 @@ function openEditor(collection, id = "", preset = {}) {
   $("#editorTitle").textContent = id ? "تعديل العنصر" : "إضافة عنصر جديد";
   const schema = fields[collection];
   if (!schema) return toast("هذا القسم للعرض فقط", true);
-  $("#editorFields").innerHTML = schema.map(definition => renderField(definition, { active: true, available: true, closed: true, ...preset, ...item })).join("");
+  const editorItem = { active: true, available: true, closed: true, mediaType: "image", ...preset, ...item };
+  $("#editorFields").innerHTML = schema.map(definition => renderField(definition, editorItem)).join("") + (collection === "content" ? '<div class="editor-media-preview full" id="editorMediaPreview"><span>ستظهر معاينة الصورة أو الفيديو هنا</span></div>' : "");
+  if (collection === "content") {
+    $("#editorFields").addEventListener("input", updateEditorMediaPreview);
+    $("#editorFields").addEventListener("change", updateEditorMediaPreview);
+    updateEditorMediaPreview();
+  }
   $("#editorDialog").showModal();
 }
 
@@ -237,9 +250,37 @@ function renderField([name, label, type, required = false, options = null, full 
   const className = full ? "full" : "";
   if (type === "textarea") return `<label class="${className}">${label}<textarea name="${name}" ${required ? "required" : ""}>${escapeHtml(value)}</textarea></label>`;
   if (type === "select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}>${options.map(([key, text]) => `<option value="${escapeAttr(key)}" ${String(value) === String(key) ? "selected" : ""}>${text}</option>`).join("")}</select></label>`;
+  if (type === "category-select") {
+    const categories = (state.collections.get("categories") || []).filter(category => category.active !== false);
+    return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="">اختر التصنيف</option>${categories.map(category => `<option value="${escapeAttr(category.id)}" ${String(value) === category.id ? "selected" : ""}>${escapeHtml(category.nameAr || category.id)}</option>`).join("")}</select></label>`;
+  }
+  if (type === "branch-scope") {
+    const scope = Array.isArray(item[name]) ? item[name].join(",") : String(value);
+    return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="" ${!scope ? "selected" : ""}>كل الفروع</option><option value="talkha" ${scope === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${scope === "mashaya" ? "selected" : ""}>فرع المشاية</option><option value="talkha,mashaya" ${scope === "talkha,mashaya" || scope === "mashaya,talkha" ? "selected" : ""}>طلخا والمشاية</option></select></label>`;
+  }
+  if (type === "branch-select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="talkha" ${value === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${value === "mashaya" ? "selected" : ""}>فرع المشاية</option></select></label>`;
   if (type === "boolean") return `<label class="${className}">${label}<select name="${name}"><option value="true" ${value !== false ? "selected" : ""}>نعم</option><option value="false" ${value === false ? "selected" : ""}>لا</option></select></label>`;
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
-  return `<label class="${className}">${label}<input name="${name}" type="${type}" value="${type === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : ""}></label>`;
+  const inputType = type === "video-file" ? "file" : type;
+  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : "";
+  return `<label class="${className}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}></label>`;
+}
+
+let editorPreviewUrl = "";
+function updateEditorMediaPreview() {
+  const preview = $("#editorMediaPreview");
+  if (!preview) return;
+  if (editorPreviewUrl) URL.revokeObjectURL(editorPreviewUrl);
+  const imageFile = $('#editorFields input[name="imageFile"]')?.files?.[0];
+  const videoFile = $('#editorFields input[name="videoFile"]')?.files?.[0];
+  const imageUrl = imageFile ? (editorPreviewUrl = URL.createObjectURL(imageFile)) : $('#editorFields [name="imageUrl"]')?.value.trim();
+  const rawVideoUrl = videoFile ? (editorPreviewUrl = URL.createObjectURL(videoFile)) : $('#editorFields [name="videoUrl"]')?.value.trim();
+  const source = videoSource(rawVideoUrl);
+  if (videoFile || source.kind === "direct") preview.innerHTML = `<video src="${escapeAttr(rawVideoUrl || editorPreviewUrl)}" poster="${escapeAttr(imageUrl || "")}" controls playsinline preload="metadata"></video>`;
+  else if (source.kind === "embed") preview.innerHTML = `<iframe src="${escapeAttr(source.url)}" title="معاينة الفيديو" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  else if (source.kind === "external") preview.innerHTML = `<a href="${escapeAttr(source.url)}" target="_blank" rel="noopener">فتح ومعاينة رابط الفيديو ↗</a>`;
+  else if (imageUrl) preview.innerHTML = `<img src="${escapeAttr(imageUrl)}" alt="معاينة الصورة">`;
+  else preview.innerHTML = "<span>ستظهر معاينة الصورة أو الفيديو هنا</span>";
 }
 
 async function saveEditor(event) {
@@ -247,13 +288,16 @@ async function saveEditor(event) {
   const { collection, id } = state.editor;
   const formData = new FormData(event.currentTarget);
   const image = formData.get("imageFile");
+  const video = formData.get("videoFile");
   formData.delete("imageFile");
+  formData.delete("videoFile");
   const payload = Object.fromEntries(formData.entries());
-  if (image?.size) {
-    $("#editorSave").disabled = true;
-    payload.imageUrl = await uploadImage(image, collection);
-  }
+  const existing = id ? (state.collections.get(collection) || []).find(item => item.id === id) || {} : {};
+  [["nameAr", "nameEn"], ["descriptionAr", "descriptionEn"], ["titleAr", "titleEn"], ["bodyAr", "bodyEn"], ["specialtyAr", "specialtyEn"], ["bioAr", "bioEn"], ["reasonAr", "reasonEn"]].forEach(([ar, en]) => { if (payload[ar] != null) payload[en] = existing[en] || payload[ar]; });
+  $("#editorSave").disabled = true;
   try {
+    if (image?.size) payload.imageUrl = await uploadImage(image, collection);
+    if (video?.size) { payload.videoUrl = await uploadVideo(video, collection); payload.mediaType = "video"; }
     await saveEntity(collection, id, payload);
     $("#editorDialog").close();
     await loadCollection(collection, true);
@@ -290,7 +334,11 @@ function fillSettings(item) {
 
 async function saveSettingsForm(event) {
   event.preventDefault();
-  try { await saveEntity("settings", "public", Object.fromEntries(new FormData(event.currentTarget))); await loadCollection("settings", true); toast("تم حفظ الإعدادات"); }
+  const payload = Object.fromEntries(new FormData(event.currentTarget));
+  const existing = (state.collections.get("settings") || [])[0] || {};
+  if (payload.businessNameAr != null) payload.businessNameEn = existing.businessNameEn || payload.businessNameAr;
+  if (payload.aboutAr != null) payload.aboutEn = existing.aboutEn || payload.aboutAr;
+  try { await saveEntity("settings", "public", payload); await loadCollection("settings", true); toast("تم حفظ الإعدادات"); }
   catch (error) { toast(error.message || "تعذر الحفظ", true); }
 }
 

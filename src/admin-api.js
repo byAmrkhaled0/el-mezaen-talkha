@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { browserLocalPersistence, getAuth, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
@@ -13,6 +14,9 @@ let storage;
 
 if (configured) {
   app = initializeApp(config);
+  if (globalThis.__APP_CHECK_SITE_KEY__) {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
+  }
   auth = getAuth(app);
   functions = getFunctions(app, "europe-west1");
   storage = getStorage(app);
@@ -54,6 +58,15 @@ export async function uploadImage(file, folder = "content") {
   if (!file || !file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) throw new Error("INVALID_IMAGE");
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/${crypto.randomUUID()}-${safeName}`);
+  await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
+  return getDownloadURL(target);
+}
+
+export async function uploadVideo(file, folder = "content") {
+  const allowed = ["video/mp4", "video/webm"];
+  if (!file || !allowed.includes(file.type) || file.size > 30 * 1024 * 1024) throw new Error("INVALID_VIDEO");
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
   return getDownloadURL(target);
 }

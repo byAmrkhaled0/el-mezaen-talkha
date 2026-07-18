@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.web.app").replace(/\/$/, "");
+const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.vercel.app").replace(/\/$/, "");
 const escaped = siteUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const origin = new URL(siteUrl).origin;
 
@@ -16,6 +16,8 @@ await writeFile("public/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
   </url>
   <url><loc>${origin}/services/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>${origin}/team/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>${origin}/branches/talkha/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>${origin}/branches/mashaya/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
 </urlset>
 `, "utf8");
 const logo = await readFile("public/assets/el-mezaen-mark-v2.png");

@@ -9,6 +9,8 @@ import { calculateCoupon, createSlotKeys, minutes, normalizePhone, paymentTransi
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
+const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
+const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings"];
 const ADMIN_ROLES = ["admin", "manager", "receptionist", "accountant"];
@@ -17,6 +19,23 @@ const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: to
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
 const hash = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
 const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+
+function requestFingerprint(request, extra = "") {
+  const forwarded = request.rawRequest?.headers?.["x-forwarded-for"];
+  const ip = String(Array.isArray(forwarded) ? forwarded[0] : forwarded || request.rawRequest?.ip || "unknown").split(",")[0].trim();
+  return hash(`${ip}|${extra}`);
+}
+
+async function enforceRateLimit(request, action, limit, windowMs, extra = "") {
+  const bucket = Math.floor(Date.now() / windowMs);
+  const ref = db.doc(`rateLimits/${hash(`${action}|${requestFingerprint(request, extra)}|${bucket}`)}`);
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const count = Number(snapshot.data()?.count || 0);
+    if (count >= limit) throw new HttpsError("resource-exhausted", "محاولات كثيرة، حاول مرة أخرى لاحقًا");
+    transaction.set(ref, { action, count: count + 1, expiresAt: Timestamp.fromMillis((bucket + 2) * windowMs), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+}
 
 function requireRole(request, roles = ADMIN_ROLES) {
   const role = request.auth?.token?.role;
@@ -39,7 +58,7 @@ async function readBranch(value) {
   return cleanDoc(snapshot);
 }
 
-export const getCatalog = onCall({ region, cors: true, enforceAppCheck: false }, async () => {
+export const getCatalog = onCall(publicOptions, async () => {
   const results = await Promise.all(PUBLIC_COLLECTIONS.map(name => db.collection(name).where("active", "==", true).limit(500).get()));
   const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.map(cleanDoc).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
   payload.settings = await readSettings();
@@ -61,7 +80,8 @@ async function fetchPricedItems(lines, branchId = "") {
   return priceItems(lines, map, new Date(), branchId);
 }
 
-export const validateCoupon = onCall({ region, cors: true, enforceAppCheck: false }, async request => {
+export const validateCoupon = onCall(publicOptions, async request => {
+  await enforceRateLimit(request, "coupon", 30, 10 * 60 * 1000);
   const code = sanitizeText(request.data?.code, 30).toUpperCase();
   const phone = request.data?.phone ? normalizePhone(request.data.phone) : "01000000000";
   const itemIds = Array.isArray(request.data?.itemIds) ? request.data.itemIds.map(String).slice(0, 30) : [];
@@ -79,7 +99,7 @@ export const validateCoupon = onCall({ region, cors: true, enforceAppCheck: fals
   return result.valid ? { valid: true, code, discountType: coupon.type, discountValue: coupon.value, discountAmount: result.discountAmount, discountPercent: result.discountPercent } : { valid: false };
 });
 
-export const createBooking = onCall({ region, cors: true, enforceAppCheck: false, timeoutSeconds: 30 }, async request => {
+export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, async request => {
   const data = request.data || {};
   const branch = await readBranch(data.branchId);
   const branchId = branch.id;
@@ -89,6 +109,7 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
     phone: normalizePhone(data.customer?.phone),
     note: sanitizeText(data.customer?.note, 500)
   };
+  await enforceRateLimit(request, "booking", 5, 15 * 60 * 1000, customer.phone);
   if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
@@ -220,7 +241,8 @@ export const createBooking = onCall({ region, cors: true, enforceAppCheck: false
   }
 });
 
-export const submitReview = onCall({ region, cors: true }, async request => {
+export const submitReview = onCall(publicOptions, async request => {
+  await enforceRateLimit(request, "review", 3, 24 * 60 * 60 * 1000);
   const name = sanitizeText(request.data?.name, 60);
   const comment = sanitizeText(request.data?.comment, 500);
   const bookingCodeValue = sanitizeText(request.data?.bookingCode, 40).toUpperCase();
@@ -233,6 +255,38 @@ export const submitReview = onCall({ region, cors: true }, async request => {
   const ref = db.collection("reviews").doc();
   await ref.set({ name, comment, rating, bookingCode: bookingCodeValue || null, status: "pending", active: false, createdAt: FieldValue.serverTimestamp() });
   return { ok: true, id: ref.id };
+});
+
+export const getCustomerBooking = onCall(publicOptions, async request => {
+  const code = sanitizeText(request.data?.code, 40).toUpperCase();
+  let phone;
+  try { phone = normalizePhone(request.data?.phone); }
+  catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+  await enforceRateLimit(request, "booking_lookup", 10, 15 * 60 * 1000, phone);
+  if (!/^MZ-[A-Z0-9-]{6,36}$/.test(code)) throw new HttpsError("invalid-argument", "كود الحجز غير صحيح");
+  const snapshot = await db.doc(`bookings/${code}`).get();
+  if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
+  const booking = cleanDoc(snapshot);
+  return { booking: { code: booking.code, branchId: booking.branchId, branchNameAr: booking.branchNameAr, branchWhatsapp: booking.branchWhatsapp, serviceNamesAr: booking.serviceNamesAr || [], staffNameAr: booking.staffNameAr, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, total: booking.total, status: booking.status, paymentStatus: booking.paymentStatus, canCancel: ["pending", "confirmed"].includes(booking.status) } };
+});
+
+export const cancelCustomerBooking = onCall(publicOptions, async request => {
+  const code = sanitizeText(request.data?.code, 40).toUpperCase();
+  let phone;
+  try { phone = normalizePhone(request.data?.phone); }
+  catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+  await enforceRateLimit(request, "booking_cancel", 5, 60 * 60 * 1000, phone);
+  const ref = db.doc(`bookings/${code}`);
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
+    const booking = snapshot.data();
+    if (!["pending", "confirmed"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إلغاء هذا الحجز من الموقع");
+    for (const lockId of booking.lockIds || []) transaction.delete(db.doc(`appointmentLocks/${lockId}`));
+    if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
+    transaction.update(ref, { status: "cancelled", cancellationSource: "customer", updatedAt: FieldValue.serverTimestamp() });
+  });
+  return { ok: true };
 });
 
 export const getAdminDashboard = onCall({ region }, async request => {

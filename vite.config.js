@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
-const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.web.app").replace(/\/$/, "");
+const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.vercel.app").replace(/\/$/, "");
 const siteOrigin = new URL(siteUrl).origin;
 
 export default defineConfig({
@@ -22,6 +22,8 @@ export default defineConfig({
         login: resolve(import.meta.dirname, "login/index.html")
         ,services: resolve(import.meta.dirname, "services/index.html")
         ,team: resolve(import.meta.dirname, "team/index.html")
+        ,branchTalkha: resolve(import.meta.dirname, "branches/talkha/index.html")
+        ,branchMashaya: resolve(import.meta.dirname, "branches/mashaya/index.html")
       }
     }
   },

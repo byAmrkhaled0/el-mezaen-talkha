@@ -1,15 +1,30 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { seedCatalog } from "./seed-data.js";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const firebaseConfigured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
 let functions;
+let app;
+let analyticsPromise;
 
 if (firebaseConfigured) {
-  const app = initializeApp(config);
+  app = initializeApp(config);
+  if (globalThis.__APP_CHECK_SITE_KEY__) {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
+  }
   functions = getFunctions(app, "europe-west1");
   if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+}
+
+export async function trackEvent(name, params = {}) {
+  if (!firebaseConfigured || !config.measurementId || navigator.doNotTrack === "1") return;
+  try {
+    analyticsPromise ||= import("firebase/analytics").then(async module => await module.isSupported() ? { module, analytics: module.getAnalytics(app) } : null);
+    const client = await analyticsPromise;
+    if (client) client.module.logEvent(client.analytics, name, params);
+  } catch (error) { console.debug("Analytics is unavailable", error?.message || error); }
 }
 
 function localCatalog() {
@@ -68,11 +83,29 @@ export async function createBooking(payload) {
   const coupon = payload.couponCode ? await validateCoupon({ code: payload.couponCode, branchId: branch.id, subtotal, phone: payload.customer.phone, itemIds: payload.items.map(item => item.id) }) : { valid: false, discountAmount: 0 };
   const total = Math.max(0, subtotal - Number(coupon.discountAmount || 0));
   const code = `MZ-${branch.code || "BR"}-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
-  const record = { ...payload, code, subtotal, discountAmount: coupon.discountAmount || 0, total, createdAt: new Date().toISOString() };
+  const record = { ...payload, code, subtotal, discountAmount: coupon.discountAmount || 0, total, status: "pending", paymentStatus: "unpaid", branchNameAr: branch.nameAr, branchWhatsapp: branch.whatsapp, serviceNamesAr: items.map(item => item.nameAr), createdAt: new Date().toISOString() };
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
   saved.unshift(record);
   localStorage.setItem("mz-preview-bookings", JSON.stringify(saved.slice(0, 50)));
   return { ok: true, bookingCode: code, subtotal, discountAmount: record.discountAmount, total, preview: true };
+}
+
+export async function getCustomerBooking(payload) {
+  if (firebaseConfigured) return (await httpsCallable(functions, "getCustomerBooking")(payload)).data;
+  const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
+  const booking = saved.find(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
+  if (!booking) throw new Error("لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
+  return { booking: { ...booking, canCancel: ["pending", "confirmed"].includes(booking.status) } };
+}
+
+export async function cancelCustomerBooking(payload) {
+  if (firebaseConfigured) return (await httpsCallable(functions, "cancelCustomerBooking")(payload)).data;
+  const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
+  const index = saved.findIndex(item => item.code === String(payload.code || "").trim().toUpperCase() && String(item.customer?.phone || "").replace(/\D/g, "") === String(payload.phone || "").replace(/\D/g, ""));
+  if (index < 0) throw new Error("لم نجد الحجز");
+  saved[index].status = "cancelled";
+  localStorage.setItem("mz-preview-bookings", JSON.stringify(saved));
+  return { ok: true, preview: true };
 }
 
 export async function submitReview(payload) {

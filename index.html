@@ -24,7 +24,7 @@
   <link rel="alternate" hreflang="x-default" href="__SITE_URL__">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
-  <link rel="apple-touch-icon" href="/assets/el-mezaen-logo.jpeg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <title>مزين مصر | حجز فرعي طلخا والمشاية</title>
   <script type="application/ld+json">
   {
@@ -186,6 +186,16 @@
         <div class="content-grid" id="newsGrid"></div>
       </div>
     </section>
+
+    <section class="section-pad manage-booking-section" id="manage-booking" aria-labelledby="manage-booking-title">
+      <div class="container manage-booking-grid">
+        <div><span class="section-kicker">بعد الحجز</span><h2 id="manage-booking-title">راجع أو ألغِ حجزك</h2><p>اكتب كود الحجز ورقم الهاتف المسجل. ويمكنك إرسال طلب تعديل للفرع مباشرة عبر واتساب.</p></div>
+        <div class="panel manage-booking-panel">
+          <form id="manageBookingForm" class="customer-form"><label class="field"><span>كود الحجز</span><input name="code" required maxlength="40" autocomplete="off" placeholder="MZ-..."></label><label class="field"><span>رقم الهاتف</span><input name="phone" type="tel" inputmode="tel" required pattern="^(?:\+?20|0)?1[0125]\d{8}$" autocomplete="tel"></label><button class="btn btn-primary full" type="submit">عرض الحجز</button></form>
+          <div class="manage-booking-result" id="manageBookingResult" hidden></div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer" id="contact">
@@ -201,6 +211,7 @@
   </footer>
 
   <button class="cart-fab btn btn-primary" type="button" data-open-booking aria-label="فتح سلة الحجز">🛒 <span data-i18n="cart">السلة</span> <span class="count-badge" data-cart-count>0</span></button>
+  <nav class="mobile-quick-actions" id="mobileQuickActions" aria-label="إجراءات الفرع السريعة"><a id="mobileCall" href="#contact">☎<span>اتصال</span></a><a id="mobileWhatsapp" href="#contact" target="_blank" rel="noopener">◉<span>واتساب</span></a><a id="mobileMap" href="#contact" target="_blank" rel="noopener">⌖<span>الموقع</span></a><button type="button" data-open-booking>✂<span>احجز</span><b class="count-badge" data-cart-count>0</b></button></nav>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <dialog class="booking-dialog branch-dialog" id="branchDialog" aria-labelledby="branch-dialog-title">
@@ -271,6 +282,7 @@
             <h3 data-i18n="successTitle">تم استلام حجزك بنجاح</h3>
             <p data-i18n="successText">احتفظ بكود الحجز، وسيتواصل معك فريق الفرع عند تأكيد الموعد.</p>
             <div class="booking-code"><span data-i18n="bookingCode">كود الحجز</span><strong id="successCode">—</strong></div>
+            <dl class="success-details"><div><dt>الفرع</dt><dd id="successBranch">—</dd></div><div><dt>الموعد</dt><dd id="successAppointment">—</dd></div></dl>
             <div class="booking-barcode"><svg id="successBarcode" aria-label="باركود الحجز"></svg><small>اعرض هذا الباركود عند الوصول</small></div>
             <p class="preview-notice" id="previewNotice" data-i18n="previewNotice">هذه معاينة محلية. اربط Firebase ليصل الحجز إلى لوحة الإدارة.</p>
             <div class="success-actions"><a class="btn btn-primary" id="successWhatsapp" href="https://wa.me/201093008896" target="_blank" rel="noopener" data-i18n="whatsapp">تواصل عبر واتساب</a><button class="btn btn-ghost" type="button" data-close-booking data-i18n="close">إغلاق</button></div>

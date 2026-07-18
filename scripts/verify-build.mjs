@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "team/index.html", "manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "assets/el-mezaen-logo.jpeg", "assets/icon.svg", "assets/hero-barbershop-cyan.webp"];
+const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "assets/el-mezaen-logo.jpeg", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -25,8 +25,14 @@ assert.match(admin, /noindex,nofollow/);
 assert.match(login, /noindex,nofollow/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(sitemap, /<urlset/);
+assert.match(sitemap, /branches\/talkha/);
+assert.match(sitemap, /branches\/mashaya/);
+assert.match(index, /el-mezaen-talkha\.vercel\.app/);
 assert.equal(manifest.display, "standalone");
 assert.ok(manifest.icons.some(icon => icon.purpose.includes("maskable")));
+assert.ok(manifest.icons.some(icon => icon.sizes === "192x192" && icon.type === "image/png"));
+assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/png"));
+assert.match(index, /apple-touch-icon\.png/);
 assert.match(sourceCss, /@media \(max-width: 560px\)/);
 assert.match(sourceCss, /@media \(max-width: 430px\)/);
 assert.match(sourceCss, /@media \(max-width: 390px\)/);
@@ -40,6 +46,8 @@ assert.match(index, /id="summaryBranch"/);
 assert.match(appSource, /branchId:/);
 assert.match(appSource, /data-select-branch/);
 assert.match(appSource, /data-book-branch/);
+assert.match(appSource, /data-video-src/);
+assert.match(appSource, /getCustomerBooking/);
 
 for (const html of [index, admin, login]) {
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);

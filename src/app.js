@@ -1,7 +1,8 @@
 import "./styles.css";
 import { applyStaticTranslations, getLang, t, translations } from "./i18n.js";
 import JsBarcode from "jsbarcode";
-import { createBooking, firebaseConfigured, getCatalog, submitReview, validateCoupon } from "./firebase-client.js";
+import { cancelCustomerBooking, createBooking, firebaseConfigured, getCatalog, getCustomerBooking, submitReview, trackEvent, validateCoupon } from "./firebase-client.js";
+import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -17,7 +18,9 @@ const state = {
   time: "",
   coupon: null,
   branchId: localStorage.getItem("mz-branch") || "",
-  completedPreview: false
+  completedPreview: false,
+  managedBooking: null,
+  manageCredentials: null
 };
 
 const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -157,18 +160,43 @@ function renderTeam() {
 }
 
 function renderContent() {
-  const celebrities = state.catalog.content.filter(item => item.active !== false && item.type === "celebrity");
+  const celebrities = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "celebrity");
   $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
-  const gallery = state.catalog.content.filter(item => item.active !== false && item.type === "gallery");
+  const gallery = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "gallery");
   const galleryItems = gallery.length ? gallery : [
     { imageUrl: "/assets/hero-barbershop-cyan.webp", titleAr: "من أعمال مزين مصر", titleEn: "El Mezaen Egypt Work" },
     { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
     { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
   ];
   $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">`).join("");
-  const news = state.catalog.content.filter(item => item.active !== false && item.type === "news");
+  const news = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
-  $("#newsGrid").innerHTML = news.map(item => `<article class="content-card reveal">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">` : ""}<h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${item.linkUrl ? `<a class="btn btn-ghost" href="${escapeAttr(item.linkUrl)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</article>`).join("");
+  $("#newsGrid").innerHTML = news.map(item => `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${item.linkUrl ? `<a class="btn btn-ghost" href="${escapeAttr(item.linkUrl)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`).join("");
+}
+
+function contentBranchLabel(item) {
+  if (!item.branchIds?.length || item.branchIds.length > 1) return state.lang === "ar" ? "كل الفروع" : "All branches";
+  const branch = state.catalog.branches.find(value => value.id === item.branchIds[0]);
+  return branch ? branchName(branch) : item.branchIds[0];
+}
+
+function renderNewsMedia(item) {
+  if (!isVideoContent(item)) return item.imageUrl ? `<img class="news-media" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">` : "";
+  const source = videoSource(item.videoUrl);
+  const label = state.lang === "ar" ? "تشغيل الفيديو" : "Play video";
+  if (source.kind === "external") return `<a class="news-video-trigger external" href="${escapeAttr(source.url)}" target="_blank" rel="noopener" aria-label="${label}">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="" loading="lazy">` : ""}<span class="video-play">▶</span><b>${label} ↗</b></a>`;
+  if (!source.url) return item.imageUrl ? `<img class="news-media" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy">` : "";
+  return `<button class="news-video-trigger" type="button" data-video-kind="${escapeAttr(source.kind)}" data-video-src="${escapeAttr(source.url)}" data-video-poster="${escapeAttr(item.imageUrl || "")}" aria-label="${label}">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="" loading="lazy">` : ""}<span class="video-play">▶</span><b>${label}</b></button>`;
+}
+
+function playNewsVideo(button) {
+  const kind = button.dataset.videoKind;
+  const src = button.dataset.videoSrc;
+  const poster = button.dataset.videoPoster;
+  if (!src) return;
+  button.outerHTML = kind === "direct"
+    ? `<video class="news-video-player" src="${escapeAttr(src)}" poster="${escapeAttr(poster)}" controls autoplay playsinline preload="metadata"></video>`
+    : `<iframe class="news-video-player" src="${escapeAttr(src)}" title="فيديو الخبر" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
 }
 
 function renderSettings() {
@@ -187,6 +215,15 @@ function renderSettings() {
   const socialSource = branch || s;
   const links = [[socialSource.facebook || s.facebook, "Facebook"], [socialSource.instagram || s.instagram, "Instagram"], [socialSource.tiktok || s.tiktok, "TikTok"]];
   $("#socialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${socialIcons[name]}</a>`).join("");
+  if (branch) {
+    $("#mobileCall").href = phoneHref(branch.phone);
+    $("#mobileWhatsapp").href = `https://wa.me/${whatsappNumber(branch.whatsapp || branch.phone)}`;
+    $("#mobileMap").href = branch.mapsUrl;
+    $("#mobileQuickActions").classList.add("ready");
+  } else {
+    $("#mobileCall").href = $("#mobileWhatsapp").href = $("#mobileMap").href = "#contact";
+    $("#mobileQuickActions").classList.remove("ready");
+  }
   renderBranchPicker();
   renderBranchFooter();
 }
@@ -232,6 +269,7 @@ function addToCart(id) {
   if (!itemIndex().has(id)) return;
   if (!state.cart.some(line => line.id === id)) state.cart.push({ id, qty: 1 });
   saveCart();
+  trackEvent("add_to_cart", { item_id: id, branch_id: state.branchId || "unselected" });
   state.coupon = null;
   renderCart();
   updateSummary();
@@ -304,6 +342,7 @@ async function refreshCatalog(silent = true) {
 }
 
 async function openBooking() {
+  trackEvent("booking_started", { branch_id: state.branchId || "unselected", cart_size: state.cart.length });
   if (firebaseConfigured) await refreshCatalog(true);
   openBranchDialog(true);
 }
@@ -335,6 +374,7 @@ function selectBranch(id, continueToBooking = false) {
   const previousCount = state.cart.length;
   state.branchId = branch.id;
   localStorage.setItem("mz-branch", branch.id);
+  trackEvent("branch_selected", { branch_id: branch.id });
   const index = itemIndex();
   state.cart = state.cart.filter(line => {
     const item = index.get(line.id);
@@ -485,9 +525,12 @@ async function submitBooking() {
     state.completedPreview = Boolean(result.preview);
     $("#previewNotice").classList.toggle("show", state.completedPreview);
     const branch = currentBranch();
+    $("#successBranch").textContent = branchName(branch);
+    $("#successAppointment").textContent = state.date && state.time ? `${state.date} • ${state.time}` : (state.lang === "ar" ? "طلب منتجات" : "Product order");
     const phone = whatsappNumber(branch?.whatsapp || branch?.phone);
     const message = state.lang === "ar" ? `مرحبًا، أنشأت حجزًا لدى مزين مصر – ${branchName(branch)}. كود الحجز: ${result.bookingCode}` : `Hello, I created a booking at El Mezaen Egypt – ${branchName(branch)}. Booking code: ${result.bookingCode}`;
     $("#successWhatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    trackEvent("booking_completed", { branch_id: state.branchId, value: Number(result.total || 0), currency: "EGP" });
     state.cart = [];
     saveCart();
     renderCart();
@@ -512,6 +555,44 @@ $("#reviewForm").addEventListener("submit", async event => {
   } catch (error) { showToast(error.message || "تعذر إرسال التقييم"); }
   finally { button.disabled = false; }
 });
+
+$("#manageBookingForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  const credentials = Object.fromEntries(new FormData(event.currentTarget));
+  button.disabled = true;
+  try {
+    const result = await getCustomerBooking(credentials);
+    state.managedBooking = result.booking;
+    state.manageCredentials = credentials;
+    renderManagedBooking();
+    trackEvent("booking_lookup", { branch_id: result.booking.branchId || "unknown" });
+  } catch (error) { showToast(error.message || "تعذر العثور على الحجز"); }
+  finally { button.disabled = false; }
+});
+
+function renderManagedBooking() {
+  const item = state.managedBooking;
+  const target = $("#manageBookingResult");
+  if (!item) { target.hidden = true; return; }
+  const wa = whatsappNumber(item.branchWhatsapp || currentBranch()?.whatsapp || currentBranch()?.phone);
+  const message = `مرحبًا، أريد تعديل الحجز رقم ${item.code} في ${item.branchNameAr || "مزين مصر"}.`;
+  target.hidden = false;
+  target.innerHTML = `<div class="manage-booking-head"><div><small>كود الحجز</small><strong>${escapeHtml(item.code)}</strong></div><span class="status-pill">${bookingStatusLabel(item.status)}</span></div><dl><div><dt>الفرع</dt><dd>${escapeHtml(item.branchNameAr || item.branchId)}</dd></div><div><dt>الخدمات</dt><dd>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</dd></div><div><dt>الموعد</dt><dd>${escapeHtml(item.bookingDate || "طلب منتجات")} ${escapeHtml(item.bookingTime || "")}</dd></div><div><dt>المتخصص</dt><dd>${escapeHtml(item.staffNameAr || "أي عضو")}</dd></div><div><dt>الإجمالي</dt><dd>${money(item.total)}</dd></div></dl><div class="manage-booking-actions"><a class="btn btn-ghost" href="https://wa.me/${wa}?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">طلب تعديل عبر واتساب</a>${item.canCancel ? '<button class="btn btn-danger" type="button" data-cancel-customer-booking>إلغاء الحجز</button>' : ""}</div>`;
+}
+
+function bookingStatusLabel(value) { return ({ pending: "جديد", confirmed: "مؤكد", rejected: "مرفوض", cancelled: "ملغي", completed: "مكتمل" })[value] || value || "—"; }
+
+async function cancelManagedBooking() {
+  if (!state.manageCredentials || !state.managedBooking?.canCancel || !confirm("هل تريد إلغاء الحجز؟")) return;
+  try {
+    await cancelCustomerBooking(state.manageCredentials);
+    state.managedBooking = { ...state.managedBooking, status: "cancelled", canCancel: false };
+    renderManagedBooking();
+    showToast("تم إلغاء الحجز بنجاح");
+    trackEvent("booking_cancelled", { branch_id: state.managedBooking.branchId || "unknown" });
+  } catch (error) { showToast(error.message || "تعذر إلغاء الحجز"); }
+}
 
 function updateCountdowns() {
   $$('[data-countdown]').forEach(el => {
@@ -538,6 +619,9 @@ function observeReveals() {
 }
 
 document.addEventListener("click", event => {
+  const video = event.target.closest("[data-video-src]");
+  if (video) playNewsVideo(video);
+  if (event.target.closest("[data-cancel-customer-booking]")) cancelManagedBooking();
   const add = event.target.closest("[data-add-id]");
   if (add) addToCart(add.dataset.addId);
   const remove = event.target.closest("[data-remove-id]");

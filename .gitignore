@@ -11,5 +11,3 @@ ui-debug.log
 .env
 .env.*
 !.env.example
-
-dist/
