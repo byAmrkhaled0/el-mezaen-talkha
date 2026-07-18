@@ -18,6 +18,7 @@ assert.equal(coupon.discountAmount, 10);
 const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 const create = httpsCallable(functions, "createBooking");
 const booking = (await create({
+  branchId: "talkha",
   items: [{ id: "hair-001", kind: "service", qty: 1 }],
   staffId: "any",
   bookingDate: tomorrow,
@@ -32,6 +33,7 @@ assert.equal(booking.total, 90);
 assert.ok(booking.bookingCode.startsWith("MZ-TK-"));
 
 await assert.rejects(() => create({
+  branchId: "talkha",
   items: [{ id: "hair-001", kind: "service", qty: 1 }],
   staffId: "any",
   bookingDate: tomorrow,
@@ -42,6 +44,7 @@ await assert.rejects(() => create({
 }));
 
 const productBooking = (await create({
+  branchId: "talkha",
   items: [{ id: "product-001", kind: "product", qty: 2 }],
   staffId: "any",
   bookingDate: null,

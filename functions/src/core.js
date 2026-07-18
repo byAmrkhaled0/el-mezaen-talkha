@@ -6,6 +6,42 @@ export function normalizePhone(value) {
   return phone;
 }
 
+export function isRecentAuthentication(authTime, nowSeconds = Math.floor(Date.now() / 1000), maxAgeSeconds = 5 * 60) {
+  const value = Number(authTime);
+  return Number.isFinite(value) && value > 0 && nowSeconds >= value && nowSeconds - value <= maxAgeSeconds;
+}
+
+export function calculatePayroll({ baseSalary = 0, monthlyTarget = 0, targetBonusPercent = 0, revenue = 0, adjustment = 0 } = {}) {
+  const base = Math.max(0, Number(baseSalary || 0));
+  const target = Math.max(0, Number(monthlyTarget || 0));
+  const percent = Math.max(0, Math.min(500, Number(targetBonusPercent || 0)));
+  const earnedRevenue = Number(revenue || 0);
+  const safeAdjustment = Number(adjustment || 0);
+  const targetAchieved = target > 0 && earnedRevenue >= target;
+  const bonus = targetAchieved ? Math.round(base * percent) / 100 : 0;
+  const netSalary = Math.max(0, base + bonus + safeAdjustment);
+  const progressPercent = target > 0 ? Math.max(0, Math.min(100, Math.round(earnedRevenue / target * 100))) : 0;
+  return { baseSalary: base, monthlyTarget: target, targetBonusPercent: percent, revenue: earnedRevenue, targetAchieved, progressPercent, bonus, adjustment: safeAdjustment, netSalary };
+}
+
+export function calculateRevenueBreakdown(items = [], amount = 0) {
+  const groups = { services: 0, products: 0, drinks: 0 };
+  for (const item of items || []) {
+    const value = Math.max(0, Number(item.lineTotal ?? (Number(item.unitPrice || 0) * Number(item.qty || 1))));
+    if (item.kind === "drink" || (item.kind === "inventory" && item.category === "drink")) groups.drinks += value;
+    else if (item.kind === "inventory" || item.kind === "product") groups.products += value;
+    else groups.services += value;
+  }
+  const sourceTotal = groups.services + groups.products + groups.drinks;
+  if (!sourceTotal) return { services: Number(amount || 0), products: 0, drinks: 0 };
+  const ratio = Number(amount || 0) / sourceTotal;
+  const roundMoney = value => { const rounded = Math.round(value * 100) / 100; return Object.is(rounded, -0) ? 0 : rounded; };
+  const services = roundMoney(groups.services * ratio);
+  const products = roundMoney(groups.products * ratio);
+  const drinks = roundMoney(Number(amount || 0) - services - products);
+  return { services, products, drinks };
+}
+
 export function minutes(value) {
   const [hour, minute] = String(value || "").split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new Error("INVALID_TIME");

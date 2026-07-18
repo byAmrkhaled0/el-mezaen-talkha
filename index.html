@@ -25,6 +25,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="preload" as="image" href="/assets/hero-barbershop-cyan.webp" type="image/webp" fetchpriority="high">
   <title>مزين مصر | حجز فرعي طلخا والمشاية</title>
   <script type="application/ld+json">
   {
@@ -44,6 +45,8 @@
         "@id": "__SITE_URL__#talkha",
         "parentOrganization": {"@id": "__SITE_URL__#organization"},
         "name": "مزين مصر – فرع طلخا",
+        "url": "__SITE_URL__/branches/talkha/",
+        "image": "__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp",
         "telephone": "+201093008896",
         "priceRange": "EGP",
         "address": {"@type": "PostalAddress", "streetAddress": "تقسيم بهاء الشربيني، أمام محل لندن", "addressLocality": "طلخا", "addressRegion": "الدقهلية", "addressCountry": "EG"}
@@ -53,6 +56,8 @@
         "@id": "__SITE_URL__#mashaya",
         "parentOrganization": {"@id": "__SITE_URL__#organization"},
         "name": "مزين مصر – فرع المشاية",
+        "url": "__SITE_URL__/branches/mashaya/",
+        "image": "__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp",
         "telephone": "+201101006961",
         "priceRange": "EGP",
         "address": {"@type": "PostalAddress", "streetAddress": "المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع", "addressLocality": "المنصورة", "addressRegion": "الدقهلية", "addressCountry": "EG"}
@@ -66,7 +71,7 @@
   <header class="site-header" id="home">
     <div class="container nav-wrap">
       <a class="brand" href="#home" aria-label="مزين مصر">
-        <img src="/assets/el-mezaen-mark-v2.png" alt="شعار مزين مصر" data-alt-ar="شعار مزين مصر" data-alt-en="El Mezaen Egypt logo" width="58" height="68">
+        <img src="/assets/el-mezaen-mark-v2.webp" alt="شعار مزين مصر" data-alt-ar="شعار مزين مصر" data-alt-en="El Mezaen Egypt logo" width="58" height="68" decoding="async">
         <span><strong data-business-name>مزين مصر</strong><small data-branch-label data-i18n="branch">فرعا طلخا والمشاية</small></span>
       </a>
       <nav class="nav-links" id="navLinks" aria-label="التنقل الرئيسي">
@@ -109,8 +114,8 @@
           </div>
         </div>
         <div class="hero-visual reveal">
-          <img class="hero-photo" src="/assets/hero-barbershop-cyan.webp" alt="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-ar="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-en="Professional men's grooming at El Mezaen Egypt" width="640" height="853" fetchpriority="high">
-          <div class="logo-plate"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="120" height="142"></div>
+          <img class="hero-photo" src="/assets/hero-barbershop-cyan.webp" alt="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-ar="تجربة حلاقة رجالية احترافية في مزين مصر" data-alt-en="Professional men's grooming at El Mezaen Egypt" width="640" height="853" fetchpriority="high" decoding="async">
+          <div class="logo-plate"><img src="/assets/el-mezaen-mark-v2.webp" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="120" height="142" decoding="async"></div>
           <div class="hero-stat"><strong>1995</strong><span>Since</span></div>
         </div>
       </div>
@@ -175,9 +180,10 @@
 
     <section class="section-pad reviews-section" id="reviews" aria-labelledby="reviews-title">
       <div class="container review-layout">
-        <div class="review-intro reveal"><span class="section-kicker">رأيك يهمنا</span><h2 id="reviews-title">قيّم تجربتك مع مزين مصر</h2><p>نراجع كل تقييم قبل نشره حفاظًا على جودة المحتوى وخصوصية عملائنا.</p><div class="review-score"><strong>5.0</strong><span>★★★★★</span><small>تجربة عناية تستحق الثقة</small></div></div>
+        <div class="review-intro reveal"><span class="section-kicker">رأيك يهمنا</span><h2 id="reviews-title">قيّم تجربتك مع مزين مصر</h2><p>نراجع كل تقييم قبل نشره حفاظًا على جودة المحتوى وخصوصية عملائنا.</p><div class="review-score"><strong id="reviewAverage">—</strong><span id="reviewAverageStars">☆☆☆☆☆</span><small id="reviewCount">لا توجد تقييمات منشورة بعد</small></div></div>
         <form class="review-form panel reveal" id="reviewForm"><label class="field"><span>الاسم</span><input name="name" required maxlength="60"></label><label class="field"><span>رقم الحجز</span><input name="bookingCode" maxlength="40" placeholder="اختياري"></label><fieldset class="rating-picker"><legend>التقييم</legend><div><input type="radio" id="star5" name="rating" value="5" checked><label for="star5">★</label><input type="radio" id="star4" name="rating" value="4"><label for="star4">★</label><input type="radio" id="star3" name="rating" value="3"><label for="star3">★</label><input type="radio" id="star2" name="rating" value="2"><label for="star2">★</label><input type="radio" id="star1" name="rating" value="1"><label for="star1">★</label></div></fieldset><label class="field"><span>اكتب رأيك</span><textarea name="comment" required maxlength="500" rows="4"></textarea></label><button class="btn btn-primary" type="submit">إرسال التقييم</button></form>
       </div>
+      <div class="container"><div class="published-reviews" id="publishedReviews" aria-live="polite"></div></div>
     </section>
 
     <section class="section-pad" id="newsSection" aria-labelledby="news-title" hidden>
@@ -201,7 +207,7 @@
   <footer class="site-footer" id="contact">
     <div class="container footer-branches-layout">
       <div class="footer-intro">
-        <a class="brand footer-brand" href="#home"><img src="/assets/el-mezaen-mark-v2.png" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="70" height="83"><span><strong data-business-name>مزين مصر</strong><small data-i18n="branch">فرعا طلخا والمشاية</small></span></a>
+        <a class="brand footer-brand" href="#home"><img src="/assets/el-mezaen-mark-v2.webp" alt="رمز مزين مصر" data-alt-ar="رمز مزين مصر" data-alt-en="El Mezaen Egypt mark" width="70" height="83" loading="lazy" decoding="async"><span><strong data-business-name>مزين مصر</strong><small data-i18n="branch">فرعا طلخا والمشاية</small></span></a>
         <p data-i18n="footerAbout">وجهتك للحلاقة والعناية الرجالية في طلخا والمشاية.</p>
         <div class="social-links" id="socialLinks"></div>
       </div>
@@ -250,6 +256,10 @@
           <section class="booking-step active" data-step="1">
             <h3 data-i18n="chooseItems">راجع خدماتك وباقاتك</h3>
             <div class="cart-lines" id="cartLines"></div>
+            <div class="drink-upsell" id="drinkUpsell" hidden>
+              <button class="drink-upsell-toggle" id="drinkUpsellToggle" type="button" aria-expanded="false" aria-controls="drinkMenu"><span class="drink-plus">＋</span><span><b>إيه رأيك تعدّل مزاجك بمشروب؟</b><small>اختياري ويتضاف على نفس الحجز</small></span><span class="drink-chevron">⌄</span></button>
+              <div class="drink-menu" id="drinkMenu" hidden><div class="drink-options" id="drinkOptions"></div></div>
+            </div>
           </section>
           <section class="booking-step" data-step="2">
             <h3 data-i18n="chooseStaff">اختر عضو الفريق</h3>

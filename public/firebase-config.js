@@ -12,7 +12,7 @@ window.__FIREBASE_CONFIG__ = {
   appId: "1:706014992341:web:5bd64ed114b3f638590f5c",
   measurementId: "G-1ZEQLZGMP1"
 };
-window.__VAPID_KEY__ = "";
+window.__VAPID_KEY__ = "BJTbVSNi4UEmQ-xb8E_lROtSH7fsFiMb4tnCdOUOQUCD-L1SxDgAg-1UYEvsDptUGBiUGtYIv9R8y5au2hsODnM";
 // ضع مفتاح reCAPTCHA Enterprise الخاص بـ Firebase App Check هنا، ثم فعّل
 // ENFORCE_APP_CHECK في Cloud Functions بعد التأكد من وصول التوكنات بنجاح.
 window.__APP_CHECK_SITE_KEY__ = "";

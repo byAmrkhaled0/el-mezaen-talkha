@@ -282,5 +282,5 @@ const settings = {
   currency: "EGP"
 };
 
-export const seedCatalog = { branches, categories, services, packages, staff, offers, coupons, content, settings };
+export const seedCatalog = { branches, categories, services, packages, staff, offers, coupons, drinks: [], content, settings };
 export const collectionsForSeed = { branches, categories, services, packages, staff, offers, coupons, content };

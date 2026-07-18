@@ -9,7 +9,7 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const state = {
   lang: getLang(),
   theme: localStorage.getItem("mz-theme") === "light" ? "light" : "dark",
-  catalog: { branches: [], categories: [], services: [], packages: [], staff: [], offers: [], content: [], translations: [], settings: {} },
+  catalog: { branches: [], categories: [], services: [], packages: [], staff: [], offers: [], drinks: [], content: [], translations: [], reviews: [], settings: {} },
   cart: JSON.parse(localStorage.getItem("mz-cart") || "[]"),
   category: "all",
   step: 1,
@@ -25,7 +25,7 @@ const state = {
 
 const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
 const localized = (item, key = "name") => item?.[`${key}${state.lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
-const needsAppointment = () => cartItems().some(item => item.kind !== "product");
+const needsAppointment = () => cartItems().some(item => !["product", "inventory", "drink"].includes(item.kind));
 const settings = () => state.catalog.settings || {};
 const currentBranch = () => state.catalog.branches.find(item => item.id === state.branchId && item.active !== false) || null;
 const availableAtBranch = item => !state.branchId || !Array.isArray(item?.branchIds) || !item.branchIds.length || item.branchIds.includes(state.branchId);
@@ -52,13 +52,14 @@ function itemIndex() {
   return new Map([
     ...state.catalog.services.map(item => [item.id, { ...item, kind: item.type === "product" ? "product" : "service" }]),
     ...state.catalog.packages.map(item => [item.id, { ...item, kind: "package" }]),
-    ...state.catalog.offers.map(item => [item.id, { ...item, kind: "offer" }])
+    ...state.catalog.offers.map(item => [item.id, { ...item, kind: "offer" }]),
+    ...(state.catalog.drinks || []).map(item => [item.id, { ...item, kind: "drink" }])
   ]);
 }
 
 function cartItems() {
   const index = itemIndex();
-  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1 })).filter(item => item.id && availableAtBranch(item));
+  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1, option: line.option || "" })).filter(item => item.id && availableAtBranch(item));
 }
 
 function subtotal() { return cartItems().reduce((sum, item) => sum + Number(item.price || item.newPrice || 0) * item.qty, 0); }
@@ -114,7 +115,7 @@ function renderOffers() {
     const old = Number(offer.oldPrice ?? offer.originalPrice ?? price);
     const percent = old > 0 ? Math.round((old - price) / old * 100) : 0;
     return `<article class="offer-card reveal">
-      ${offer.imageUrl ? `<img src="${escapeAttr(offer.imageUrl)}" alt="${escapeAttr(localized(offer))}" loading="lazy">` : ""}
+      ${offer.imageUrl ? `<img src="${escapeAttr(offer.imageUrl)}" alt="${escapeAttr(localized(offer))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 32vw">` : ""}
       <div class="offer-body"><span class="discount-badge">-${percent}%</span><h3>${escapeHtml(localized(offer))}</h3><p>${escapeHtml(localized(offer, "description"))}</p>
       <div class="price-row"><div><span class="old-price">${money(old)}</span><div class="price">${money(price)}</div></div>${offer.endAt && offer.showCountdown ? `<time data-countdown="${escapeAttr(offer.endAt)}"></time>` : ""}</div>
       <button class="btn btn-primary" data-add-id="${escapeAttr(offer.id)}" data-kind="offer">${t("addCart", state.lang)}</button></div>
@@ -127,7 +128,7 @@ function renderPackages() {
   $("#packageGrid").innerHTML = state.catalog.packages.filter(item => availableAtBranch(item) && item.active !== false && item.status !== "expired").map(item => {
     const badge = item.badge === "popular" ? t("featured", state.lang) : item.badge === "special" ? t("special", state.lang) : t("package", state.lang);
     return `<article class="package-card ${item.badge ? "highlight" : ""} reveal">
-      <div class="package-cover"><img src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy"><span>${badge}</span></div>
+      <div class="package-cover"><img src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 33vw"><span>${badge}</span></div>
       <div class="card-top"><span class="card-tag">♛ ${badge}</span><span class="duration">◷ ${item.duration} ${t("minute", state.lang)}</span></div>
       <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p>
       <div class="price-row"><strong class="price">${money(item.price)}</strong></div>
@@ -153,7 +154,7 @@ function renderServices() {
 
 function renderTeam() {
   $("#teamGrid").innerHTML = state.catalog.staff.filter(item => availableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
-    <img class="team-photo" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" width="220" height="220">
+    <img class="team-photo" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">
     <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
     <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
   </article>`).join("");
@@ -161,17 +162,27 @@ function renderTeam() {
 
 function renderContent() {
   const celebrities = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "celebrity");
-  $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
+  $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 32vw" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
   const gallery = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "gallery");
   const galleryItems = gallery.length ? gallery : [
     { imageUrl: "/assets/hero-barbershop-cyan.webp", titleAr: "من أعمال مزين مصر", titleEn: "El Mezaen Egypt Work" },
     { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
     { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
   ];
-  $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">`).join("");
+  $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 100vw, 50vw" width="640" height="480">`).join("");
   const news = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
   $("#newsGrid").innerHTML = news.map(item => `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${item.linkUrl ? `<a class="btn btn-ghost" href="${escapeAttr(item.linkUrl)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`).join("");
+}
+
+function renderReviews() {
+  const published = (state.catalog.reviews || []).filter(item => item.active !== false);
+  const reviews = [...published].sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 9);
+  const average = published.length ? published.reduce((sum, item) => sum + Number(item.rating || 0), 0) / published.length : 0;
+  $("#reviewAverage").textContent = published.length ? average.toFixed(1) : "—";
+  $("#reviewAverageStars").textContent = published.length ? `${"★".repeat(Math.round(average))}${"☆".repeat(5 - Math.round(average))}` : "☆☆☆☆☆";
+  $("#reviewCount").textContent = published.length ? `${published.length} تقييم منشور` : "لا توجد تقييمات منشورة بعد";
+  $("#publishedReviews").innerHTML = reviews.map(item => `<article class="published-review panel ${item.featured ? "featured" : ""}"><header><div class="review-avatar">${escapeHtml(String(item.name || "ع").trim().charAt(0) || "ع")}</div><div><h3>${escapeHtml(item.name || "عميل مزين مصر")}</h3><span>${"★".repeat(Math.max(1, Math.min(5, Number(item.rating || 5))))}${"☆".repeat(5 - Math.max(1, Math.min(5, Number(item.rating || 5))))}</span></div>${item.verified ? '<b class="verified-review">✓ حجز موثّق</b>' : ""}</header><p>${escapeHtml(item.comment || "")}</p>${item.adminReply ? `<div class="review-reply"><b>رد مزين مصر</b><span>${escapeHtml(item.adminReply)}</span></div>` : ""}</article>`).join("");
 }
 
 function contentBranchLabel(item) {
@@ -181,7 +192,7 @@ function contentBranchLabel(item) {
 }
 
 function renderNewsMedia(item) {
-  if (!isVideoContent(item)) return item.imageUrl ? `<img class="news-media" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" width="640" height="480">` : "";
+  if (!isVideoContent(item)) return item.imageUrl ? `<img class="news-media" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 100vw, 33vw" width="640" height="480">` : "";
   const source = videoSource(item.videoUrl);
   const label = state.lang === "ar" ? "تشغيل الفيديو" : "Play video";
   if (source.kind === "external") return `<a class="news-video-trigger external" href="${escapeAttr(source.url)}" target="_blank" rel="noopener" aria-label="${label}">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="" loading="lazy">` : ""}<span class="video-play">▶</span><b>${label} ↗</b></a>`;
@@ -258,22 +269,51 @@ function renderAll() {
   renderServices();
   renderTeam();
   renderContent();
+  renderReviews();
   renderSettings();
   renderCart();
+  renderDrinks();
   renderStaffPicker();
   updateSummary();
   observeReveals();
 }
 
-function addToCart(id) {
-  if (!itemIndex().has(id)) return;
-  if (!state.cart.some(line => line.id === id)) state.cart.push({ id, qty: 1 });
+function addToCart(id, option = "") {
+  const item = itemIndex().get(id);
+  if (!item) return;
+  const existing = state.cart.find(line => line.id === id);
+  if (!existing) state.cart.push({ id, qty: 1, option: item.kind === "drink" ? option || item.drinkOptions?.[0] || "" : "" });
+  else if (item.kind === "drink") { existing.qty = Math.min(Number(item.maxQty || 20), Number(existing.qty || 1) + 1); existing.option = option || existing.option || item.drinkOptions?.[0] || ""; }
   saveCart();
   trackEvent("add_to_cart", { item_id: id, branch_id: state.branchId || "unselected" });
   state.coupon = null;
   renderCart();
   updateSummary();
   showToast(t("added", state.lang));
+}
+
+function changeCartQty(id, delta) {
+  const item = itemIndex().get(id);
+  const line = state.cart.find(value => value.id === id);
+  if (!item || !line || item.kind !== "drink") return;
+  line.qty = Math.max(1, Math.min(Number(item.maxQty || 20), Number(line.qty || 1) + delta));
+  state.coupon = null;
+  saveCart();
+  renderCart();
+  updateSummary();
+}
+
+function renderDrinks() {
+  const wrapper = $("#drinkUpsell");
+  const menu = $("#drinkMenu");
+  const drinks = (state.catalog.drinks || []).filter(item => item.active !== false && availableAtBranch(item) && Number(item.maxQty || 0) > 0);
+  wrapper.hidden = !drinks.length;
+  if (!drinks.length) { menu.hidden = true; return; }
+  $("#drinkOptions").innerHTML = drinks.map(item => {
+    const qty = state.cart.find(line => line.id === item.id)?.qty || 0;
+    const options = Array.isArray(item.drinkOptions) ? item.drinkOptions : [];
+    return `<article class="drink-option"><span class="drink-cup" aria-hidden="true">☕</span><div><b>${escapeHtml(localized(item))}</b><small>${money(item.price)}${qty ? ` • في الحجز: ${qty}` : ""}</small></div>${options.length ? `<label><span>التحضير</span><select data-drink-option="${escapeAttr(item.id)}">${options.map(option => `<option value="${escapeAttr(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}<button type="button" data-add-drink="${escapeAttr(item.id)}" aria-label="إضافة ${escapeAttr(localized(item))}">＋ إضافة • ${money(item.price)}</button></article>`;
+  }).join("");
 }
 
 function removeFromCart(id) {
@@ -286,8 +326,9 @@ function removeFromCart(id) {
 
 function renderCart() {
   const items = cartItems();
-  $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line"><div><b>${escapeHtml(localized(item))}</b><small>${item.duration ?? 0} ${t("minute", state.lang)}</small></div><strong class="line-price">${money(item.price || item.newPrice)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button></div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
+  $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line"><div><b>${escapeHtml(localized(item))}</b><small>${item.kind === "drink" ? `مشروب • ${item.qty}${item.option ? ` • ${escapeHtml(item.option)}` : ""}` : `${item.duration ?? 0} ${t("minute", state.lang)}`}</small></div>${item.kind === "drink" ? `<div class="cart-qty"><button type="button" data-cart-qty="-1" data-cart-id="${escapeAttr(item.id)}">−</button><b>${item.qty}</b><button type="button" data-cart-qty="1" data-cart-id="${escapeAttr(item.id)}">＋</button></div>` : ""}<strong class="line-price">${money(Number(item.price || item.newPrice) * item.qty)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button></div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
   saveCart();
+  renderDrinks();
   updateProductOnlyUi();
 }
 
@@ -456,7 +497,7 @@ function renderTimes() {
   const [openH, openM] = String(schedule.openingTime || "11:00").split(":").map(Number);
   const [closeH, closeM] = String(schedule.closingTime || "23:00").split(":").map(Number);
   const step = Math.max(5, Number(schedule.slotMinutes || 15));
-  const duration = Math.max(0, cartItems().filter(item => item.kind !== "product").reduce((sum, item) => sum + Number(item.duration || 0), 0));
+  const duration = Math.max(0, cartItems().filter(item => !["product", "inventory", "drink"].includes(item.kind)).reduce((sum, item) => sum + Number(item.duration || 0), 0));
   const selectedDate = $("#bookingDate").value;
   const now = new Date();
   const options = [];
@@ -480,7 +521,9 @@ async function applyCouponCode() {
   button.disabled = true;
   button.textContent = t("applying", state.lang);
   try {
-    const result = await validateCoupon({ code, branchId: state.branchId, subtotal: subtotal(), phone: $("#customerPhone").value.trim(), itemIds: state.cart.map(line => line.id) });
+    const itemIds = cartItems().filter(item => !["inventory", "drink"].includes(item.kind)).map(item => item.id);
+    if (!itemIds.length) throw new Error("no-discountable-items");
+    const result = await validateCoupon({ code, branchId: state.branchId, subtotal: subtotal(), phone: $("#customerPhone").value.trim(), itemIds });
     if (!result.valid) throw new Error(result.message || "invalid");
     state.coupon = result;
     updateSummary();
@@ -510,7 +553,7 @@ async function submitBooking() {
   try {
     const result = await createBooking({
       branchId: state.branchId,
-      items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty })),
+      items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty, option: item.option || "" })),
       staffId: state.staffId,
       bookingDate: state.date || null,
       bookingTime: state.time || null,
@@ -624,8 +667,12 @@ document.addEventListener("click", event => {
   if (event.target.closest("[data-cancel-customer-booking]")) cancelManagedBooking();
   const add = event.target.closest("[data-add-id]");
   if (add) addToCart(add.dataset.addId);
+  const drink = event.target.closest("[data-add-drink]");
+  if (drink) addToCart(drink.dataset.addDrink, document.querySelector(`[data-drink-option="${CSS.escape(drink.dataset.addDrink)}"]`)?.value || "");
   const remove = event.target.closest("[data-remove-id]");
   if (remove) removeFromCart(remove.dataset.removeId);
+  const quantity = event.target.closest("[data-cart-qty]");
+  if (quantity) changeCartQty(quantity.dataset.cartId, Number(quantity.dataset.cartQty || 0));
   const filter = event.target.closest("[data-category]");
   if (filter) { state.category = filter.dataset.category; renderServices(); }
   const staff = event.target.closest("[data-staff-id]");
@@ -651,6 +698,12 @@ $("#navLinks").addEventListener("click", () => { $("#navLinks").classList.remove
 $("#nextStep").addEventListener("click", nextStep);
 $("#prevStep").addEventListener("click", () => goToStep(state.step - 1));
 $("#applyCoupon").addEventListener("click", applyCouponCode);
+$("#drinkUpsellToggle").addEventListener("click", () => {
+  const menu = $("#drinkMenu");
+  const open = menu.hidden;
+  menu.hidden = !open;
+  $("#drinkUpsellToggle").setAttribute("aria-expanded", String(open));
+});
 $("#bookingDate").addEventListener("change", event => { state.date = event.target.value; renderTimes(); updateSummary(); });
 $("#bookingTime").addEventListener("change", event => { state.time = event.target.value; updateSummary(); });
 $("#bookingDialog").addEventListener("click", event => { if (event.target === $("#bookingDialog")) closeBooking(); });

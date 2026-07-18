@@ -46,7 +46,9 @@ export async function getCatalog() {
       packages: remote.packages?.length ? remote.packages : fallback.packages,
       staff: remote.staff?.length ? remote.staff : fallback.staff,
       offers: Array.isArray(remote.offers) ? remote.offers : fallback.offers,
+      drinks: Array.isArray(remote.drinks) ? remote.drinks : [],
       content: remote.content?.length ? remote.content : fallback.content,
+      reviews: Array.isArray(remote.reviews) ? remote.reviews : [],
       translations: Array.isArray(remote.translations) ? remote.translations : [],
       settings: { ...fallback.settings, ...(remote.settings || {}) },
       preview: !remote.services?.length || !remote.packages?.length
@@ -77,11 +79,12 @@ export async function createBooking(payload) {
   const catalog = localCatalog();
   const branch = catalog.branches.find(item => item.id === payload.branchId && item.active !== false);
   if (!branch) throw new Error("اختر الفرع أولًا");
-  const indexed = new Map([...catalog.services.map(item => [item.id, item]), ...catalog.packages.map(item => [item.id, item]), ...catalog.offers.map(item => [item.id, item])]);
+  const indexed = new Map([...catalog.services.map(item => [item.id, item]), ...catalog.packages.map(item => [item.id, item]), ...catalog.offers.map(item => [item.id, item]), ...(catalog.drinks || []).map(item => [item.id, item])]);
   const items = payload.items.map(line => indexed.get(line.id)).filter(item => item && (!item.branchIds?.length || item.branchIds.includes(branch.id)));
   if (items.length !== payload.items.length) throw new Error("إحدى الخدمات غير متاحة في الفرع المختار");
-  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0), 0);
-  const coupon = payload.couponCode ? await validateCoupon({ code: payload.couponCode, branchId: branch.id, subtotal, phone: payload.customer.phone, itemIds: payload.items.map(item => item.id) }) : { valid: false, discountAmount: 0 };
+  const subtotal = items.reduce((sum, item, index) => sum + Number(item.price || 0) * Math.max(1, Number(payload.items[index]?.qty || 1)), 0);
+  const discountableIds = payload.items.filter(item => item.kind !== "drink").map(item => item.id);
+  const coupon = payload.couponCode && discountableIds.length ? await validateCoupon({ code: payload.couponCode, branchId: branch.id, subtotal, phone: payload.customer.phone, itemIds: discountableIds }) : { valid: false, discountAmount: 0 };
   const total = Math.max(0, subtotal - Number(coupon.discountAmount || 0));
   const code = `MZ-${branch.code || "BR"}-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
   const record = { ...payload, code, subtotal, discountAmount: coupon.discountAmount || 0, total, status: "pending", paymentStatus: "unpaid", branchNameAr: branch.nameAr, branchWhatsapp: branch.whatsapp, serviceNamesAr: items.map(item => item.nameAr), createdAt: new Date().toISOString() };

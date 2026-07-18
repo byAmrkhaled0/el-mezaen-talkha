@@ -4,21 +4,34 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { calculateCoupon, createSlotKeys, minutes, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isRecentAuthentication, minutes, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
 const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck };
-const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations"];
-const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings"];
+const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
+const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 const ADMIN_ROLES = ["admin", "manager", "receptionist", "accountant"];
+const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "marketing", "other"];
+const INVENTORY_CATEGORIES = ["product", "supply"];
+const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
 
-const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt) });
+const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
 const hash = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
 const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+
+function businessDateParts(date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return { dateKey: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, month: `${parts.year}-${parts.month}` };
+}
+
+function normalizeDrinkOptions(value) {
+  const options = (Array.isArray(value) ? value : [value]).flatMap(item => String(item || "").split(/[،,]/));
+  return [...new Set(options.map(item => sanitizeText(item, 40)).filter(Boolean))].slice(0, 12);
+}
 
 function requestFingerprint(request, extra = "") {
   const forwarded = request.rawRequest?.headers?.["x-forwarded-for"];
@@ -43,6 +56,11 @@ function requireRole(request, roles = ADMIN_ROLES) {
   return role;
 }
 
+function requireRecentAdmin(request) {
+  requireRole(request, ["admin"]);
+  if (!isRecentAuthentication(request.auth?.token?.auth_time)) throw new HttpsError("unauthenticated", "أعد إدخال باسورد الأدمن لتأكيد الحذف");
+}
+
 function sanitizeText(value, max = 200) { return String(value || "").trim().slice(0, max); }
 
 async function readSettings() {
@@ -59,9 +77,21 @@ async function readBranch(value) {
 }
 
 export const getCatalog = onCall(publicOptions, async () => {
-  const results = await Promise.all(PUBLIC_COLLECTIONS.map(name => db.collection(name).where("active", "==", true).limit(500).get()));
+  const [results, drinksSnapshot, publicSettings] = await Promise.all([
+    Promise.all(PUBLIC_COLLECTIONS.map(name => db.collection(name).where("active", "==", true).limit(500).get())),
+    db.collection("drinks").limit(200).get(),
+    readSettings()
+  ]);
   const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.map(cleanDoc).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
-  payload.settings = await readSettings();
+  payload.drinks = drinksSnapshot.docs.flatMap(snapshot => {
+    const item = snapshot.data();
+    const price = Number(item.price || 0);
+    if (item.active === false || !Number.isFinite(price) || price < 0 || !item.branchId) return [];
+    const nameAr = sanitizeText(item.nameAr, 100);
+    if (!nameAr) return [];
+    return [{ id: snapshot.id, nameAr, nameEn: sanitizeText(item.nameEn || item.nameAr, 100), type: DRINK_TYPES.includes(item.type) ? item.type : "other", price, drinkOptions: normalizeDrinkOptions(item.drinkOptions), branchIds: [sanitizeText(item.branchId, 40)], maxQty: 20, active: true, sortOrder: Number(item.sortOrder || 0) }];
+  }).sort((a, b) => a.sortOrder - b.sortOrder);
+  payload.settings = publicSettings;
   return payload;
 });
 
@@ -78,6 +108,23 @@ async function fetchPricedItems(lines, branchId = "") {
     return [[item.id, { ...data, id: item.id, kind: requestedKind === "product" ? "product" : requestedKind }]];
   }));
   return priceItems(lines, map, new Date(), branchId);
+}
+
+function priceDrinkSnapshots(snapshots, lines, branchId) {
+  return snapshots.map((snapshot, index) => {
+    const source = snapshot.data() || {};
+    const line = lines[index];
+    if (!snapshot.exists || source.active === false || source.branchId !== branchId) throw new Error("DRINK_UNAVAILABLE");
+    const nameAr = sanitizeText(source.nameAr, 100);
+    if (!nameAr) throw new Error("DRINK_UNAVAILABLE");
+    const unitPrice = Number(source.price || 0);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("DRINK_PRICE");
+    const drinkOptions = normalizeDrinkOptions(source.drinkOptions);
+    const option = line.option || drinkOptions[0] || "";
+    if (drinkOptions.length && !drinkOptions.includes(option)) throw new Error("DRINK_OPTION");
+    const qty = Math.max(1, Math.min(20, Math.floor(Number(line.qty || 1))));
+    return { id: snapshot.id, kind: "drink", category: "drink", type: DRINK_TYPES.includes(source.type) ? source.type : "other", nameAr, nameEn: sanitizeText(source.nameEn || nameAr, 100), option: option || null, qty, unitPrice, lineTotal: unitPrice * qty, duration: 0, staffRequired: false, ref: snapshot.ref };
+  });
 }
 
 export const validateCoupon = onCall(publicOptions, async request => {
@@ -113,9 +160,17 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
-  let pricedItems;
-  try { pricedItems = await fetchPricedItems(data.items, branchId); }
-  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  const rawLines = Array.isArray(data.items) ? data.items.slice(0, 30).map(line => ({ id: sanitizeText(line?.id, 100), kind: sanitizeText(line?.kind, 20), qty: Math.max(1, Math.min(20, Math.floor(Number(line?.qty || 1)))), option: sanitizeText(line?.option, 40) })) : [];
+  if (!rawLines.length || rawLines.some(line => !line.id || !["service", "package", "offer", "product", "inventory", "drink"].includes(line.kind))) throw new HttpsError("invalid-argument", "عناصر الحجز غير صحيحة");
+  if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
+  const catalogLines = rawLines.filter(line => !["inventory", "drink"].includes(line.kind));
+  const inventoryLines = rawLines.filter(line => line.kind === "inventory");
+  const drinkLines = rawLines.filter(line => line.kind === "drink");
+  let pricedItems = [];
+  if (catalogLines.length) {
+    try { pricedItems = await fetchPricedItems(catalogLines, branchId); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  }
   const appointmentItems = pricedItems.filter(item => item.staffRequired);
   const duration = appointmentItems.reduce((sum, item) => sum + item.duration, 0);
   const productOnly = appointmentItems.length === 0;
@@ -161,6 +216,8 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const couponCode = sanitizeText(data.couponCode, 30).toUpperCase();
   const couponRef = couponCode ? db.doc(`coupons/${couponCode}`) : null;
   const couponUsageRef = couponCode ? db.doc(`couponUsage/${couponCode}_${hash(customer.phone)}`) : null;
+  const inventoryRefs = inventoryLines.map(line => db.doc(`inventoryItems/${line.id}`));
+  const drinkRefs = drinkLines.map(line => db.doc(`drinks/${line.id}`));
 
   try {
     return await db.runTransaction(async transaction => {
@@ -179,13 +236,30 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         }
         if (!assigned) throw new Error("SLOT_UNAVAILABLE");
       }
+      const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
+      const inventoryItems = inventorySnapshots.map((snapshot, index) => {
+        const source = snapshot.data() || {};
+        const line = inventoryLines[index];
+        if (!snapshot.exists || source.active === false || source.category !== "drink" || source.branchId !== branchId) throw new Error("DRINK_UNAVAILABLE");
+        if (Number(source.stockQty || 0) < line.qty) throw new Error("DRINK_STOCK");
+        const unitPrice = Number(source.sellingPrice || 0);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("DRINK_PRICE");
+        const drinkOptions = normalizeDrinkOptions(source.drinkOptions);
+        const option = line.option || drinkOptions[0] || "";
+        if (drinkOptions.length && !drinkOptions.includes(option)) throw new Error("DRINK_OPTION");
+        return { id: snapshot.id, kind: "inventory", category: "drink", nameAr: sanitizeText(source.nameAr, 100), nameEn: sanitizeText(source.nameEn || source.nameAr, 100), option: option || null, qty: line.qty, unitPrice, lineTotal: unitPrice * line.qty, duration: 0, staffRequired: false, ref: snapshot.ref };
+      });
+      const drinkSnapshots = drinkRefs.length ? await transaction.getAll(...drinkRefs) : [];
+      const drinkItems = priceDrinkSnapshots(drinkSnapshots, drinkLines, branchId);
+      const allPricedItems = [...pricedItems, ...inventoryItems, ...drinkItems];
       const couponData = baseReads[2]?.exists ? baseReads[2].data() : null;
       const coupon = couponData && (!Array.isArray(couponData.branchIds) || !couponData.branchIds.length || couponData.branchIds.includes(branchId)) ? couponData : null;
       const couponResult = calculateCoupon(coupon, pricedItems, { usageCount: Number(coupon?.usageCount || 0), phoneUsageCount: Number(baseReads[3]?.data()?.count || 0) });
-      const subtotal = pricedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+      const subtotal = allPricedItems.reduce((sum, item) => sum + item.lineTotal, 0);
       const discount = couponResult.valid ? couponResult.discountAmount : 0;
       const total = Math.max(0, subtotal - discount);
       const now = FieldValue.serverTimestamp();
+      const publicItems = allPricedItems.map(({ ref, ...item }) => item);
       const record = {
         code,
         branchId,
@@ -198,9 +272,9 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         partySize: Math.max(1, Math.min(10, Number(data.partySize || 1))),
         phone: customer.phone,
         phoneHash: hash(customer.phone),
-        items: pricedItems,
-        itemIds: pricedItems.map(item => item.id),
-        serviceNamesAr: pricedItems.map(item => item.nameAr),
+        items: publicItems,
+        itemIds: publicItems.map(item => item.id),
+        serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`),
         staffId: assigned?.id || "none",
         staffNameAr: assigned?.nameAr || "لا يحتاج عضو فريق",
         staffNameEn: assigned?.nameEn || "No staff required",
@@ -229,6 +303,10 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
       if (assigned?.id) transaction.update(db.doc(`staff/${assigned.id}`), { bookingCount: FieldValue.increment(1), updatedAt: now });
       assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now }));
+      inventoryItems.forEach(item => {
+        transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
+        transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId, bookingId: code, quantity: -item.qty, type: "booking-sale", dateKey: businessDateParts().dateKey, createdAt: now, source: "website" });
+      });
       if (couponResult.valid) {
         transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now });
         transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now }, { merge: true });
@@ -236,8 +314,9 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       return { ok: true, bookingCode: code, branchId, branchNameAr: branch.nameAr, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, staffId: assigned?.id || null, staffNameAr: assigned?.nameAr || null };
     });
   } catch (error) {
-    const messages = { DUPLICATE_REQUEST: "تم إرسال هذا الطلب من قبل", DUPLICATE_BOOKING: "يوجد حجز مطابق لهذا الرقم والموعد", SLOT_UNAVAILABLE: "الموعد غير متاح، اختر وقتًا آخر" };
-    throw new HttpsError("already-exists", messages[error.message] || "تعذر إنشاء الحجز");
+    const messages = { DUPLICATE_REQUEST: "تم إرسال هذا الطلب من قبل", DUPLICATE_BOOKING: "يوجد حجز مطابق لهذا الرقم والموعد", SLOT_UNAVAILABLE: "الموعد غير متاح، اختر وقتًا آخر", DRINK_UNAVAILABLE: "أحد المشروبات غير متاح في هذا الفرع", DRINK_STOCK: "الكمية المطلوبة من أحد المشروبات غير متاحة", DRINK_PRICE: "سعر أحد المشروبات غير صحيح", DRINK_OPTION: "اختيار تحضير المشروب غير صحيح" };
+    const code = ["DUPLICATE_REQUEST", "DUPLICATE_BOOKING"].includes(error.message) ? "already-exists" : "failed-precondition";
+    throw new HttpsError(code, messages[error.message] || "تعذر إنشاء الحجز");
   }
 });
 
@@ -248,12 +327,14 @@ export const submitReview = onCall(publicOptions, async request => {
   const bookingCodeValue = sanitizeText(request.data?.bookingCode, 40).toUpperCase();
   const rating = Math.max(1, Math.min(5, Math.round(Number(request.data?.rating || 5))));
   if (!name || !comment) throw new HttpsError("invalid-argument", "بيانات التقييم غير مكتملة");
+  let verifiedBooking = null;
   if (bookingCodeValue) {
     const booking = await db.doc(`bookings/${bookingCodeValue}`).get();
     if (!booking.exists) throw new HttpsError("not-found", "كود الحجز غير صحيح");
+    verifiedBooking = booking.data();
   }
   const ref = db.collection("reviews").doc();
-  await ref.set({ name, comment, rating, bookingCode: bookingCodeValue || null, status: "pending", active: false, createdAt: FieldValue.serverTimestamp() });
+  await ref.set({ name, comment, rating, bookingCode: bookingCodeValue || null, verified: Boolean(verifiedBooking), branchId: verifiedBooking?.branchId || null, status: "pending", active: false, createdAt: FieldValue.serverTimestamp() });
   return { ok: true, id: ref.id };
 });
 
@@ -282,27 +363,38 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
     if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
     const booking = snapshot.data();
     if (!["pending", "confirmed"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إلغاء هذا الحجز من الموقع");
+    const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
+    const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
+    const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
     for (const lockId of booking.lockIds || []) transaction.delete(db.doc(`appointmentLocks/${lockId}`));
     if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
-    transaction.update(ref, { status: "cancelled", cancellationSource: "customer", updatedAt: FieldValue.serverTimestamp() });
+    inventorySnapshots.forEach((inventory, index) => {
+      if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: FieldValue.serverTimestamp() });
+      transaction.delete(db.doc(`stockMovements/${code}_${soldInventory[index].id}`));
+    });
+    transaction.update(ref, { status: "cancelled", cancellationSource: "customer", inventoryReleased: soldInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: FieldValue.serverTimestamp() });
   });
   return { ok: true };
 });
 
 export const getAdminDashboard = onCall({ region }, async request => {
   requireRole(request);
-  const [bookingsSnap, ledgerSnap] = await Promise.all([
+  const [bookingsSnap, ledgerSnap, expensesSnap] = await Promise.all([
     db.collection("bookings").orderBy("createdAt", "desc").limit(500).get(),
-    db.collection("revenueLedger").orderBy("createdAt", "desc").limit(1000).get()
+    db.collection("revenueLedger").orderBy("createdAt", "desc").limit(1000).get(),
+    db.collection("expenses").orderBy("createdAt", "desc").limit(1000).get()
   ]);
   const bookings = bookingsSnap.docs.map(cleanDoc);
   const ledger = ledgerSnap.docs.map(cleanDoc);
-  const today = new Date().toISOString().slice(0, 10);
+  const expenses = expensesSnap.docs.map(cleanDoc);
+  const today = businessDateParts().dateKey;
   const month = today.slice(0, 7);
   const revenue = period => ledger.filter(item => !period || String(item.dateKey || "").startsWith(period)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const expenseTotal = period => expenses.filter(item => !period || String(item.dateKey || "").startsWith(period)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   return {
     bookings,
     ledger,
+    expenses,
     stats: {
       bookingCount: bookings.length,
       todayBookings: bookings.filter(item => item.bookingDate === today).length,
@@ -311,6 +403,11 @@ export const getAdminDashboard = onCall({ region }, async request => {
       todayRevenue: revenue(today),
       monthRevenue: revenue(month),
       totalRevenue: revenue(),
+      todayExpenses: expenseTotal(today),
+      monthExpenses: expenseTotal(month),
+      totalExpenses: expenseTotal(),
+      monthNetProfit: revenue(month) - expenseTotal(month),
+      totalNetProfit: revenue() - expenseTotal(),
       lastCollected: ledger.find(item => item.type === "payment")?.amount || 0
     }
   };
@@ -319,7 +416,7 @@ export const getAdminDashboard = onCall({ region }, async request => {
 export const getAdminCollection = onCall({ region }, async request => {
   const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
-  const allowed = [...ADMIN_COLLECTIONS, "customers", "activityLogs", "users", "revenueLedger"];
+  const allowed = [...ADMIN_COLLECTIONS, "customers", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
   if (!allowed.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   if (collection === "users" && role !== "admin") throw new HttpsError("permission-denied", "صلاحية المدير مطلوبة");
   if (collection === "settings") {
@@ -335,14 +432,39 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.id;
   delete payload.createdAt;
   delete payload.updatedAt;
-  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
-  ["active", "available", "showCountdown", "startsFrom", "closed"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
+  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
+  ["active", "available", "showCountdown", "startsFrom", "closed", "featured"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
   ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
   ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
   if (collection === "coupons") payload.code = sanitizeText(payload.code || raw.id, 30).toUpperCase();
   if (collection === "branches") {
     payload.code = sanitizeText(payload.code, 3).toUpperCase();
+  }
+  if (collection === "inventoryItems") {
+    if ("category" in payload) payload.category = INVENTORY_CATEGORIES.includes(payload.category) ? payload.category : "product";
+    if ("branchId" in payload) payload.branchId = sanitizeText(payload.branchId || "talkha", 40).toLowerCase();
+    if ("nameAr" in payload) payload.nameAr = sanitizeText(payload.nameAr, 100);
+    if ("unit" in payload) payload.unit = sanitizeText(payload.unit || "قطعة", 30);
+    if (("nameAr" in payload && !payload.nameAr) || ("sellingPrice" in payload && payload.sellingPrice < 0) || ("costPrice" in payload && payload.costPrice < 0) || ("stockQty" in payload && payload.stockQty < 0)) throw new HttpsError("invalid-argument", "بيانات الصنف غير صحيحة");
+  }
+  if (collection === "drinks") {
+    if ("nameAr" in payload) payload.nameAr = sanitizeText(payload.nameAr, 100);
+    if ("nameEn" in payload) payload.nameEn = sanitizeText(payload.nameEn || payload.nameAr, 100);
+    if ("type" in payload) payload.type = DRINK_TYPES.includes(payload.type) ? payload.type : "other";
+    if ("branchId" in payload) payload.branchId = sanitizeText(payload.branchId || "talkha", 40).toLowerCase();
+    if ("drinkOptions" in payload) payload.drinkOptions = normalizeDrinkOptions(payload.drinkOptions);
+    if (("nameAr" in payload && !payload.nameAr) || ("price" in payload && payload.price < 0) || ("branchId" in payload && !/^[a-z0-9-]{2,40}$/.test(payload.branchId))) throw new HttpsError("invalid-argument", "بيانات المشروب غير صحيحة");
+  }
+  if (collection === "reviews") {
+    if ("name" in payload) payload.name = sanitizeText(payload.name, 60);
+    if ("comment" in payload) payload.comment = sanitizeText(payload.comment, 500);
+    if ("adminReply" in payload) payload.adminReply = sanitizeText(payload.adminReply, 500);
+    if ("rating" in payload) payload.rating = Math.max(1, Math.min(5, Math.round(Number(payload.rating || 5))));
+    if ("status" in payload) {
+      payload.status = ["pending", "published", "rejected"].includes(payload.status) ? payload.status : "pending";
+      payload.active = payload.status === "published";
+    } else if ("active" in payload) payload.status = payload.active ? "published" : "pending";
   }
   return payload;
 }
@@ -382,6 +504,350 @@ export const adminDelete = onCall({ region }, async request => {
   return { ok: true };
 });
 
+export const getBusinessDashboard = onCall({ region }, async request => {
+  requireRole(request);
+  const currentMonth = businessDateParts().month;
+  const month = sanitizeText(request.data?.month || currentMonth, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
+  const [staffSnapshot, ledgerSnapshot, expensesSnapshot, inventorySnapshot, drinksSnapshot, payrollSnapshot, reviewsSnapshot, bookingsSnapshot] = await Promise.all([
+    db.collection("staff").limit(200).get(),
+    db.collection("revenueLedger").limit(5000).get(),
+    db.collection("expenses").limit(3000).get(),
+    db.collection("inventoryItems").limit(500).get(),
+    db.collection("drinks").limit(300).get(),
+    db.collection("payrollPayments").where("month", "==", month).limit(300).get(),
+    db.collection("reviews").limit(500).get(),
+    db.collection("bookings").limit(5000).get()
+  ]);
+  const bookings = new Map(bookingsSnapshot.docs.map(snapshot => [snapshot.id, cleanDoc(snapshot)]));
+  const ledger = ledgerSnapshot.docs.map(cleanDoc).filter(item => String(item.dateKey || "").startsWith(month)).map(item => {
+    const booking = bookings.get(item.bookingId || item.bookingCode);
+    const breakdown = item.revenueBreakdown || calculateRevenueBreakdown(booking?.items || [], item.amount);
+    return { ...item, revenueBreakdown: breakdown };
+  });
+  const inventory = inventorySnapshot.docs.map(cleanDoc).filter(item => item.category !== "drink").sort((a, b) => String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const drinks = drinksSnapshot.docs.map(cleanDoc).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const inventoryById = new Map(inventory.map(item => [item.id, item]));
+  const expenses = expensesSnapshot.docs.map(cleanDoc).filter(item => String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
+  const payrollPayments = new Map(payrollSnapshot.docs.map(snapshot => [snapshot.data().staffId, cleanDoc(snapshot)]));
+  const payroll = staffSnapshot.docs.map(snapshot => {
+    const staff = cleanDoc(snapshot);
+    const revenue = ledger.filter(item => item.staffId === staff.id).reduce((sum, item) => sum + Number(item.revenueBreakdown?.services || 0), 0);
+    return { ...staff, ...calculatePayroll({ ...staff, revenue }), payment: payrollPayments.get(staff.id) || null };
+  }).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  const grossRevenue = ledger.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const reviews = reviewsSnapshot.docs.map(cleanDoc).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const productPurchaseCost = expenses.filter(item => item.category === "inventory" && item.inventoryCategory !== "drink").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const drinkRevenue = ledger.reduce((sum, item) => sum + Number(item.revenueBreakdown?.drinks || 0), 0);
+  return {
+    month,
+    payroll,
+    expenses,
+    inventory,
+    drinks,
+    reviews,
+    stats: {
+      grossRevenue,
+      totalExpenses,
+      netProfit: grossRevenue - totalExpenses,
+      inventoryValue: inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0),
+      productPurchaseCost,
+      drinkRevenue,
+      drinkCount: drinks.filter(item => item.active !== false).length,
+      productStockValue: inventory.reduce((sum, item) => sum + Number(item.costPrice || 0) * Number(item.stockQty || 0), 0),
+      productLowStock: inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length,
+      lowStockCount: inventory.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length,
+      pendingReviews: reviews.filter(item => item.active !== true).length
+    }
+  };
+});
+
+export const recordExpense = onCall({ region }, async request => {
+  requireRole(request, ["admin", "manager", "accountant"]);
+  const amount = Number(request.data?.amount || 0);
+  const category = sanitizeText(request.data?.category, 30);
+  const description = sanitizeText(request.data?.description, 200);
+  const branchId = sanitizeText(request.data?.branchId || "talkha", 40).toLowerCase();
+  const dateKey = sanitizeText(request.data?.dateKey || businessDateParts().dateKey, 10);
+  const inventoryItemId = sanitizeText(request.data?.inventoryItemId, 100);
+  const stockQuantity = Math.max(0, Number(request.data?.stockQuantity || 0));
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000 || !EXPENSE_CATEGORIES.includes(category) || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new HttpsError("invalid-argument", "بيانات المصروف غير صحيحة");
+  const expenseRef = db.collection("expenses").doc();
+  const inventoryRef = category === "inventory" && inventoryItemId ? db.doc(`inventoryItems/${inventoryItemId}`) : null;
+  const activityRef = db.collection("activityLogs").doc();
+  await db.runTransaction(async transaction => {
+    const inventorySnapshot = inventoryRef ? await transaction.get(inventoryRef) : null;
+    if (inventoryRef && !inventorySnapshot.exists) throw new HttpsError("not-found", "صنف المخزون غير موجود");
+    transaction.create(expenseRef, { amount, category, description, branchId, dateKey, inventoryItemId: inventoryRef ? inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? stockQuantity : 0, paymentMethod: sanitizeText(request.data?.paymentMethod || "cash", 30), createdAt: FieldValue.serverTimestamp(), createdBy: request.auth.uid });
+    if (inventorySnapshot?.exists && stockQuantity > 0) {
+      const oldQuantity = Math.max(0, Number(inventorySnapshot.data().stockQty || 0));
+      const oldCost = Math.max(0, Number(inventorySnapshot.data().costPrice || 0));
+      const weightedCost = (oldQuantity * oldCost + amount) / (oldQuantity + stockQuantity);
+      transaction.update(inventoryRef, { stockQty: FieldValue.increment(stockQuantity), costPrice: Math.round(weightedCost * 100) / 100, updatedAt: FieldValue.serverTimestamp() });
+    }
+    transaction.set(activityRef, { action: "record-expense", collection: "expenses", entityId: expenseRef.id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  });
+  return { ok: true, id: expenseRef.id };
+});
+
+export const createPosOrder = onCall({ region }, async request => {
+  requireRole(request, ["admin", "manager", "receptionist"]);
+  const branch = await readBranch(request.data?.branchId);
+  const customer = {
+    firstName: sanitizeText(request.data?.customer?.firstName, 50),
+    lastName: sanitizeText(request.data?.customer?.lastName, 50),
+    phone: ""
+  };
+  try { customer.phone = normalizePhone(request.data?.customer?.phone); }
+  catch { throw new HttpsError("invalid-argument", "رقم هاتف العميل غير صحيح"); }
+  if (!customer.firstName) throw new HttpsError("invalid-argument", "اكتب اسم العميل");
+  const rawLines = Array.isArray(request.data?.items) ? request.data.items.slice(0, 40) : [];
+  if (!rawLines.length || rawLines.some(line => !sanitizeText(line?.id, 100) || !["service", "package", "offer", "product", "inventory", "drink"].includes(sanitizeText(line?.kind, 20)))) throw new HttpsError("invalid-argument", "عناصر الشيك غير صحيحة");
+  const catalogLines = rawLines.filter(line => !["inventory", "drink"].includes(line.kind));
+  const inventoryLines = rawLines.filter(line => line.kind === "inventory");
+  const drinkLines = rawLines.filter(line => line.kind === "drink");
+  if (new Set(inventoryLines.map(line => sanitizeText(line.id, 100))).size !== inventoryLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس صنف المخزون في الطلب");
+  if (new Set(drinkLines.map(line => sanitizeText(line.id, 100))).size !== drinkLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس المشروب في الطلب");
+  let catalogItems = [];
+  if (catalogLines.length) {
+    try { catalogItems = await fetchPricedItems(catalogLines, branch.id); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  }
+  const staffId = sanitizeText(request.data?.staffId || "none", 100);
+  let staff = null;
+  if (staffId !== "none") {
+    const staffSnapshot = await db.doc(`staff/${staffId}`).get();
+    if (!staffSnapshot.exists || staffSnapshot.data().active === false) throw new HttpsError("failed-precondition", "العامل غير متاح");
+    staff = cleanDoc(staffSnapshot);
+    if (Array.isArray(staff.branchIds) && staff.branchIds.length && !staff.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "العامل غير متاح في الفرع المختار");
+  }
+  const method = sanitizeText(request.data?.paymentMethod || "cash", 30);
+  if (!["cash", "vodafone_cash", "instapay", "other"].includes(method)) throw new HttpsError("invalid-argument", "طريقة الدفع غير صحيحة");
+  const paid = request.data?.paid !== false;
+  const code = bookingCode(branch.code);
+  const bookingRef = db.doc(`bookings/${code}`);
+  const customerRef = db.doc(`customers/${hash(customer.phone)}`);
+  const ledgerRef = db.doc(`revenueLedger/payment_${code}`);
+  const inventoryRefs = inventoryLines.map(line => db.doc(`inventoryItems/${sanitizeText(line.id, 100)}`));
+  const drinkRefs = drinkLines.map(line => db.doc(`drinks/${sanitizeText(line.id, 100)}`));
+  const activityRef = db.collection("activityLogs").doc();
+  const { dateKey, time } = businessDateParts();
+  return db.runTransaction(async transaction => {
+    const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
+    const inventoryItems = inventorySnapshots.map((snapshot, index) => {
+      if (!snapshot.exists || snapshot.data().active === false || snapshot.data().category === "supply") throw new HttpsError("failed-precondition", "أحد أصناف البضاعة غير متاح للبيع");
+      const source = snapshot.data();
+      const qty = Math.max(1, Math.min(100, Math.floor(Number(inventoryLines[index].qty || 1))));
+      if (Number(source.stockQty || 0) < qty) throw new HttpsError("failed-precondition", `الكمية غير كافية من ${source.nameAr || "الصنف"}`);
+      const unitPrice = Number(source.sellingPrice || 0);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new HttpsError("failed-precondition", "سعر الصنف غير صحيح");
+      return { id: snapshot.id, kind: "inventory", category: source.category, nameAr: source.nameAr, nameEn: source.nameEn || source.nameAr, option: null, qty, unitPrice, lineTotal: unitPrice * qty, duration: 0, staffRequired: false, ref: snapshot.ref };
+    });
+    const drinkSnapshots = drinkRefs.length ? await transaction.getAll(...drinkRefs) : [];
+    let drinkItems;
+    try { drinkItems = priceDrinkSnapshots(drinkSnapshots, drinkLines, branch.id); }
+    catch (error) {
+      const messages = { DRINK_UNAVAILABLE: "أحد المشروبات غير متاح في هذا الفرع", DRINK_PRICE: "سعر أحد المشروبات غير صحيح", DRINK_OPTION: "اختيار تحضير المشروب غير صحيح" };
+      throw new HttpsError("failed-precondition", messages[error.message] || "بيانات المشروب غير صحيحة");
+    }
+    const items = [...catalogItems, ...inventoryItems, ...drinkItems];
+    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+    const discountAmount = Math.max(0, Math.min(subtotal, Number(request.data?.discountAmount || 0)));
+    const total = subtotal - discountAmount;
+    const now = FieldValue.serverTimestamp();
+    const publicItems = items.map(({ ref, ...item }) => item);
+    const revenueBreakdown = calculateRevenueBreakdown(publicItems, total);
+    transaction.create(bookingRef, { code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: staff?.id || "none", staffNameAr: staff?.nameAr || "بدون عامل", staffNameEn: staff?.nameEn || "No staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, discountPercent: subtotal ? Math.round(discountAmount / subtotal * 10000) / 100 : 0, total, status: "completed", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", createdAt: now, updatedAt: now, paidAt: paid ? now : null });
+    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBranchId: branch.id, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
+    if (staff) transaction.update(db.doc(`staff/${staff.id}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(revenueBreakdown.services) } : {}), updatedAt: now });
+    if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, type: "payment", paymentMethod: method, staffId: staff?.id || "none", itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
+    inventoryItems.forEach(item => {
+      transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
+      transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
+    });
+    transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid" };
+  });
+});
+
+export const recordPayrollPayment = onCall({ region }, async request => {
+  requireRole(request, ["admin"]);
+  const month = sanitizeText(request.data?.month, 7);
+  const staffId = sanitizeText(request.data?.staffId, 100);
+  const adjustment = Number(request.data?.adjustment || 0);
+  if (!/^\d{4}-\d{2}$/.test(month) || !staffId || !Number.isFinite(adjustment) || Math.abs(adjustment) > 1000000) throw new HttpsError("invalid-argument", "بيانات صرف الراتب غير صحيحة");
+  const [staffSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("revenueLedger").limit(5000).get()]);
+  if (!staffSnapshot.exists) throw new HttpsError("not-found", "العامل غير موجود");
+  const staff = staffSnapshot.data();
+  const revenue = ledgerSnapshot.docs.map(snapshot => snapshot.data()).filter(item => item.staffId === staffId && String(item.dateKey || "").startsWith(month)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const calculated = calculatePayroll({ ...staff, revenue, adjustment });
+  if (calculated.netSalary <= 0) throw new HttpsError("failed-precondition", "حدد الراتب الأساسي للعامل من قسم فريق العمل أولًا");
+  const payrollRef = db.doc(`payrollPayments/${month}_${staffId}`);
+  const expenseRef = db.doc(`expenses/salary_${month}_${staffId}`);
+  const activityRef = db.collection("activityLogs").doc();
+  await db.runTransaction(async transaction => {
+    const existing = await transaction.get(payrollRef);
+    if (existing.exists) throw new HttpsError("already-exists", "تم تسجيل صرف راتب هذا العامل لهذا الشهر");
+    const now = FieldValue.serverTimestamp();
+    transaction.create(payrollRef, { month, staffId, staffNameAr: staff.nameAr || staffId, ...calculated, status: "paid", paidAt: now, createdBy: request.auth.uid });
+    transaction.create(expenseRef, { amount: calculated.netSalary, category: "salary", description: `راتب ${staff.nameAr || staffId} عن ${month}`, branchId: Array.isArray(staff.branchIds) && staff.branchIds.length === 1 ? staff.branchIds[0] : "all", dateKey: businessDateParts().dateKey, payrollPaymentId: payrollRef.id, staffId, month, paymentMethod: sanitizeText(request.data?.paymentMethod || "cash", 30), createdAt: now, createdBy: request.auth.uid });
+    transaction.set(activityRef, { action: "pay-salary", collection: "payrollPayments", entityId: payrollRef.id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+  });
+  return { ok: true, payroll: calculated };
+});
+
+async function deleteBookingPermanently(id, request) {
+  const bookingRef = db.doc(`bookings/${id}`);
+  const paymentRef = db.doc(`revenueLedger/payment_${id}`);
+  const refundRef = db.doc(`revenueLedger/refund_${id}`);
+  const activityRef = db.collection("activityLogs").doc();
+  return db.runTransaction(async transaction => {
+    const [bookingSnapshot, paymentSnapshot, refundSnapshot] = await transaction.getAll(bookingRef, paymentRef, refundRef);
+    if (!bookingSnapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
+    const booking = bookingSnapshot.data();
+    const ledgerSnapshots = [paymentSnapshot, refundSnapshot].filter(snapshot => snapshot.exists);
+    const netRevenue = ledgerSnapshots.reduce((sum, snapshot) => sum + Number(snapshot.data().amount || 0), 0);
+    const netStaffRevenue = ledgerSnapshots.reduce((sum, snapshot) => sum + Number(snapshot.data().revenueBreakdown?.services ?? snapshot.data().amount ?? 0), 0);
+    const staffRef = booking.staffId && booking.staffId !== "none" ? db.doc(`staff/${booking.staffId}`) : null;
+    const customerRef = booking.phoneHash ? db.doc(`customers/${booking.phoneHash}`) : null;
+    const couponRef = booking.couponCode ? db.doc(`coupons/${booking.couponCode}`) : null;
+    const couponUsageRef = booking.couponCode && booking.phoneHash ? db.doc(`couponUsage/${booking.couponCode}_${booking.phoneHash}`) : null;
+    const soldInventory = (booking.items || []).filter(item => item.kind === "inventory" && item.id);
+    const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
+    const relatedRefs = [staffRef, customerRef, couponRef, couponUsageRef, ...inventoryRefs].filter(Boolean);
+    const relatedSnapshots = relatedRefs.length ? await transaction.getAll(...relatedRefs) : [];
+    const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
+    const customerBookings = customerRef ? await transaction.get(db.collection("bookings").where("phoneHash", "==", booking.phoneHash).limit(500)) : null;
+    const previousBooking = customerBookings?.docs.filter(snapshot => snapshot.id !== id).sort((a, b) => Number(b.data().createdAt?.toMillis?.() || 0) - Number(a.data().createdAt?.toMillis?.() || 0))[0]?.data();
+
+    ledgerSnapshots.forEach(snapshot => transaction.delete(snapshot.ref));
+    (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
+    if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
+    soldInventory.forEach(item => {
+      const inventoryRef = db.doc(`inventoryItems/${item.id}`);
+      if (!booking.inventoryReleased && related.get(inventoryRef.path)?.exists) transaction.update(inventoryRef, { stockQty: FieldValue.increment(Math.max(1, Number(item.qty || 1))), updatedAt: FieldValue.serverTimestamp() });
+      transaction.delete(db.doc(`stockMovements/${id}_${item.id}`));
+    });
+    transaction.delete(bookingRef);
+
+    const staffSnapshot = staffRef ? related.get(staffRef.path) : null;
+    if (staffSnapshot?.exists) {
+      const staff = staffSnapshot.data();
+      transaction.update(staffRef, {
+        bookingCount: Math.max(0, Number(staff.bookingCount || 0) - 1),
+        revenueTotal: Math.max(0, Number(staff.revenueTotal || 0) - netStaffRevenue),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    const customerSnapshot = customerRef ? related.get(customerRef.path) : null;
+    if (customerSnapshot?.exists) {
+      const customer = customerSnapshot.data();
+      const bookingCount = Math.max(0, Number(customer.bookingCount || 0) - 1);
+      transaction.update(customerRef, {
+        bookingCount,
+        totalSpent: Math.max(0, Number(customer.totalSpent || 0) - netRevenue),
+        lastBookingAt: previousBooking?.createdAt || null,
+        lastBranchId: previousBooking?.branchId || null,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    const couponSnapshot = couponRef ? related.get(couponRef.path) : null;
+    if (couponSnapshot?.exists) {
+      const coupon = couponSnapshot.data();
+      transaction.update(couponRef, {
+        usageCount: Math.max(0, Number(coupon.usageCount || 0) - 1),
+        discountTotal: Math.max(0, Number(coupon.discountTotal || 0) - Number(booking.discountAmount || 0)),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    const couponUsageSnapshot = couponUsageRef ? related.get(couponUsageRef.path) : null;
+    if (couponUsageSnapshot?.exists) {
+      const usage = couponUsageSnapshot.data();
+      transaction.update(couponUsageRef, {
+        count: Math.max(0, Number(usage.count || 0) - 1),
+        discountTotal: Math.max(0, Number(usage.discountTotal || 0) - Number(booking.discountAmount || 0)),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    transaction.set(activityRef, { action: "secure-delete-booking", collection: "bookings", entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    return { ok: true };
+  });
+}
+
+async function deleteRevenuePermanently(id, request) {
+  const ledgerRef = db.doc(`revenueLedger/${id}`);
+  const activityRef = db.collection("activityLogs").doc();
+  return db.runTransaction(async transaction => {
+    const ledgerSnapshot = await transaction.get(ledgerRef);
+    if (!ledgerSnapshot.exists) throw new HttpsError("not-found", "عملية الإيراد غير موجودة");
+    const ledger = ledgerSnapshot.data();
+    const bookingId = sanitizeText(ledger.bookingId, 100);
+    const bookingRef = bookingId ? db.doc(`bookings/${bookingId}`) : null;
+    const refundRef = ledger.type === "payment" && bookingId ? db.doc(`revenueLedger/refund_${bookingId}`) : null;
+    const firstRefs = [bookingRef, refundRef].filter(Boolean);
+    const firstSnapshots = firstRefs.length ? await transaction.getAll(...firstRefs) : [];
+    const first = new Map(firstSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
+    if (refundRef && first.get(refundRef.path)?.exists) throw new HttpsError("failed-precondition", "احذف عملية الاسترداد أولًا ثم احذف عملية الدفع");
+    const bookingSnapshot = bookingRef ? first.get(bookingRef.path) : null;
+    const booking = bookingSnapshot?.exists ? bookingSnapshot.data() : null;
+    const staffId = sanitizeText(ledger.staffId || booking?.staffId, 100);
+    const staffRef = staffId && staffId !== "none" ? db.doc(`staff/${staffId}`) : null;
+    const customerRef = booking?.phoneHash ? db.doc(`customers/${booking.phoneHash}`) : null;
+    const relatedRefs = [staffRef, customerRef].filter(Boolean);
+    const relatedSnapshots = relatedRefs.length ? await transaction.getAll(...relatedRefs) : [];
+    const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
+    const amount = Number(ledger.amount || 0);
+    const staffAmount = Number(ledger.revenueBreakdown?.services ?? amount);
+
+    const staffSnapshot = staffRef ? related.get(staffRef.path) : null;
+    if (staffSnapshot?.exists) transaction.update(staffRef, { revenueTotal: Math.max(0, Number(staffSnapshot.data().revenueTotal || 0) - staffAmount), updatedAt: FieldValue.serverTimestamp() });
+    const customerSnapshot = customerRef ? related.get(customerRef.path) : null;
+    if (customerSnapshot?.exists) transaction.update(customerRef, { totalSpent: Math.max(0, Number(customerSnapshot.data().totalSpent || 0) - amount), updatedAt: FieldValue.serverTimestamp() });
+    if (bookingSnapshot?.exists) {
+      transaction.update(bookingRef, ledger.type === "refund"
+        ? { paymentStatus: "paid", refundedAt: null, updatedAt: FieldValue.serverTimestamp() }
+        : { paymentStatus: "unpaid", paymentMethod: null, paidAt: null, updatedAt: FieldValue.serverTimestamp() });
+    }
+    transaction.delete(ledgerRef);
+    transaction.set(activityRef, { action: "secure-delete-revenue", collection: "revenueLedger", entityId: id, bookingId, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    return { ok: true };
+  });
+}
+
+async function deleteExpensePermanently(id, request) {
+  const expenseRef = db.doc(`expenses/${id}`);
+  const activityRef = db.collection("activityLogs").doc();
+  return db.runTransaction(async transaction => {
+    const expenseSnapshot = await transaction.get(expenseRef);
+    if (!expenseSnapshot.exists) throw new HttpsError("not-found", "المصروف غير موجود");
+    const expense = expenseSnapshot.data();
+    const inventoryRef = expense.inventoryItemId ? db.doc(`inventoryItems/${expense.inventoryItemId}`) : null;
+    const payrollRef = expense.payrollPaymentId ? db.doc(`payrollPayments/${expense.payrollPaymentId}`) : null;
+    const relatedRefs = [inventoryRef, payrollRef].filter(Boolean);
+    const relatedSnapshots = relatedRefs.length ? await transaction.getAll(...relatedRefs) : [];
+    const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
+    if (inventoryRef && related.get(inventoryRef.path)?.exists && Number(expense.stockQuantity || 0) > 0) {
+      const item = related.get(inventoryRef.path).data();
+      transaction.update(inventoryRef, { stockQty: Math.max(0, Number(item.stockQty || 0) - Number(expense.stockQuantity || 0)), updatedAt: FieldValue.serverTimestamp() });
+    }
+    if (payrollRef && related.get(payrollRef.path)?.exists) transaction.delete(payrollRef);
+    transaction.delete(expenseRef);
+    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    return { ok: true };
+  });
+}
+
+export const adminSecureDelete = onCall({ region }, async request => {
+  requireRecentAdmin(request);
+  const kind = sanitizeText(request.data?.kind, 30);
+  const id = sanitizeText(request.data?.id, 100);
+  if (!id || !["booking", "revenue", "expense"].includes(kind)) throw new HttpsError("invalid-argument", "طلب الحذف غير صالح");
+  if (kind === "booking") return deleteBookingPermanently(id, request);
+  if (kind === "revenue") return deleteRevenuePermanently(id, request);
+  return deleteExpensePermanently(id, request);
+});
+
 export const updateBooking = onCall({ region }, async request => {
   const role = requireRole(request);
   const id = sanitizeText(request.data?.id, 100);
@@ -394,11 +860,19 @@ export const updateBooking = onCall({ region }, async request => {
     const now = FieldValue.serverTimestamp();
     if (["pending", "confirmed", "rejected", "cancelled", "completed"].includes(action)) {
       if (!["admin", "manager", "receptionist"].includes(role)) throw new HttpsError("permission-denied", "لا تملك صلاحية تعديل حالة الحجز");
+      const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
+      if (!["rejected", "cancelled"].includes(action) && booking.inventoryReleased && (booking.items || []).some(item => item.kind === "inventory")) throw new HttpsError("failed-precondition", "لا يمكن إعادة فتح الحجز بعد رجوع المشروبات للمخزون؛ أنشئ طلبًا جديدًا");
       if (["rejected", "cancelled"].includes(action)) {
+        const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
+        const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
+        inventorySnapshots.forEach((inventory, index) => {
+          if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: now });
+          transaction.delete(db.doc(`stockMovements/${id}_${soldInventory[index].id}`));
+        });
         (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
         if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
       }
-      transaction.update(ref, { status: action, updatedAt: now });
+      transaction.update(ref, { status: action, ...(["rejected", "cancelled"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), updatedAt: now });
       return { ok: true, status: action };
     }
     let transition;
@@ -411,9 +885,10 @@ export const updateBooking = onCall({ region }, async request => {
     const ledger = await transaction.get(ledgerRef);
     if (ledger.exists) return { ok: true, idempotent: true, paymentStatus: transition.status };
     const dateKey = new Date().toISOString().slice(0, 10);
-    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
+    const revenueBreakdown = calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount);
+    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
     transaction.update(ref, { paymentStatus: transition.status, paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, updatedAt: now });
-    if (booking.staffId && booking.staffId !== "none") transaction.update(db.doc(`staff/${booking.staffId}`), { revenueTotal: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
+    if (booking.staffId && booking.staffId !== "none") transaction.update(db.doc(`staff/${booking.staffId}`), { revenueTotal: FieldValue.increment(revenueBreakdown.services), updatedAt: now });
     if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
     return { ok: true, paymentStatus: transition.status };
   });

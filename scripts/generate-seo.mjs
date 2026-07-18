@@ -20,7 +20,7 @@ await writeFile("public/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
   <url><loc>${origin}/branches/mashaya/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
 </urlset>
 `, "utf8");
-const logo = await readFile("public/assets/el-mezaen-mark-v2.png");
+const logo = await readFile("public/assets/el-mezaen-mark-v2.webp");
 const embeddedLogo = logo.toString("base64");
-await writeFile("public/assets/icon.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="180" fill="#071a2c"/><image href="data:image/png;base64,${embeddedLogo}" x="92" y="92" width="840" height="840" preserveAspectRatio="xMidYMid meet"/></svg>`, "utf8");
+await writeFile("public/assets/icon.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="180" fill="#071a2c"/><image href="data:image/webp;base64,${embeddedLogo}" x="92" y="92" width="840" height="840" preserveAspectRatio="xMidYMid meet"/></svg>`, "utf8");
 console.log(`SEO files generated for ${siteUrl}`);

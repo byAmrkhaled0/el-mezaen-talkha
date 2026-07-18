@@ -1,10 +1,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, createSlotKeys, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isRecentAuthentication, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
   assert.throws(() => normalizePhone("123"), /INVALID_PHONE/);
+});
+
+test("requires a recent administrator authentication for destructive actions", () => {
+  assert.equal(isRecentAuthentication(1_000, 1_299), true);
+  assert.equal(isRecentAuthentication(1_000, 1_301), false);
+  assert.equal(isRecentAuthentication(undefined, 1_100), false);
+  assert.equal(isRecentAuthentication(1_200, 1_100), false);
+});
+
+test("calculates target bonus and final monthly salary", () => {
+  assert.deepEqual(calculatePayroll({ baseSalary: 5000, monthlyTarget: 20000, targetBonusPercent: 10, revenue: 22000, adjustment: -250 }), {
+    baseSalary: 5000,
+    monthlyTarget: 20000,
+    targetBonusPercent: 10,
+    revenue: 22000,
+    targetAchieved: true,
+    progressPercent: 100,
+    bonus: 500,
+    adjustment: -250,
+    netSalary: 5250
+  });
+  assert.equal(calculatePayroll({ baseSalary: 5000, monthlyTarget: 20000, targetBonusPercent: 10, revenue: 12000 }).bonus, 0);
+});
+
+test("separates service, product and drink income after discount", () => {
+  const breakdown = calculateRevenueBreakdown([
+    { kind: "service", lineTotal: 100 },
+    { kind: "inventory", category: "product", lineTotal: 60 },
+    { kind: "drink", category: "drink", lineTotal: 40 }
+  ], 180);
+  assert.deepEqual(breakdown, { services: 90, products: 54, drinks: 36 });
+  assert.deepEqual(calculateRevenueBreakdown([{ kind: "drink", category: "drink", lineTotal: 40 }], -40), { services: 0, products: 0, drinks: -40 });
 });
 
 test("prices only from trusted server documents", () => {

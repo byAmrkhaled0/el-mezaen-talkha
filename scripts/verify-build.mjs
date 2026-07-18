@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "assets/el-mezaen-logo.jpeg", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -10,11 +10,16 @@ const index = await readFile("dist/index.html", "utf8");
 const admin = await readFile("dist/admin/index.html", "utf8");
 const login = await readFile("dist/login/index.html", "utf8");
 const manifest = JSON.parse(await readFile("dist/manifest.webmanifest", "utf8"));
+const adminManifest = JSON.parse(await readFile("dist/admin-manifest.webmanifest", "utf8"));
 const robots = await readFile("dist/robots.txt", "utf8");
 const sitemap = await readFile("dist/sitemap.xml", "utf8");
+const secondaryPages = await Promise.all(["services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html"].map(file => readFile(join("dist", file), "utf8")));
+const worker = await readFile("dist/sw.js", "utf8");
+const firebaseConfig = await readFile("dist/firebase-config.js", "utf8");
 const sourceCss = await readFile("src/styles.css", "utf8");
 const adminCss = await readFile("src/admin.css", "utf8");
 const appSource = await readFile("src/app.js", "utf8");
+const functionsSource = await readFile("functions/src/index.js", "utf8");
 
 assert.match(index, /width=device-width/);
 assert.match(index, /application\/ld\+json/);
@@ -22,13 +27,21 @@ assert.match(index, /rel="canonical"/);
 assert.match(index, /property="og:title"/);
 assert.doesNotMatch(index, /href="\/login\//, "The public site must not expose an admin dashboard link");
 assert.match(admin, /noindex,nofollow/);
+assert.match(admin, /admin-manifest\.webmanifest/);
 assert.match(login, /noindex,nofollow/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(sitemap, /<urlset/);
 assert.match(sitemap, /branches\/talkha/);
 assert.match(sitemap, /branches\/mashaya/);
 assert.match(index, /el-mezaen-talkha\.vercel\.app/);
+for (const page of secondaryPages) {
+  assert.match(page, /rel="canonical"/);
+  assert.match(page, /el-mezaen-talkha\.vercel\.app/);
+  assert.match(page, /application\/ld\+json/);
+}
 assert.equal(manifest.display, "standalone");
+assert.equal(adminManifest.display, "standalone");
+assert.equal(adminManifest.start_url, "/admin/?source=pwa");
 assert.ok(manifest.icons.some(icon => icon.purpose.includes("maskable")));
 assert.ok(manifest.icons.some(icon => icon.sizes === "192x192" && icon.type === "image/png"));
 assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/png"));
@@ -43,6 +56,18 @@ assert.match(index, /id="branchDialog"/);
 assert.match(index, /id="branchPicker"/);
 assert.match(index, /id="branchFooterGrid"/);
 assert.match(index, /id="summaryBranch"/);
+assert.match(index, /id="drinkUpsell"/);
+assert.match(admin, /id="posSectionFilter"/);
+assert.match(admin, /id="posCategoryFilter"/);
+assert.match(admin, /id="serviceCategoryFilter"/);
+assert.match(admin, /id="drinks"/);
+assert.match(admin, /data-collection="drinks"/);
+assert.match(appSource, /data-drink-option/);
+assert.match(functionsSource, /calculateRevenueBreakdown/);
+assert.match(functionsSource, /DRINK_OPTION/);
+assert.match(functionsSource, /db\.collection\("drinks"\)/);
+assert.match(worker, /addEventListener\("push"/);
+assert.match(firebaseConfig, /window\.__VAPID_KEY__\s*=\s*"[A-Za-z0-9_-]{80,}"/);
 assert.match(appSource, /branchId:/);
 assert.match(appSource, /data-select-branch/);
 assert.match(appSource, /data-book-branch/);
@@ -67,4 +92,5 @@ for (const file of mainScripts) {
   const size = (await stat(join("dist", file))).size;
   assert.ok(size < 180 * 1024, `${file} is unexpectedly large: ${size}`);
 }
+assert.ok((await stat("dist/assets/el-mezaen-mark-v2.webp")).size < 40 * 1024, "Optimized logo is unexpectedly large");
 console.log("Build verification passed: routes, local assets, PWA, SEO, noindex, responsive breakpoints and bundle budgets.");

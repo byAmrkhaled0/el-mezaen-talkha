@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
-import { browserLocalPersistence, getAuth, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { browserLocalPersistence, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";
@@ -49,17 +49,48 @@ async function call(name, data = {}) {
 }
 
 export const getDashboard = () => call("getAdminDashboard");
+export const getBusinessDashboard = month => call("getBusinessDashboard", { month });
 export const getCollection = (collection, limit = 300) => call("getAdminCollection", { collection, limit });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
+export const secureDeleteRecord = (kind, id) => call("adminSecureDelete", { kind, id });
 export const changeBooking = (id, action, paymentMethod) => call("updateBooking", { id, action, paymentMethod });
+export const createPosOrder = payload => call("createPosOrder", payload);
+export const recordExpense = payload => call("recordExpense", payload);
+export const recordPayrollPayment = payload => call("recordPayrollPayment", payload);
 export const changeUserRole = (uid, email, role) => call("setUserRole", { uid, email, role });
 
+export async function verifyAdminPassword(password) {
+  const user = auth?.currentUser;
+  if (!user?.email || !password) throw new Error("ADMIN_PASSWORD_REQUIRED");
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  await user.getIdToken(true);
+  return true;
+}
+
+async function optimizeImage(file) {
+  if (!globalThis.createImageBitmap || !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type)) return file;
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d", { alpha: true }).drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("IMAGE_OPTIMIZATION_FAILED")), "image/webp", .82));
+  if (blob.size >= file.size && scale === 1) return file;
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp" });
+}
+
 export async function uploadImage(file, folder = "content") {
-  if (!file || !file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) throw new Error("INVALID_IMAGE");
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  if (!file || !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) throw new Error("INVALID_IMAGE");
+  const optimized = await optimizeImage(file);
+  const safeName = optimized.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/${crypto.randomUUID()}-${safeName}`);
-  await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
+  await uploadBytes(target, optimized, { contentType: optimized.type, cacheControl: "public,max-age=31536000,immutable" });
   return getDownloadURL(target);
 }
 
