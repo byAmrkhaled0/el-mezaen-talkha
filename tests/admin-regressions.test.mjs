@@ -45,3 +45,19 @@ test("worker accounts have admin-only secure deletion", async () => {
   assert.match(functionsSource, /secure-delete-user/);
   assert.match(functionsSource, /لا يمكنك حذف حساب الأدمن المستخدم حاليًا/);
 });
+
+test("CSP allows Firebase Authentication helper script and iframe", async () => {
+  const [vercel, firebase] = await Promise.all([read("vercel.json"), read("firebase.json")]);
+
+  for (const config of [vercel, firebase]) {
+    assert.match(config, /script-src[^;]*https:\/\/apis\.google\.com/);
+    assert.match(config, /frame-src[^;]*https:\/\/el-mezaen-talkha\.firebaseapp\.com/);
+  }
+});
+
+test("public content rejects unsafe link protocols", async () => {
+  const app = await read("src/app.js");
+  assert.match(app, /const safeWebUrl/);
+  assert.match(app, /\["http:", "https:"\]\.includes\(url\.protocol\)/);
+  assert.match(app, /const link = safeWebUrl\(item\.linkUrl\)/);
+});

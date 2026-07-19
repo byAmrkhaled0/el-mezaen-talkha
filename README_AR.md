@@ -1,13 +1,12 @@
 # مزين مصر – فرعا طلخا والمشاية
 
-نسخة Firebase-first مطورة من المشروع الأصلي، وتضم اختيار الفرع قبل الحجز، موقع الحجز، لوحة الإدارة، Cloud Functions، قواعد Firestore وStorage، PWA وSEO. بقي مجلد `worker/` الأصلي داخل السورس كمرجع للترحيل، لكنه لا يدخل في نسخة Firebase المبنية داخل `dist/`.
+نسخة Firebase-first نظيفة تضم اختيار الفرع والحجز ولوحة الإدارة وCloud Functions وقواعد Firestore وStorage وPWA وSEO. أزيلت منها نسخة Cloudflare Worker القديمة والأصول المكررة وأدوات الترحيل غير المستخدمة.
 
 ## المتطلبات
 
 - Node.js 22.
-- Java 21 فقط عند تشغيل Firebase Emulator.
 - مشروع Firebase بخطة مناسبة لتشغيل Cloud Functions من الجيل الثاني.
-- حساب خدمة محلي للزرع/الترحيل، أو Application Default Credentials.
+- Firebase CLI مثبت عالميًا للنشر: `npm install -g firebase-tools`.
 
 ## التشغيل المحلي للواجهة
 
@@ -31,23 +30,6 @@ npm run dev
 
 إعداد Firebase Web ليس كلمة مرور؛ قواعد الأمان والصلاحيات والدوال هي التي تمنع الوصول. لا تضع Service Account أو أي مفتاح سري داخل `public/`.
 
-## زرع البيانات الأصلية
-
-الزرع يستخدم `merge` ولا يحذف أي مستند موجود:
-
-```bash
-FIREBASE_PROJECT_ID=YOUR_PROJECT_ID npm run seed
-```
-
-على Windows PowerShell:
-
-```powershell
-$env:FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
-npm run seed
-```
-
-البيانات المزروعة: فرعا طلخا والمشاية، 12 تصنيفًا، 82 خدمة/منتجًا، 6 باقات، 21 عضو فريق، كوبون `WELCOME10` الموجود في السورس الأصلي، ومحتوى الصور والإعدادات. يجب تنفيذ الزرع بعد نشر الدوال أو قبل أول حجز حتى تستطيع الدالة التحقق من الفرع.
-
 ## إدارة الفرعين
 
 - يختار العميل الفرع قبل فتح خطوات الحجز، ويظهر الفرع في الملخص وكود الحجز ولوحة الإدارة والتقارير.
@@ -55,22 +37,9 @@ npm run seed
 - من لوحة الإدارة افتح «الفروع والتواصل» لتعديل العنوان والهاتف وواتساب والخرائط والسوشيال وساعات العمل.
 - بيانات طلخا والمشاية موجودة كبداية، لكن راجعها مع المالك قبل النشر النهائي.
 
-## إنشاء أول مدير بدون حفظ كلمة المرور في السورس
+## حسابات العاملين
 
-أنشئ المستخدم أولًا من Firebase Authentication، ثم نفّذ:
-
-```bash
-FIREBASE_PROJECT_ID=YOUR_PROJECT_ID npm run create-admin -- --email owner@example.com --role admin
-```
-
-الأدوار المدعومة:
-
-- `admin`: تحكم كامل وإدارة الصلاحيات.
-- `manager`: إدارة المحتوى والخدمات والحجوزات والدفع.
-- `receptionist`: تأكيد/رفض/إلغاء/إكمال الحجوزات، بدون تسجيل الدفع.
-- `accountant`: تسجيل الدفع والاسترداد، بدون تغيير حالة الحجز التشغيلية.
-
-بعد تعديل الدور يجب على المستخدم تسجيل الخروج والدخول مجددًا لتحديث الـToken.
+الأدمن ينشئ المدير والكاشير من «حسابات العاملين والصلاحيات»، ويحدد الفروع والأقسام المسموح بها. حذف حساب العامل يتطلب إعادة إدخال باسورد الأدمن، ويحذف Authentication والصلاحيات وPush Tokens ويسجل العملية في Activity Logs.
 
 ## الاختبار
 
@@ -80,14 +49,6 @@ npm run test:functions
 npm run build
 npm run verify:build
 ```
-
-اختبار Firebase Emulator الكامل:
-
-```bash
-npm run test:emulator
-```
-
-يختبر: تحميل الكتالوج، كوبون الخصم، التسعير من الخادم، إنشاء الحجز، منع الحجز المطابق، فصل أقفال المواعيد بين الفرعين، وحجز المنتجات من دون موعد. يحتاج Java 21 وقد يحتاج أول تشغيل لتنزيل Firestore Emulator.
 
 ## البناء وSEO
 
@@ -109,9 +70,9 @@ npm run build
 لم يتم تنفيذ أي نشر من هذه النسخة. بعد مراجعة المشروع محليًا:
 
 ```bash
-npx firebase login
-npx firebase use --add
-npx firebase deploy --only firestore:rules,firestore:indexes,storage,functions,hosting
+firebase login
+firebase use el-mezaen-talkha
+firebase deploy --only functions,firestore:rules,firestore:indexes,storage
 ```
 
 بعد النشر:
@@ -124,16 +85,6 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage,functions,h
 6. اختبر كوبونًا منتهيًا وحد الاستخدام لكل هاتف.
 7. راجع Console وNetwork وFirebase Logs.
 8. فعّل App Check للدوال العامة بعد تسجيل النطاقات والتأكد من عدم كسر iPhone/Android.
-
-## ترحيل Cloudflare D1 دون حذف البيانات
-
-السورس الأصلي يستخدم Cloudflare Worker/D1. صدّر الجداول إلى ملف JSON بالشكل التالي: `services`, `packages`, `staff`, `bookings`، ثم:
-
-```bash
-FIREBASE_PROJECT_ID=YOUR_PROJECT_ID node scripts/migrate-d1-export.mjs d1-export.json
-```
-
-الترحيل يعمل بـ`merge` ولا يحذف بيانات Firestore. خذ نسخة احتياطية من D1 ومن Firestore قبل التشغيل، وراجع عدد السجلات بعده.
 
 ## ملاحظات تشغيلية
 

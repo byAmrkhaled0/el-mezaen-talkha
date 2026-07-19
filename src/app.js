@@ -41,6 +41,12 @@ const whatsappNumber = value => {
   const digits = String(value || "").replace(/\D/g, "");
   return digits.startsWith("0") ? `2${digits}` : digits;
 };
+const safeWebUrl = value => {
+  try {
+    const url = new URL(String(value || "").trim(), location.origin);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch { return ""; }
+};
 const socialIcons = {
   Facebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>',
   Instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>',
@@ -184,7 +190,7 @@ function renderContent() {
   $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 100vw, 50vw" width="640" height="480">`).join("");
   const news = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
-  $("#newsGrid").innerHTML = news.map(item => `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${item.linkUrl ? `<a class="btn btn-ghost" href="${escapeAttr(item.linkUrl)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`).join("");
+  $("#newsGrid").innerHTML = news.map(item => { const link = safeWebUrl(item.linkUrl); return `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${link ? `<a class="btn btn-ghost" href="${escapeAttr(link)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`; }).join("");
 }
 
 function renderReviews() {
@@ -236,12 +242,12 @@ function renderSettings() {
   $("#bookingBranchAddress").textContent = branch ? branchAddress(branch) : "—";
   $("#summaryBranch").textContent = branch ? branchName(branch) : t("chooseBranch", state.lang);
   const socialSource = branch || s;
-  const links = [[socialSource.facebook || s.facebook, "Facebook"], [socialSource.instagram || s.instagram, "Instagram"], [socialSource.tiktok || s.tiktok, "TikTok"]];
+  const links = [[safeWebUrl(socialSource.facebook || s.facebook), "Facebook"], [safeWebUrl(socialSource.instagram || s.instagram), "Instagram"], [safeWebUrl(socialSource.tiktok || s.tiktok), "TikTok"]];
   $("#socialLinks").innerHTML = links.filter(([url]) => url).map(([url, name]) => `<a class="social-${name.toLowerCase()}" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="${name}">${socialIcons[name]}</a>`).join("");
   if (branch) {
     $("#mobileCall").href = phoneHref(branch.phone);
     $("#mobileWhatsapp").href = `https://wa.me/${whatsappNumber(branch.whatsapp || branch.phone)}`;
-    $("#mobileMap").href = branch.mapsUrl;
+    $("#mobileMap").href = safeWebUrl(branch.mapsUrl) || "#contact";
     $("#mobileQuickActions").classList.add("ready");
   } else {
     $("#mobileCall").href = $("#mobileWhatsapp").href = $("#mobileMap").href = "#contact";

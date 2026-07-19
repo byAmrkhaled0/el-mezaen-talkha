@@ -1,9 +1,9 @@
-@import "@fontsource/tajawal/arabic-400.css";
-@import "@fontsource/tajawal/latin-400.css";
-@import "@fontsource/tajawal/arabic-700.css";
-@import "@fontsource/tajawal/latin-700.css";
-@import "@fontsource/alexandria/arabic-700.css";
-@import "@fontsource/alexandria/latin-700.css";
+@font-face{font-family:Tajawal;font-style:normal;font-display:swap;font-weight:400;src:url("@fontsource/tajawal/files/tajawal-arabic-400-normal.woff2") format("woff2")}
+@font-face{font-family:Tajawal;font-style:normal;font-display:swap;font-weight:400;src:url("@fontsource/tajawal/files/tajawal-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:Tajawal;font-style:normal;font-display:swap;font-weight:700;src:url("@fontsource/tajawal/files/tajawal-arabic-700-normal.woff2") format("woff2")}
+@font-face{font-family:Tajawal;font-style:normal;font-display:swap;font-weight:700;src:url("@fontsource/tajawal/files/tajawal-latin-700-normal.woff2") format("woff2")}
+@font-face{font-family:Alexandria;font-style:normal;font-display:swap;font-weight:700;src:url("@fontsource/alexandria/files/alexandria-arabic-700-normal.woff2") format("woff2")}
+@font-face{font-family:Alexandria;font-style:normal;font-display:swap;font-weight:700;src:url("@fontsource/alexandria/files/alexandria-latin-700-normal.woff2") format("woff2")}
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -10%, rgba(34,211,238,.18), transparent 34rem), #020811; color: #f4fbff; font-family: "Tajawal", sans-serif; }
 .login-page { min-height: 100dvh; }
