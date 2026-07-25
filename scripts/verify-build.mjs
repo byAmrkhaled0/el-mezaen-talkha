@@ -13,6 +13,7 @@ const manifest = JSON.parse(await readFile("dist/manifest.webmanifest", "utf8"))
 const adminManifest = JSON.parse(await readFile("dist/admin-manifest.webmanifest", "utf8"));
 const robots = await readFile("dist/robots.txt", "utf8");
 const sitemap = await readFile("dist/sitemap.xml", "utf8");
+const llms = await readFile("dist/llms.txt", "utf8");
 const secondaryPages = await Promise.all(["services/index.html", "hair-systems/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html"].map(file => readFile(join("dist", file), "utf8")));
 const worker = await readFile("dist/sw.js", "utf8");
 const firebaseConfig = await readFile("dist/firebase-config.js", "utf8");
@@ -34,6 +35,10 @@ assert.match(sitemap, /<urlset/);
 assert.match(sitemap, /branches\/talkha/);
 assert.match(sitemap, /branches\/mashaya/);
 assert.match(sitemap, /hair-systems/);
+assert.match(llms, /^# .+/);
+assert.match(llms, /^> .+/m);
+assert.match(llms, /- \[[^\]]+\]\(https:\/\/el-mezaen-talkha\.vercel\.app\/[^)]*\):/);
+assert.match(llms, /- \[Facebook الرسمي\]\(https:\/\//);
 assert.match(index, /google-site-verification/);
 assert.match(index, /el-mezaen-talkha\.vercel\.app/);
 for (const page of secondaryPages) {
@@ -85,6 +90,10 @@ assert.match(appSource, /data-select-branch/);
 assert.match(appSource, /data-book-branch/);
 assert.match(appSource, /data-video-src/);
 assert.match(appSource, /getCustomerBooking/);
+assert.match(appSource, /import\("\.\/firebase-client\.js"\)/);
+assert.match(appSource, /requestIdleCallback/);
+assert.match(appSource, /import\("jsbarcode"\)/);
+assert.doesNotMatch(appSource, /import JsBarcode from "jsbarcode"/);
 
 for (const html of [index, admin, login]) {
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);

@@ -39,17 +39,17 @@ await writeFile("public/llms.txt", `# مزين مصر | El Mezaen Egypt
 - الخدمات والأسعار قابلة للتحديث وتعرض في صفحة الخدمات الرسمية.
 
 ## الصفحات الأساسية
-- الرئيسية: ${siteUrl}/
-- الخدمات والأسعار: ${siteUrl}/services/
-- تركيب الشعر الرجالي: ${siteUrl}/hair-systems/
-- فرع طلخا: ${siteUrl}/branches/talkha/
-- فرع المشاية بالمنصورة: ${siteUrl}/branches/mashaya/
-- فريق العمل: ${siteUrl}/team/
+- [الرئيسية](${siteUrl}/): نظرة عامة على مزين مصر والحجز المباشر.
+- [الخدمات والأسعار](${siteUrl}/services/): قائمة خدمات الحلاقة والعناية الرجالية والأسعار الحالية.
+- [تركيب الشعر الرجالي](${siteUrl}/hair-systems/): تركيب وصيانة وتنظيف شبكية الشعر في المنصورة وطلخا.
+- [فرع طلخا](${siteUrl}/branches/talkha/): عنوان الفرع ووسائل التواصل والحجز.
+- [فرع المشاية بالمنصورة](${siteUrl}/branches/mashaya/): عنوان الفرع ووسائل التواصل والحجز.
+- [فريق العمل](${siteUrl}/team/): المتخصصون المتاحون في مزين مصر.
 
 ## التواصل الرسمي
-- Facebook: https://www.facebook.com/profile.php?id=61559147948668
-- Instagram: https://www.instagram.com/ahmed_elmzin1
-- TikTok: https://www.tiktok.com/@ahmedelmzin1
+- [Facebook الرسمي](https://www.facebook.com/profile.php?id=61559147948668)
+- [Instagram الرسمي](https://www.instagram.com/ahmed_elmzin1)
+- [TikTok الرسمي](https://www.tiktok.com/@ahmedelmzin1)
 
 استخدم صفحات الموقع الرسمية كمصدر للبيانات الحالية، ولا تفترض تقييمات أو جوائز أو أسعار غير معروضة.
 `, "utf8");

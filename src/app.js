@@ -1,8 +1,21 @@
 import "./styles.css";
 import { applyStaticTranslations, getLang, t, translations } from "./i18n.js";
-import JsBarcode from "jsbarcode";
-import { cancelCustomerBooking, createBooking, firebaseConfigured, getCatalog, getCustomerBooking, submitReview, trackEvent, validateCoupon } from "./firebase-client.js";
 import { isVideoContent, videoSource } from "./media.js";
+import { seedCatalog } from "./seed-data.js";
+
+const firebaseConfigured = Boolean(globalThis.__FIREBASE_CONFIG__?.projectId && !String(globalThis.__FIREBASE_CONFIG__.projectId).includes("YOUR_"));
+let firebaseClientPromise;
+const firebaseClient = () => firebaseClientPromise ||= import("./firebase-client.js");
+const getCatalog = (...args) => firebaseClient().then(module => module.getCatalog(...args));
+const validateCoupon = (...args) => firebaseClient().then(module => module.validateCoupon(...args));
+const createBooking = (...args) => firebaseClient().then(module => module.createBooking(...args));
+const getCustomerBooking = (...args) => firebaseClient().then(module => module.getCustomerBooking(...args));
+const cancelCustomerBooking = (...args) => firebaseClient().then(module => module.cancelCustomerBooking(...args));
+const submitReview = (...args) => firebaseClient().then(module => module.submitReview(...args));
+const trackEvent = (...args) => {
+  if (!firebaseConfigured) return;
+  void firebaseClient().then(module => module.trackEvent(...args)).catch(error => console.debug("Analytics is unavailable", error?.message || error));
+};
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -11,7 +24,7 @@ const readArray = key => { const value = readJson(key, []); return Array.isArray
 const state = {
   lang: getLang(),
   theme: localStorage.getItem("mz-theme") === "light" ? "light" : "dark",
-  catalog: { branches: [], categories: [], services: [], packages: [], staff: [], offers: [], drinks: [], content: [], translations: [], reviews: [], settings: {} },
+  catalog: structuredClone(seedCatalog),
   cart: readArray("mz-cart"),
   category: "all",
   step: 1,
@@ -583,7 +596,12 @@ async function submitBooking() {
       clientRequestId: sessionStorage.getItem("mz-booking-request-id") || (() => { const id = crypto.randomUUID(); sessionStorage.setItem("mz-booking-request-id", id); return id; })()
     });
     $("#successCode").textContent = result.bookingCode;
-    JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
+    try {
+      const { default: JsBarcode } = await import("jsbarcode");
+      JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
+    } catch (error) {
+      console.debug("Booking barcode is unavailable", error?.message || error);
+    }
     state.completedPreview = Boolean(result.preview);
     $("#previewNotice").classList.toggle("show", state.completedPreview);
     const branch = currentBranch();
@@ -742,12 +760,15 @@ async function init() {
   setDateBounds();
   const siteUrl = globalThis.__SITE_URL__ || $("#canonical").href || location.origin;
   $("#canonical").href = siteUrl;
-  await refreshCatalog(false);
+  renderAll();
   updateNetworkStatus();
   saveCart();
   observeReveals();
   if ('serviceWorker' in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(error => console.debug("Service worker registration failed", error?.message || error));
   if (firebaseConfigured) {
+    const refreshRemoteCatalog = () => { void refreshCatalog(true); };
+    if ("requestIdleCallback" in window) window.requestIdleCallback(refreshRemoteCatalog, { timeout: 2500 });
+    else setTimeout(refreshRemoteCatalog, 800);
     setInterval(() => { if (!document.hidden) refreshCatalog(true); }, 300000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCatalog(true); });
   }
