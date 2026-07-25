@@ -1,9 +1,9 @@
 export const translations = {
   ar: {
-    home: "الرئيسية", branch: "فرعا طلخا والمشاية", offers: "العروض", packages: "الباقات", services: "الخدمات", about: "عن مزين",
+    home: "الرئيسية", branch: "فرعا طلخا والمشاية", offers: "العروض", packages: "الباقات", services: "الخدمات", hairSystems: "تركيب الشعر", about: "عن مزين",
     team: "الفريق", gallery: "المعرض", contact: "تواصل معنا", bookNow: "احجز الآن", addCart: "إضافة للسلة", callNow: "اتصل الآن", whatsappBranch: "واتساب المحل",
-    heroBadge: "منذ 1995 • خبرة تصنع الفارق", heroTitle1: "لوكك يبدأ من", heroTitle2: "مزين مصر",
-    heroText: "مش مجرد حلاقة… دي تجربة بتصنع حضورك. اختار خدماتك ومتخصصك وموعدك، وسيب التفاصيل علينا.",
+    heroBadge: "منذ 1995 • خبرة تصنع الفارق", heroTitle1: "حلاقة رجالية وتركيب شعر", heroTitle2: "في المنصورة وطلخا",
+    heroText: "منذ 1995 بنقدم قصات وعناية رجالية وتركيب وصيانة شبكية الشعر في فرعي المشاية وطلخا، مع حجز مباشر واختيار المتخصص والموعد.",
     startBooking: "ابدأ الحجز", exploreServices: "استكشف الخدمات", years: "خبرة منذ 1995", specialists: "+20 متخصص", fastBooking: "حجز سريع وآمن",
     offersTag: "عروض تتحكم بها الإدارة", offersTitle: "عروض مختارة ليك", offersText: "العروض النشطة والمجدولة تظهر هنا تلقائيًا.", noOffers: "لا توجد عروض نشطة حاليًا.",
     packagesTag: "قيمة أكبر في زيارة واحدة", packagesTitle: "الباقات", packagesText: "اختار الفرع ثم احجز الباقة المناسبة بسهولة.",
@@ -21,13 +21,17 @@ export const translations = {
     successTitle: "تم استلام حجزك بنجاح", successText: "احتفظ بكود الحجز، وسيتواصل معك فريق الفرع عند تأكيد الموعد.", bookingCode: "كود الحجز", whatsapp: "تواصل عبر واتساب", previewNotice: "هذه معاينة محلية. اربط Firebase ليصل الحجز إلى لوحة الإدارة.",
     footerAbout: "وجهتك للحلاقة والعناية الرجالية في طلخا والمشاية.", workingHours: "مواعيد العمل", daily: "يوميًا", bookingHelp: "الحجز والاستفسار", admin: "لوحة الإدارة", developedBy: "تم البرمجة بواسطة المهندس عمرو خالد",
     chooseBranch: "اختر الفرع", chooseBranchText: "اختر الفرع الأقرب لك، وبعدها كمّل الحجز في خطوات بسيطة.", selectedBranch: "الفرع المختار", changeBranch: "تغيير الفرع", bookBranch: "احجز في هذا الفرع", directions: "الاتجاهات", landline: "الخط الأرضي",
+    localSeoTag: "حلاقة وعناية قريبة منك", localSeoTitle: "بتدور على حلاق في المنصورة أو طلخا؟", localSeoText: "مزين مصر بيجمع الحلاقة الرجالية، تهذيب الدقن، تنظيف البشرة، علاج وتصفيف الشعر، وتركيب وصيانة الشبكية في مكان واحد. اختار فرع المشاية بالمنصورة أو فرع طلخا واحجز الخدمة والموعد المناسب.",
+    discoverHairSystems: "اعرف خدمات تركيب الشعر", allServicesPrices: "كل الخدمات والأسعار", localHaircut: "قصات شعر رجالي", localBeard: "حلاقة وتهذيب الدقن", localSystems: "تركيب وتنظيف شبكية الشعر", localSkin: "تنظيف البشرة والعناية الرجالية",
+    faqTag: "إجابات سريعة", faqTitle: "أسئلة عن مزين مصر", faqBestQ: "إزاي أختار أفضل حلاق في المنصورة؟", faqBestA: "اختار المكان حسب خبرة الفريق، نظافة الأدوات، وضوح الخدمات والأسعار، سهولة الحجز، وقرب الفرع. مزين مصر يعمل منذ 1995 وله فرع في المشاية بالمنصورة وفرع في طلخا.",
+    faqHairQ: "هل متاح تركيب شعر رجالي وشبكية؟", faqHairA: "نعم، تشمل الخدمات تركيب شبكة جديدة وقصها وتنظيفها وصيانتها والسيرفيس. المعاينة داخل الفرع تحدد الخيار الأنسب للحالة.", faqBranchesQ: "أين توجد فروع مزين مصر؟", faqBranchesA: "فرع المشاية في المشاية السفلية أمام بوابة نادي الجزيرة الثانية، وفرع طلخا في تقسيم بهاء الشربيني أمام محل LONDONE.", faqHoursQ: "ما مواعيد العمل والحجز؟", faqHoursA: "المواعيد الحالية يوميًا من 11 صباحًا إلى 11 مساءً. يمكنك اختيار الفرع والخدمات والمتخصص والموعد من الموقع.",
     privacy: "بياناتك تُستخدم لتنفيذ الحجز فقط.", loadError: "تعذر تحميل البيانات. حاول مرة أخرى.", couponInvalid: "كود الخصم غير صالح.", added: "تمت الإضافة للسلة", menu: "القائمة", theme: "تغيير المظهر", language: "تغيير اللغة"
   },
   en: {
-    home: "Home", branch: "Talkha & El Mashaya", offers: "Offers", packages: "Packages", services: "Services", about: "About",
+    home: "Home", branch: "Talkha & El Mashaya", offers: "Offers", packages: "Packages", services: "Services", hairSystems: "Hair Systems", about: "About",
     team: "Team", gallery: "Gallery", contact: "Contact", bookNow: "Book Now", addCart: "Add to Cart", callNow: "Call Now", whatsappBranch: "Shop WhatsApp",
-    heroBadge: "Since 1995 • Experience That Shows", heroTitle1: "Your Look Starts at", heroTitle2: "El Mezaen Egypt",
-    heroText: "More than a haircut — an experience built around your presence. Choose your services, specialist and time; we will take care of every detail.",
+    heroBadge: "Since 1995 • Experience That Shows", heroTitle1: "Men's Grooming & Hair Systems", heroTitle2: "in Mansoura and Talkha",
+    heroText: "Since 1995, we have offered men's haircuts, grooming, and hair-system installation and maintenance at our El Mashaya and Talkha branches, with direct online booking.",
     startBooking: "Start Booking", exploreServices: "Explore Services", years: "Since 1995", specialists: "20+ Specialists", fastBooking: "Fast, Secure Booking",
     offersTag: "Admin-managed offers", offersTitle: "Offers Picked for You", offersText: "Active and scheduled offers appear here automatically.", noOffers: "There are no active offers right now.",
     packagesTag: "More value in one visit", packagesTitle: "Packages", packagesText: "Choose your branch, then book the package that suits you.",
@@ -45,6 +49,10 @@ export const translations = {
     successTitle: "Your Booking Was Received", successText: "Keep your booking code. The branch team will contact you when the appointment is confirmed.", bookingCode: "Booking Code", whatsapp: "Chat on WhatsApp", previewNotice: "This is a local preview. Connect Firebase to send bookings to the admin dashboard.",
     footerAbout: "Your men's grooming destination in Talkha and El Mashaya.", workingHours: "Working Hours", daily: "Daily", bookingHelp: "Bookings & Enquiries", admin: "Admin Dashboard", developedBy: "Developed by Eng. Amr Khaled",
     chooseBranch: "Choose a Branch", chooseBranchText: "Choose the nearest branch, then complete your booking in a few simple steps.", selectedBranch: "Selected Branch", changeBranch: "Change Branch", bookBranch: "Book This Branch", directions: "Directions", landline: "Landline",
+    localSeoTag: "Men's grooming near you", localSeoTitle: "Looking for a barber in Mansoura or Talkha?", localSeoText: "El Mezaen Egypt brings together men's haircuts, beard grooming, facial cleansing, hair care, and hair-system installation and maintenance. Choose El Mashaya in Mansoura or Talkha and book online.",
+    discoverHairSystems: "Explore hair-system services", allServicesPrices: "All services and prices", localHaircut: "Men's haircuts", localBeard: "Beard grooming", localSystems: "Hair-system installation and cleaning", localSkin: "Facial cleansing and men's care",
+    faqTag: "Quick answers", faqTitle: "About El Mezaen Egypt", faqBestQ: "How do I choose a barber in Mansoura?", faqBestA: "Compare team experience, tool hygiene, clear services and prices, booking convenience, and branch location. El Mezaen Egypt has operated since 1995, with branches in El Mashaya, Mansoura and Talkha.",
+    faqHairQ: "Do you install men's hair systems?", faqHairA: "Yes. Current services include new installation, cutting, cleaning, maintenance and routine service. An in-branch consultation determines the suitable option.", faqBranchesQ: "Where are the branches?", faqBranchesA: "The El Mashaya branch is on Lower El Mashaya opposite Al Gezira Club Gate 2. The Talkha branch is in Bahaa El-Sherbiny Division opposite LONDONE.", faqHoursQ: "What are the opening and booking hours?", faqHoursA: "Current hours are daily from 11:00 AM to 11:00 PM. Choose the branch, services, specialist and time on the website.",
     privacy: "Your details are used only to fulfil your booking.", loadError: "Could not load the data. Please try again.", couponInvalid: "This discount code is not valid.", added: "Added to cart", menu: "Menu", theme: "Change theme", language: "Change language"
   }
 };

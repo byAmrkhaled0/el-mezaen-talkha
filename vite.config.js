@@ -24,6 +24,7 @@ export default defineConfig({
         ,team: resolve(import.meta.dirname, "team/index.html")
         ,branchTalkha: resolve(import.meta.dirname, "branches/talkha/index.html")
         ,branchMashaya: resolve(import.meta.dirname, "branches/mashaya/index.html")
+        ,hairSystems: resolve(import.meta.dirname, "hair-systems/index.html")
       }
     }
   },

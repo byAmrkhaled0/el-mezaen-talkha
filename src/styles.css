@@ -471,6 +471,51 @@ body{background:radial-gradient(circle at 92% 4%,rgba(49,226,214,.16),transparen
 @media(max-width:1000px){.catalog-grid,.team-page-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:760px){.catalog-grid,.team-page-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-page .nav-actions .btn{display:none}}@media(max-width:430px){.catalog-grid{grid-template-columns:1fr}.team-page-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-search{grid-template-columns:auto 1fr}.catalog-search b{grid-column:1/-1}.team-page-card{min-height:300px}.team-page-card .team-bio{display:none}}
 .branch-landing { min-height:100dvh; display:grid; align-items:center; padding:55px 0; }.branch-landing-grid { display:grid; grid-template-columns:1fr .85fr; gap:48px; align-items:center; }.branch-landing .brand { margin-bottom:42px; }.branch-landing .eyebrow { margin-top:20px; }.branch-landing h1 { margin:18px 0; font:800 clamp(3rem,7vw,6rem)/1.15 "Alexandria",sans-serif; }.branch-landing h1 em { color:var(--cyan); font-style:normal; }.branch-landing p { max-width:650px; color:var(--muted); font-size:20px; line-height:1.8; }.branch-landing-photo { width:100%; max-height:78dvh; object-fit:cover; border:1px solid var(--line); border-radius:34px; box-shadow:var(--shadow); }@media(max-width:760px){.branch-landing{padding:28px 0 45px}.branch-landing-grid{grid-template-columns:1fr;gap:28px}.branch-landing .brand{margin-bottom:28px}.branch-landing h1{font-size:2.75rem}.branch-landing p{font-size:17px}.branch-landing-photo{max-height:420px;order:-1}.branch-landing .hero-actions .btn{flex:1 1 180px}}
 
+/* Search-first editorial pages and visible local-business content. */
+.narrow{width:min(900px,100%)}
+.seo-nav{display:flex;align-items:center;gap:18px;margin-inline-start:auto;color:var(--muted);font-weight:700}
+.seo-nav a:hover{color:var(--cyan)}
+.local-seo-section,.seo-muted-section{background:linear-gradient(135deg,color-mix(in srgb,var(--cyan) 6%,transparent),transparent 55%)}
+.local-seo-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:44px;align-items:center}
+.local-seo-grid h2,.seo-landing h2{font:800 clamp(28px,4vw,46px)/1.25 "Alexandria",sans-serif;margin:8px 0 14px}
+.local-seo-grid p,.seo-landing p{color:var(--muted);line-height:1.9}
+.local-service-links{display:grid;gap:12px;padding:0;margin:0;list-style:none}
+.local-service-links a{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:19px 21px;border:1px solid var(--line);border-radius:17px;background:var(--panel);box-shadow:0 14px 40px rgba(0,0,0,.08)}
+.local-service-links span{color:var(--cyan);font-size:22px}
+.faq-list{display:grid;gap:12px}
+.faq-list details{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:0 20px}
+.faq-list summary{cursor:pointer;list-style:none;padding:20px 32px 20px 0;font-weight:800;position:relative}
+.faq-list summary::-webkit-details-marker{display:none}
+.faq-list summary::before{content:"＋";position:absolute;inset-inline-start:0;color:var(--cyan)}
+.faq-list details[open] summary::before{content:"−"}
+.faq-list p{margin:0 0 20px;color:var(--muted);line-height:1.9}
+.footer-service-link{margin-top:14px}.footer-service-link a{color:var(--cyan)}
+.seo-landing{padding-top:var(--header-h)}
+.seo-hero{padding:72px 0 58px;min-height:82vh;display:grid;align-items:center}
+.seo-hero-grid{display:grid;grid-template-columns:1.08fr .72fr;gap:54px;align-items:center}
+.seo-hero h1{font:800 clamp(42px,6.6vw,82px)/1.12 "Alexandria",sans-serif;margin:20px 0}
+.seo-hero h1 em{display:block;color:var(--cyan);font-style:normal}
+.seo-lead{font-size:clamp(17px,2vw,21px);max-width:760px}
+.seo-hero-photo{width:100%;max-height:650px;object-fit:cover;border:1px solid var(--line);border-radius:34px;box-shadow:var(--shadow)}
+.breadcrumbs{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px;margin-bottom:24px}
+.breadcrumbs a{color:var(--cyan)}
+.seo-proof{display:flex;flex-wrap:wrap;gap:10px 18px;padding:0;margin:24px 0 0;list-style:none;color:var(--muted);font-weight:700}
+.seo-proof li::before{content:"✓";color:var(--cyan);margin-inline-end:7px}
+.seo-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.seo-card,.branch-seo-card,.seo-callout{border:1px solid var(--line);border-radius:22px;background:var(--panel);padding:25px;box-shadow:0 16px 50px rgba(0,0,0,.08)}
+.seo-card>span{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--cyan) 14%,transparent);color:var(--cyan);font-weight:900}
+.seo-card h3,.branch-seo-card h3{font:800 20px "Alexandria",sans-serif;margin:17px 0 8px}
+.seo-card p,.branch-seo-card p{font-size:15px}
+.seo-two-col{display:grid;grid-template-columns:1fr .8fr;gap:44px;align-items:start}
+.process-list{display:grid;gap:14px;margin:24px 0 0;padding:0;list-style:none;counter-reset:steps}
+.process-list li{padding:18px 20px;border-inline-start:3px solid var(--cyan);background:var(--panel);border-radius:14px;line-height:1.8;color:var(--muted)}
+.process-list b{color:var(--text)}
+.seo-callout{position:sticky;top:calc(var(--header-h) + 24px)}
+.branch-seo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.branch-seo-card .hero-actions{margin-top:20px}
+@media(max-width:1000px){.seo-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.seo-nav{display:none}}
+@media(max-width:760px){.local-seo-grid,.seo-hero-grid,.seo-two-col,.branch-seo-grid{grid-template-columns:1fr}.seo-hero{padding:40px 0}.seo-hero-photo{max-height:390px;order:-1}.seo-hero h1{font-size:40px}.seo-card-grid{grid-template-columns:1fr}.seo-callout{position:static}.local-seo-grid{gap:26px}}
+
 /* v5 mobile media and verified reviews */
 main > .section-pad:not(.hero){content-visibility:auto;contain-intrinsic-size:700px}img{color:transparent;background:color-mix(in srgb,var(--navy-800),transparent 18%)}.published-reviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:24px}.published-review{padding:18px;min-width:0}.published-review.featured{border-color:color-mix(in srgb,var(--gold),transparent 35%);box-shadow:0 16px 45px color-mix(in srgb,var(--gold),transparent 88%)}.published-review header{display:flex;align-items:center;gap:10px}.published-review h3{margin:0 0 3px;font:700 15px "Alexandria"}.published-review header span{color:#ffc54d;letter-spacing:2px}.published-review>p{margin:14px 0 0;color:var(--muted);line-height:1.75;overflow-wrap:anywhere}.review-avatar{width:43px;height:43px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;color:#00151b;background:var(--cyan);font-weight:900}.verified-review{margin-inline-start:auto;padding:5px 8px;border-radius:999px;color:#052311;background:var(--success);font-size:11px;white-space:nowrap}.review-reply{display:grid;gap:4px;margin-top:13px;padding:10px;border-inline-start:3px solid var(--cyan);border-radius:8px;background:color-mix(in srgb,var(--cyan),transparent 93%)}.review-reply b{color:var(--cyan);font-size:12px}.review-reply span{line-height:1.65}
 @media(max-width:820px){.published-reviews{grid-template-columns:repeat(2,minmax(0,1fr))}}

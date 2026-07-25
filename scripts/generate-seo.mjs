@@ -3,22 +3,55 @@ import { readFile, writeFile } from "node:fs/promises";
 const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.vercel.app").replace(/\/$/, "");
 const escaped = siteUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const origin = new URL(siteUrl).origin;
+const lastmod = new Date().toISOString().slice(0, 10);
+const urls = [
+  ["", "واجهة مزين مصر للحلاقة الرجالية"],
+  ["/services/", "خدمات وأسعار مزين مصر"],
+  ["/hair-systems/", "تركيب الشعر الرجالي في المنصورة وطلخا"],
+  ["/team/", "فريق مزين مصر"],
+  ["/branches/talkha/", "مزين مصر فرع طلخا"],
+  ["/branches/mashaya/", "مزين مصر فرع المشاية"]
+];
 
-await writeFile("public/robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /login/\nSitemap: ${origin}/sitemap.xml\n`, "utf8");
+await writeFile("public/robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /login/\n\nSitemap: ${siteUrl}/sitemap.xml\n`, "utf8");
 await writeFile("public/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  <url>
-    <loc>${escaped}</loc>
-    <xhtml:link rel="alternate" hreflang="ar-EG" href="${escaped}?lang=ar"/>
-    <xhtml:link rel="alternate" hreflang="en" href="${escaped}?lang=en"/>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url><loc>${origin}/services/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>${origin}/team/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>${origin}/branches/talkha/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>${origin}/branches/mashaya/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urls.map(([path, title]) => `  <url>
+    <loc>${escaped}${path}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <image:image>
+      <image:loc>${origin}/assets/hero-barbershop-cyan.webp</image:loc>
+      <image:title>${title}</image:title>
+    </image:image>
+  </url>`).join("\n")}
 </urlset>
+`, "utf8");
+await writeFile("public/llms.txt", `# مزين مصر | El Mezaen Egypt
+
+> الموقع الرسمي لمزين مصر للحلاقة والعناية الرجالية وتركيب وصيانة شبكية الشعر في المنصورة وطلخا.
+
+## معلومات موثقة
+- النشاط: حلاقة وعناية رجالية وتركيب وصيانة شبكية الشعر.
+- الخبرة: يعمل مزين مصر منذ 1995.
+- فرع طلخا: تقسيم بهاء الشربيني، أمام محل LONDONE للملابس. هاتف 01093008896.
+- فرع المشاية: المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع، المنصورة. هاتف 01101006961.
+- مواعيد العمل الحالية: يوميًا من 11:00 صباحًا إلى 11:00 مساءً.
+- الخدمات والأسعار قابلة للتحديث وتعرض في صفحة الخدمات الرسمية.
+
+## الصفحات الأساسية
+- الرئيسية: ${siteUrl}/
+- الخدمات والأسعار: ${siteUrl}/services/
+- تركيب الشعر الرجالي: ${siteUrl}/hair-systems/
+- فرع طلخا: ${siteUrl}/branches/talkha/
+- فرع المشاية بالمنصورة: ${siteUrl}/branches/mashaya/
+- فريق العمل: ${siteUrl}/team/
+
+## التواصل الرسمي
+- Facebook: https://www.facebook.com/profile.php?id=61559147948668
+- Instagram: https://www.instagram.com/ahmed_elmzin1
+- TikTok: https://www.tiktok.com/@ahmedelmzin1
+
+استخدم صفحات الموقع الرسمية كمصدر للبيانات الحالية، ولا تفترض تقييمات أو جوائز أو أسعار غير معروضة.
 `, "utf8");
 const logo = await readFile("public/assets/el-mezaen-mark-v2.webp");
 const embeddedLogo = logo.toString("base64");

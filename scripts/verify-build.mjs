@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["index.html", "admin/index.html", "login/index.html", "services/index.html", "hair-systems/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -13,7 +13,7 @@ const manifest = JSON.parse(await readFile("dist/manifest.webmanifest", "utf8"))
 const adminManifest = JSON.parse(await readFile("dist/admin-manifest.webmanifest", "utf8"));
 const robots = await readFile("dist/robots.txt", "utf8");
 const sitemap = await readFile("dist/sitemap.xml", "utf8");
-const secondaryPages = await Promise.all(["services/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html"].map(file => readFile(join("dist", file), "utf8")));
+const secondaryPages = await Promise.all(["services/index.html", "hair-systems/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html"].map(file => readFile(join("dist", file), "utf8")));
 const worker = await readFile("dist/sw.js", "utf8");
 const firebaseConfig = await readFile("dist/firebase-config.js", "utf8");
 const sourceCss = await readFile("src/styles.css", "utf8");
@@ -33,6 +33,8 @@ assert.match(robots, /Disallow: \/admin\//);
 assert.match(sitemap, /<urlset/);
 assert.match(sitemap, /branches\/talkha/);
 assert.match(sitemap, /branches\/mashaya/);
+assert.match(sitemap, /hair-systems/);
+assert.match(index, /google-site-verification/);
 assert.match(index, /el-mezaen-talkha\.vercel\.app/);
 for (const page of secondaryPages) {
   assert.match(page, /rel="canonical"/);
