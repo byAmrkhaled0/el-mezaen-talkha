@@ -67,7 +67,7 @@ const fields = {
   ],
   reviews: [["name", "اسم العميل", "text", true], ["rating", "التقييم من 5", "number", true], ["comment", "التعليق", "textarea", true, null, true], ["bookingCode", "كود الحجز", "text"], ["status", "حالة التقييم", "select", true, [["pending", "بانتظار المراجعة"], ["published", "منشور"], ["rejected", "مرفوض"]]], ["featured", "تقييم مميز ومثبت", "boolean"], ["adminReply", "رد الإدارة", "textarea", false, null, true]],
   holidays: [["branchId", "الفرع", "branch-select", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب", "text"], ["closed", "مغلق بالكامل", "boolean"]],
-  content: [["type", "النوع", "select", true, [["gallery", "معرض"], ["celebrity", "صور مشاهير"], ["news", "خبر/منشور"]]], ["titleAr", "العنوان", "text", true], ["bodyAr", "المحتوى", "textarea", false, null, true], ["branchIds", "يظهر في", "branch-scope", false, null, true], ["mediaType", "نوع الوسائط", "select", true, [["image", "صورة"], ["video", "فيديو"]]], ["imageUrl", "رابط الصورة أو غلاف الفيديو", "url", false, null, true], ["imageFile", "رفع صورة أو غلاف", "file", false, null, true], ["videoUrl", "رابط YouTube أو Facebook أو TikTok أو MP4", "url", false, null, true], ["videoFile", "رفع فيديو MP4 أو WebM (بحد أقصى 30MB)", "video-file", false, null, true], ["linkUrl", "رابط المنشور الأصلي", "url", false, null, true], ["sortOrder", "الترتيب", "number"], ["active", "مفعل", "boolean"]],
+  content: [["type", "", "hidden"], ["mediaType", "", "hidden"], ["imageUrl", "", "hidden"], ["videoUrl", "", "hidden"], ["linkUrl", "", "hidden"], ["titleAr", "العنوان", "text", true], ["branchIds", "يظهر في", "branch-scope", false, null, true], ["bodyAr", "وصف اختياري", "textarea", false, null, true], ["imageFile", "اختر صورة من الجهاز", "file", false, null, true], ["videoFile", "أو اختر فيديو من الجهاز (MP4 أو WebM أقل من 30MB)", "video-file", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "انشر على الموقع", "boolean"]],
 };
 
 const sectionTitles = Object.fromEntries($$('[data-section]').map(button => [button.dataset.section, button.textContent.trim().replace(/^[^\s]+\s/, "")]));
@@ -757,6 +757,7 @@ function openEditor(collection, id = "", preset = {}) {
 function renderField([name, label, type, required = false, options = null, full = false], item) {
   const value = Array.isArray(item[name]) ? item[name].join(",") : item[name] ?? "";
   const className = full ? "full" : "";
+  if (type === "hidden") return `<input name="${name}" type="hidden" value="${escapeAttr(value)}">`;
   if (type === "textarea") return `<label class="${className}">${label}<textarea name="${name}" ${required ? "required" : ""}>${escapeHtml(value)}</textarea></label>`;
   if (type === "select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}>${options.map(([key, text]) => `<option value="${escapeAttr(key)}" ${String(value) === String(key) ? "selected" : ""}>${text}</option>`).join("")}</select></label>`;
   if (type === "category-select") {
@@ -773,7 +774,9 @@ function renderField([name, label, type, required = false, options = null, full 
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
   const inputType = type === "video-file" ? "file" : type;
   const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : "";
-  return `<label class="${className}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}></label>`;
+  const uploadClass = inputType === "file" ? "media-upload-field full" : className;
+  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : "";
+  return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
 
 let editorPreviewUrl = "";
@@ -803,8 +806,12 @@ async function saveEditor(event) {
   formData.delete("videoFile");
   const payload = Object.fromEntries(formData.entries());
   const existing = id ? (state.collections.get(collection) || []).find(item => item.id === id) || {} : {};
+  if (collection === "content" && !image?.size && !video?.size && !existing.imageUrl && !existing.videoUrl) return toast("اختر صورة أو فيديو من الجهاز أولًا", true);
   [["nameAr", "nameEn"], ["descriptionAr", "descriptionEn"], ["titleAr", "titleEn"], ["bodyAr", "bodyEn"], ["specialtyAr", "specialtyEn"], ["bioAr", "bioEn"], ["reasonAr", "reasonEn"]].forEach(([ar, en]) => { if (payload[ar] != null) payload[en] = existing[en] || payload[ar]; });
-  $("#editorSave").disabled = true;
+  const saveButton = $("#editorSave");
+  const saveLabel = saveButton.textContent;
+  saveButton.disabled = true;
+  saveButton.textContent = image?.size || video?.size ? "جاري الرفع…" : "جاري الحفظ…";
   try {
     if (image?.size) payload.imageUrl = await uploadImage(image, collection);
     if (video?.size) { payload.videoUrl = await uploadVideo(video, collection); payload.mediaType = "video"; }
@@ -814,7 +821,7 @@ async function saveEditor(event) {
     if (["inventoryItems", "drinks", "staff"].includes(collection)) await loadBusiness(true);
     toast("تم الحفظ بنجاح");
   } catch (error) { toast(error.message || "تعذر الحفظ", true); }
-  finally { $("#editorSave").disabled = false; }
+  finally { saveButton.disabled = false; saveButton.textContent = saveLabel; }
 }
 
 async function deleteItem(collection, id) {
