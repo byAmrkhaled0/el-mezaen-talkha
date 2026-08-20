@@ -972,11 +972,11 @@ document.addEventListener("click", async event => {
   const posAdd = event.target.closest("[data-pos-add]"); if (posAdd) addPosItem(posAdd.dataset.posAdd, posAdd.dataset.posKind);
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
   const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; renderCollection("services"); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-  const salary = event.target.closest("[data-pay-salary]"); if (salary) paySalary(salary.dataset.paySalary);
+  const salary = event.target.closest("[data-pay-salary]"); if (salary) await withButtonBusy(salary,()=>paySalary(salary.dataset.paySalary));
   const review = event.target.closest("[data-review-action]"); if (review) await withButtonBusy(review,()=>updateReview(review.dataset.reviewId, review.dataset.reviewAction, review.dataset.reviewFeatured === "true"));
-  const wallet=event.target.closest("[data-wallet-adjust]");if(wallet){const points=Number(prompt("تعديل النقاط (+ أو -)","0")||0);const cashback=Number(prompt("تعديل الكاش باك (+ أو -)","0")||0);const reason=prompt("سبب التعديل")||"";if(reason&&(points||cashback)){try{await adjustCustomerWallet({customerId:wallet.dataset.walletAdjust,points,cashback,reason,idempotencyKey:crypto.randomUUID()});await loadCollection("customers",true);toast("تم تعديل المحفظة وتسجيل الحركة")}catch(error){toast(error.message||"تعذر التعديل",true)}}}
-  const campaignAction=event.target.closest("[data-campaign-action]");if(campaignAction){try{await updateWhatsappCampaignState(campaignAction.dataset.campaignId,campaignAction.dataset.campaignAction);await loadCollection("campaigns",true);renderCampaigns();toast("تم تحديث الحملة")}catch(error){toast(error.message,true)}}
-  const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟")){try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}}}
+  const wallet=event.target.closest("[data-wallet-adjust]");if(wallet){const points=Number(prompt("تعديل النقاط (+ أو -)","0")||0);const cashback=Number(prompt("تعديل الكاش باك (+ أو -)","0")||0);const reason=prompt("سبب التعديل")||"";if(reason&&(points||cashback))await withButtonBusy(wallet,async()=>{try{await adjustCustomerWallet({customerId:wallet.dataset.walletAdjust,points,cashback,reason,idempotencyKey:crypto.randomUUID()});await loadCollection("customers",true);toast("تم تعديل المحفظة وتسجيل الحركة")}catch(error){toast(error.message||"تعذر التعديل",true)}})}
+  const campaignAction=event.target.closest("[data-campaign-action]");if(campaignAction)await withButtonBusy(campaignAction,async()=>{try{await updateWhatsappCampaignState(campaignAction.dataset.campaignId,campaignAction.dataset.campaignAction);await loadCollection("campaigns",true);renderCampaigns();toast("تم تحديث الحملة")}catch(error){toast(error.message,true)}});
+  const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟"))await withButtonBusy(consent,async()=>{try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}})}
 });
 document.addEventListener("input", event => {
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
@@ -1035,7 +1035,7 @@ $("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue
 $("#openScanner").addEventListener("click", openScanner);
 $("#scannerClose").addEventListener("click", closeScanner);
 $("#scannerCamera").addEventListener("change", openScanner);
-$("#findScannedBooking").addEventListener("click", findScanned);
+$("#findScannedBooking").addEventListener("click", event => withButtonBusy(event.currentTarget, findScanned));
 $("#secureDeleteClose").addEventListener("click", closeSecureDelete);
 $("#secureDeleteCancel").addEventListener("click", closeSecureDelete);
 $("#secureDeleteForm").addEventListener("submit", submitSecureDelete);

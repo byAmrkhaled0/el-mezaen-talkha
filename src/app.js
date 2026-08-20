@@ -680,8 +680,10 @@ function renderManagedBooking() {
 
 function bookingStatusLabel(value) { return ({ pending: "جديد", confirmed: "مؤكد", rejected: "مرفوض", cancelled: "ملغي", completed: "مكتمل" })[value] || value || "—"; }
 
-async function cancelManagedBooking() {
+async function cancelManagedBooking(button) {
   if (!state.manageCredentials || !state.managedBooking?.canCancel || !confirm("هل تريد إلغاء الحجز؟")) return;
+  const label = button?.textContent || "";
+  if (button) { button.disabled = true; button.textContent = "جاري الإلغاء…"; }
   try {
     await cancelCustomerBooking(state.manageCredentials);
     state.managedBooking = { ...state.managedBooking, status: "cancelled", canCancel: false };
@@ -689,6 +691,7 @@ async function cancelManagedBooking() {
     showToast("تم إلغاء الحجز بنجاح");
     trackEvent("booking_cancelled", { branch_id: state.managedBooking.branchId || "unknown" });
   } catch (error) { showToast(error.message || "تعذر إلغاء الحجز"); }
+  finally { if (button?.isConnected) { button.disabled = false; button.textContent = label; } }
 }
 
 function updateCountdowns() {
@@ -718,7 +721,8 @@ function observeReveals() {
 document.addEventListener("click", event => {
   const video = event.target.closest("[data-video-src]");
   if (video) playNewsVideo(video);
-  if (event.target.closest("[data-cancel-customer-booking]")) cancelManagedBooking();
+  const cancelBooking = event.target.closest("[data-cancel-customer-booking]");
+  if (cancelBooking && !cancelBooking.disabled) cancelManagedBooking(cancelBooking);
   const add = event.target.closest("[data-add-id]");
   if (add) addToCart(add.dataset.addId);
   const drink = event.target.closest("[data-add-drink]");
