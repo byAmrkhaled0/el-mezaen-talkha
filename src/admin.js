@@ -325,18 +325,36 @@ function printReceipt(id) {
   popup.document.close();
 }
 
-let scanStream;let scanLocked=false;let scanLastValue="";let scanLastAt=0;
-async function openScanner() {
-  $("#scannerDialog").showModal();
-  if (!("BarcodeDetector" in window)) return toast("يمكنك كتابة الكود يدويًا؛ المسح بالكاميرا غير مدعوم في هذا المتصفح", true);
-  try {
-    scanLocked=false;scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: $("#scannerCamera").value || "environment" } });
-    $("#scannerVideo").srcObject = scanStream; await $("#scannerVideo").play();
-    const detector = new BarcodeDetector({ formats: ["code_128", "qr_code"] });
-    const tick = async () => { if (!scanStream || scanLocked) return; const codes = await detector.detect($("#scannerVideo")).catch(() => []); const value=codes[0]?.rawValue||"";if(value&&!(value===scanLastValue&&Date.now()-scanLastAt<3000)){scanLastValue=value;scanLastAt=Date.now();scanLocked=true;$("#scannerCode").value=value;await findScanned();return}requestAnimationFrame(tick);};tick();
-  } catch (error) { const denied=error?.name==="NotAllowedError";toast(denied?"تم رفض إذن الكاميرا؛ اسمح به أو استخدم الإدخال اليدوي":"الكاميرا غير متاحة أو مستخدمة بتطبيق آخر؛ استخدم الإدخال اليدوي",true); }
+let scanStream;let scanControls;let scanLocked=false;let scanLastValue="";let scanLastAt=0;
+async function acceptScannedValue(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized || scanLocked || (normalized === scanLastValue && Date.now() - scanLastAt < 3000)) return;
+  scanLastValue = normalized; scanLastAt = Date.now(); scanLocked = true;
+  $("#scannerCode").value = normalized;
+  await findScanned();
 }
-function closeScanner() { scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;scanLocked=false; if($("#scannerDialog").open)$("#scannerDialog").close(); }
+async function openScanner() {
+  if (!$("#scannerDialog").open) $("#scannerDialog").showModal();
+  try {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("UNSUPPORTED_CAMERA"), { name: "NotSupportedError" });
+    closeScanner(false);
+    scanLocked=false;scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("#scannerCamera").value || "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    const video = $("#scannerVideo"); video.srcObject = scanStream; await video.play();
+    if ("BarcodeDetector" in window) {
+      const detector = new BarcodeDetector({ formats: ["code_128", "qr_code"] });
+      const tick = async () => { if (!scanStream || scanLocked) return; const codes = await detector.detect(video).catch(() => []); await acceptScannedValue(codes[0]?.rawValue); if (scanStream && !scanLocked) requestAnimationFrame(tick); }; tick();
+    } else {
+      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const reader = new BrowserMultiFormatReader();
+      scanControls = await reader.decodeFromStream(scanStream, video, (result) => { if (result) acceptScannedValue(result.getText()); });
+    }
+  } catch (error) {
+    scanControls?.stop?.(); scanControls = null; scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;
+    const message = error?.name === "NotAllowedError" ? "تم رفض إذن الكاميرا؛ فعّله من إعدادات الموقع أو استخدم الإدخال اليدوي" : error?.name === "NotFoundError" ? "لا توجد كاميرا متاحة على هذا الجهاز؛ استخدم الإدخال اليدوي" : error?.name === "NotReadableError" ? "الكاميرا مستخدمة في تطبيق آخر؛ أغلق التطبيق ثم حاول مجددًا" : "هذا المتصفح لا يسمح بالكاميرا هنا؛ افتح الموقع في Chrome أو Safari واستخدم الإدخال اليدوي";
+    toast(message, true);
+  }
+}
+function closeScanner(closeDialog = true) { scanControls?.stop?.(); scanControls = null; scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;scanLocked=false; if(closeDialog && $("#scannerDialog").open)$("#scannerDialog").close(); }
 async function findScanned() { const raw=$("#scannerCode").value.trim();if(!raw){scanLocked=false;return}if(raw.toLowerCase().startsWith("mzc_")){try{const result=await scanCustomerCode(raw);closeScanner();await loadCollection("customers",true);selectPosCustomer(result.customer.id);showSection("pos");toast(`تم فتح العميل ${result.customer.firstName||""}`)}catch(error){scanLocked=false;toast(error.message||"كود العميل غير صحيح",true)}return}const code=raw.toUpperCase();const found=state.dashboard.bookings.find(item=>String(item.code).toUpperCase()===code);if(!found){scanLocked=false;return toast("لم يتم العثور على الحجز أو المنتج",true)}closeScanner();$("#bookingSearch").value=found.code;renderBookings();document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});toast("تم فتح الحجز");}
 
 function renderRevenue() {
@@ -1009,6 +1027,7 @@ $("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookin
 $("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "branch", "booking", "type", "method", "staff", "services", "products", "drinks", "amount"], state.dashboard.ledger.map(item => [item.dateKey, branchLabel(item.branchId), item.bookingCode, item.type, item.paymentMethod, item.staffId, item.revenueBreakdown?.services || 0, item.revenueBreakdown?.products || 0, item.revenueBreakdown?.drinks || 0, item.amount])));
 $("#openScanner").addEventListener("click", openScanner);
 $("#scannerClose").addEventListener("click", closeScanner);
+$("#scannerCamera").addEventListener("change", openScanner);
 $("#findScannedBooking").addEventListener("click", findScanned);
 $("#secureDeleteClose").addEventListener("click", closeSecureDelete);
 $("#secureDeleteCancel").addEventListener("click", closeSecureDelete);

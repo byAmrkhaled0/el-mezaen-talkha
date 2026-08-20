@@ -17,9 +17,12 @@
   "dependencies": {
     "@fontsource/alexandria": "^5.2.8",
     "@fontsource/tajawal": "^5.2.7",
+    "@zxing/browser": "^0.1.5",
     "firebase": "^12.2.1",
     "jsbarcode": "^3.12.1",
     "qrcode": "^1.5.4"
   },
-  "devDependencies": { "vite": "^7.0.6" }
+  "devDependencies": {
+    "vite": "^7.0.6"
+  }
 }
