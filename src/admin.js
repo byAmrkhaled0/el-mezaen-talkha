@@ -15,7 +15,7 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", editingUserId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, loadedAt: { dashboard: 0, business: 0 }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", editingUserId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
@@ -116,11 +116,13 @@ async function showSection(id) {
   $$('[data-section]').forEach(button => button.classList.toggle("active", button.dataset.section === id));
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
-  if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id)) await loadDashboard();
+  const tasks = [];
+  if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id) && Date.now() - state.loadedAt.dashboard > 45_000) tasks.push(loadDashboard());
   const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
-  for (const collection of map[id] || []) await loadCollection(collection, true);
+  tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
+  if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
+  await Promise.all(tasks);
   if (id === "revenue") renderRevenue();
-  if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id)) await loadBusiness();
   if (id === "pos") renderPos();
   if (id === "users") renderUserAccounts();
   if (id === "campaigns") renderCampaigns();
@@ -201,6 +203,7 @@ async function loadDashboard(silent = false) {
     if (state.lastBookingCount !== null && result.bookings.length > state.lastBookingCount) notifyNewBooking();
     state.lastBookingCount = result.bookings.length;
     state.dashboard = result;
+    state.loadedAt.dashboard = Date.now();
     renderDashboard();
   } catch (error) { if (!silent) toast(error.message || "تعذر تحميل لوحة الإدارة", true); }
 }
@@ -209,6 +212,7 @@ async function loadBusiness(silent = false) {
   const month = $("#payrollMonth")?.value || cairoDateKey().slice(0, 7);
   try {
     state.business = await getBusinessDashboard(month);
+    state.loadedAt.business = Date.now();
     state.collections.set("inventoryItems", state.business.inventory || []);
     state.collections.set("drinks", state.business.drinks || []);
     renderBusiness();
@@ -269,7 +273,8 @@ function renderBookings() {
 function renderPosReceipts() {
   const target = $("#posReceipts");
   if (!target) return;
-  const receipts = state.dashboard.bookings.filter(item => item.source === "pos").slice(0, 12);
+  const query = $("#posReceiptSearch")?.value.trim().toLowerCase() || "";
+  const receipts = state.dashboard.bookings.filter(item => item.source === "pos" && (!query || [item.code, item.customerName, item.phone, ...(item.serviceNamesAr || [])].some(value => String(value || "").toLowerCase().includes(query)))).slice(0, 30);
   target.innerHTML = receipts.map(item => `<tr><td><b>${escapeHtml(item.code || item.id)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName || "عميل نقدي")}<br><small>${escapeHtml(item.phone || "")}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</td><td>${escapeHtml(item.staffNameAr || "—")}</td><td><b>${money(item.total)}</b></td><td>${paymentLabel(item.paymentStatus)}</td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة</button><button data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال صورة الشيك</button></div></td></tr>`).join("") || emptyRow(7);
 }
 
@@ -950,6 +955,7 @@ document.addEventListener("click", async event => {
 });
 document.addEventListener("input", event => {
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
+  if (event.target.id === "posReceiptSearch") renderPosReceipts();
   if (event.target.id === "posItemSearch" || event.target.id === "posDiscount") event.target.id === "posItemSearch" ? renderPos() : renderPosCart();
   if (event.target.matches("[data-pos-qty]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posQty && item.kind === event.target.dataset.posKind); if (line) { const catalogItem = posCatalogItems().find(item => item.id === line.id && item.kind === line.kind); const max = line.kind === "inventory" ? Math.max(1, Number(catalogItem?.stockQty || 1)) : 20; line.qty = Math.max(1, Math.min(max, Math.floor(Number(event.target.value || 1)))); renderPosCart(); } }
 });

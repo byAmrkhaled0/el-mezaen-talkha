@@ -136,3 +136,22 @@ html[data-admin-role="cashier"] .cashier-metrics .metric-card:nth-child(3),html[
   .pos-items{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.pos-item{height:108px;min-height:108px;padding:9px;padding-inline-end:39px}
 }
 @media(max-width:360px){.pos-items{grid-template-columns:1fr}.pos-item{height:96px;min-height:96px}}
+
+/* Wide, fast cashier workspace */
+.pos-search-box{min-width:min(440px,100%);height:46px;display:flex;align-items:center;gap:8px;border:1px solid color-mix(in srgb,var(--cyan),transparent 55%);border-radius:12px;padding-inline:12px;background:var(--bg2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)}
+.pos-search-box:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan),transparent 86%)}
+.pos-search-box>span{color:var(--cyan);font-size:22px}.pos-search-box input,.pos-search-box .pos-search{width:100%;min-height:42px!important;border:0!important;outline:0;background:transparent!important;box-shadow:none!important}
+.pos-filters{width:100%;display:grid;grid-template-columns:minmax(280px,1fr) 180px 210px;align-items:center}.pos-filters .pos-search-box{grid-column:auto}
+.pos-receipt-tools{align-items:center}.pos-receipt-tools .pos-search-box{min-width:min(380px,100%)}
+.pos-ticket-panel{border-color:color-mix(in srgb,var(--cyan),transparent 68%)}
+@media(min-width:1101px){
+  html[data-admin-role="cashier"] .admin-main{padding-inline:12px}
+  html[data-admin-role="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(450px,500px);gap:12px}
+  html[data-admin-role="cashier"] .pos-ticket-panel{top:72px;max-height:calc(100dvh - 84px);overflow:auto}
+  html[data-admin-role="cashier"] .pos-form{grid-template-columns:1fr 1fr;align-items:end}
+  html[data-admin-role="cashier"] .pos-form>.pos-customer-fields,html[data-admin-role="cashier"] .pos-form>.pos-cart,html[data-admin-role="cashier"] .pos-form>.pos-payment,html[data-admin-role="cashier"] .pos-form>.pos-total,html[data-admin-role="cashier"] .pos-form>.pos-submit{grid-column:1/-1}
+  html[data-admin-role="cashier"] .pos-cart{max-height:310px}
+  html[data-admin-role="cashier"] .pos-items{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}
+}
+@media(max-width:1250px){.pos-filters{grid-template-columns:1fr 1fr}.pos-filters .pos-search-box{grid-column:1/-1}}
+@media(max-width:720px){.pos-filters{grid-template-columns:1fr 1fr}.pos-filters .pos-search-box{grid-column:1/-1;min-width:0}.pos-receipt-tools .pos-search-box{min-width:0;width:100%}.pos-receipt-tools{display:grid;grid-template-columns:1fr}.pos-receipt-tools>*{width:100%}}
