@@ -67,7 +67,7 @@ const fields = {
   ],
   reviews: [["name", "اسم العميل", "text", true], ["rating", "التقييم من 5", "number", true], ["comment", "التعليق", "textarea", true, null, true], ["bookingCode", "كود الحجز", "text"], ["status", "حالة التقييم", "select", true, [["pending", "بانتظار المراجعة"], ["published", "منشور"], ["rejected", "مرفوض"]]], ["featured", "تقييم مميز ومثبت", "boolean"], ["adminReply", "رد الإدارة", "textarea", false, null, true]],
   holidays: [["branchId", "الفرع", "branch-select", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب", "text"], ["closed", "مغلق بالكامل", "boolean"]],
-  content: [["type", "", "hidden"], ["mediaType", "", "hidden"], ["imageUrl", "", "hidden"], ["videoUrl", "", "hidden"], ["linkUrl", "", "hidden"], ["titleAr", "العنوان", "text", true], ["branchIds", "يظهر في", "branch-scope", false, null, true], ["bodyAr", "وصف اختياري", "textarea", false, null, true], ["imageFile", "اختر صورة من الجهاز", "file", false, null, true], ["videoFile", "أو اختر فيديو من الجهاز (MP4 أو WebM أقل من 30MB)", "video-file", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "انشر على الموقع", "boolean"]],
+  content: [["type", "", "hidden"], ["mediaType", "", "hidden"], ["imageUrl", "", "hidden"], ["videoUrl", "", "hidden"], ["linkUrl", "", "hidden"], ["titleAr", "العنوان", "text", true], ["branchIds", "يظهر في", "branch-scope", false, null, true], ["bodyAr", "وصف اختياري", "textarea", false, null, true], ["mediaFile", "اختر صورة أو فيديو من الجهاز", "media-file", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "انشر على الموقع", "boolean"]],
 };
 
 const sectionTitles = Object.fromEntries($$('[data-section]').map(button => [button.dataset.section, button.textContent.trim().replace(/^[^\s]+\s/, "")]));
@@ -772,10 +772,10 @@ function renderField([name, label, type, required = false, options = null, full 
   if (type === "drink-branch-select") return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="talkha" ${value === "talkha" ? "selected" : ""}>فرع طلخا</option><option value="mashaya" ${value === "mashaya" ? "selected" : ""}>فرع المشاية</option>${state.role === "admin" ? `<option value="all" ${value === "all" ? "selected" : ""}>كل الفروع</option>` : ""}</select></label>`;
   if (type === "boolean") return `<label class="${className}">${label}<select name="${name}"><option value="true" ${value !== false ? "selected" : ""}>نعم</option><option value="false" ${value === false ? "selected" : ""}>لا</option></select></label>`;
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
-  const inputType = type === "video-file" ? "file" : type;
-  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : "";
+  const inputType = ["video-file", "media-file"].includes(type) ? "file" : type;
+  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : type === "media-file" ? 'accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm"' : "";
   const uploadClass = inputType === "file" ? "media-upload-field full" : className;
-  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : "";
+  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : type === "media-file" ? "صور JPG/PNG/WebP/AVIF أو فيديو MP4/WebM أقل من 30MB" : "";
   return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
 
@@ -784,8 +784,9 @@ function updateEditorMediaPreview() {
   const preview = $("#editorMediaPreview");
   if (!preview) return;
   if (editorPreviewUrl) URL.revokeObjectURL(editorPreviewUrl);
-  const imageFile = $('#editorFields input[name="imageFile"]')?.files?.[0];
-  const videoFile = $('#editorFields input[name="videoFile"]')?.files?.[0];
+  const mediaFile = $('#editorFields input[name="mediaFile"]')?.files?.[0];
+  const imageFile = mediaFile?.type?.startsWith("image/") ? mediaFile : $('#editorFields input[name="imageFile"]')?.files?.[0];
+  const videoFile = mediaFile?.type?.startsWith("video/") ? mediaFile : $('#editorFields input[name="videoFile"]')?.files?.[0];
   const imageUrl = imageFile ? (editorPreviewUrl = URL.createObjectURL(imageFile)) : $('#editorFields [name="imageUrl"]')?.value.trim();
   const rawVideoUrl = videoFile ? (editorPreviewUrl = URL.createObjectURL(videoFile)) : $('#editorFields [name="videoUrl"]')?.value.trim();
   const source = videoSource(rawVideoUrl);
@@ -800,8 +801,10 @@ async function saveEditor(event) {
   event.preventDefault();
   const { collection, id } = state.editor;
   const formData = new FormData(event.currentTarget);
-  const image = formData.get("imageFile");
-  const video = formData.get("videoFile");
+  const media = formData.get("mediaFile");
+  const image = media?.type?.startsWith("image/") ? media : formData.get("imageFile");
+  const video = media?.type?.startsWith("video/") ? media : formData.get("videoFile");
+  formData.delete("mediaFile");
   formData.delete("imageFile");
   formData.delete("videoFile");
   const payload = Object.fromEntries(formData.entries());
