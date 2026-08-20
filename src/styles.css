@@ -177,8 +177,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .value-list { display: flex; flex-wrap: wrap; gap: 9px; }
 .value-list span { border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; }
 .gallery-mosaic { display: grid; grid-template-columns: 1.15fr .85fr; grid-template-rows: 1fr 1fr; gap: 10px; min-height: 490px; }
-.gallery-mosaic img { width: 100%; height: 100%; object-fit: cover; border-radius: 21px; border: 1px solid var(--line); }
-.gallery-mosaic img:first-child { grid-row: 1/3; }
+.gallery-mosaic img,.gallery-mosaic video,.gallery-video-link { width: 100%; height: 100%; min-height:0; object-fit: cover; border-radius: 21px; border: 1px solid var(--line); background:#000; }
+.gallery-mosaic > :first-child { grid-row: 1/3; }
+.gallery-video-link{position:relative;display:grid;place-items:center;overflow:hidden;color:#fff;text-decoration:none}.gallery-video-link b{position:absolute;inset:auto 12px 12px;text-shadow:0 2px 8px #000}
 
 .team-grid { grid-template-columns: repeat(5, 1fr); }
 .team-card { border-radius: 20px; padding: 13px; text-align: center; }

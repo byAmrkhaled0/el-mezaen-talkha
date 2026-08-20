@@ -10,7 +10,7 @@ export function videoSource(value) {
   if (!url) return { kind: "", url: "" };
   const host = url.hostname.replace(/^www\./, "").toLowerCase();
   const path = decodeURIComponent(url.pathname);
-  if (/\.(?:mp4|webm|ogg)$/i.test(path)) return { kind: "direct", url: url.href };
+  if (/\.(?:mp4|webm|ogg|mov)$/i.test(path)) return { kind: "direct", url: url.href };
 
   if (["youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com"].includes(host)) {
     const id = host === "youtu.be" ? path.split("/").filter(Boolean)[0]

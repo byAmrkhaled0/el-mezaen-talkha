@@ -200,10 +200,19 @@ function renderContent() {
     { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
     { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
   ];
-  $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(item => `<img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 100vw, 50vw" width="640" height="480">`).join("");
+  $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(renderGalleryMedia).join("");
   const news = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
   $("#newsGrid").innerHTML = news.map(item => { const link = safeWebUrl(item.linkUrl); return `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${link ? `<a class="btn btn-ghost" href="${escapeAttr(link)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`; }).join("");
+}
+
+function renderGalleryMedia(item) {
+  const label = escapeAttr(localized(item, "title"));
+  if (!isVideoContent(item)) return `<img src="${escapeAttr(item.imageUrl)}" alt="${label}" loading="lazy" decoding="async" sizes="(max-width:560px) 100vw, 50vw" width="640" height="480">`;
+  const source = videoSource(item.videoUrl);
+  if (source.kind === "direct") return `<video class="gallery-video" src="${escapeAttr(source.url)}" poster="${escapeAttr(item.imageUrl || "")}" aria-label="${label}" controls playsinline preload="metadata"></video>`;
+  if (source.url) return `<a class="gallery-video-link" href="${escapeAttr(source.url)}" target="_blank" rel="noopener" aria-label="${label}"><span class="video-play">▶</span><b>${label}</b></a>`;
+  return "";
 }
 
 function renderReviews() {

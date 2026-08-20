@@ -143,8 +143,10 @@ export async function uploadImage(file, folder = "content") {
 }
 
 export async function uploadVideo(file, folder = "content") {
-  const allowed = ["video/mp4", "video/webm"];
-  if (!file || !allowed.includes(file.type) || file.size >= 30 * 1024 * 1024) throw new Error("اختر فيديو MP4 أو WebM أقل من 30MB");
+  const allowed = ["video/mp4", "video/webm", "video/quicktime"];
+  if (!file) throw new Error("اختر فيديو من الجهاز");
+  if (!allowed.includes(file.type)) throw new Error(`نوع الفيديو غير مدعوم (${file.type || "غير معروف"}). استخدم MP4 أو WebM أو MOV`);
+  if (file.size >= 30 * 1024 * 1024) throw new Error(`حجم الفيديو ${Math.ceil(file.size / 1024 / 1024)}MB؛ الحد الأقصى 30MB`);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
