@@ -4,7 +4,6 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 import { getFunctions as getAdminFunctions } from "firebase-admin/functions";
-import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -13,8 +12,10 @@ import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, calculate
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
-const whatsappToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
-const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+// Meta is deferred. These stay empty unless explicitly supplied as runtime env values.
+// Restore Secret Manager bindings when the official WhatsApp integration is enabled.
+const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 80, maxInstances: 100, timeoutSeconds: 30 };
 const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
@@ -1314,7 +1315,7 @@ export const sendWhatsappReceipt = onCall(adminOptions, async request => {
   const booking = bookingSnapshot.data(); requireBranchAccess(request, booking.branchId);
   const settings = await readSettings();
   if (settings.whatsappReceiptsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الشيكات عبر واتساب متوقف");
-  const accessToken = whatsappToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
+  const accessToken = whatsappToken; const phoneNumberId = whatsappPhoneNumberId;
   if (!accessToken || !phoneNumberId) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
   const templateName = sanitizeText(settings.whatsappReceiptTemplate, 120);
   if (!/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("failed-precondition", "قالب شيك واتساب غير مضبوط");
@@ -1351,7 +1352,7 @@ export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { ma
   const campaign = snapshot.data();
   const settings = await readSettings();
   if (settings.whatsappCampaignsEnabled !== true) { await ref.update({ state: "PAUSED", lastError: "FEATURE_DISABLED", updatedAt: FieldValue.serverTimestamp() }); return; }
-  const accessToken = whatsappToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
+  const accessToken = whatsappToken; const phoneNumberId = whatsappPhoneNumberId;
   if (!accessToken || !phoneNumberId) { await ref.update({ state: "PAUSED", lastError: "META_NOT_CONFIGURED", updatedAt: FieldValue.serverTimestamp() }); return; }
   const remaining = Number(campaign.recipientCap || 100) - Number(campaign.sentCount || 0);
   if (remaining <= 0) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
