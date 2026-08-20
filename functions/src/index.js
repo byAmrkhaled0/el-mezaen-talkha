@@ -38,6 +38,7 @@ const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.C
 let catalogCache = null;
 let catalogCacheExpiresAt = 0;
 let catalogLoadPromise = null;
+let catalogCacheRevision = "";
 
 export const health = onRequest({ region, cors: false, memory: "256MiB", maxInstances: 10, timeoutSeconds: 10 }, async (_request, response) => {
   try { await db.doc("settings/public").get(); response.set("Cache-Control", "no-store").status(200).json({ ready: true, version: process.env.K_REVISION || "local", environment: process.env.GCLOUD_PROJECT ? "production" : "local", firestore: "ready" }); }
@@ -115,6 +116,17 @@ function itemInAllowedBranch(item, allowedBranches) {
 function invalidateCatalogCache() {
   catalogCache = null;
   catalogCacheExpiresAt = 0;
+  catalogCacheRevision = "";
+}
+
+async function readCatalogRevision() {
+  const snapshot = await db.doc("settings/catalogRevision").get();
+  return snapshot.exists ? String(snapshot.data()?.version || snapshot.updateTime?.toMillis() || "") : "initial";
+}
+
+async function markCatalogChanged() {
+  invalidateCatalogCache();
+  await db.doc("settings/catalogRevision").set({ version: `${Date.now()}-${randomBytes(6).toString("hex")}`, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 function requirePermission(request, permission) {
   const role = requireRole(request);
@@ -217,9 +229,11 @@ async function loadCatalog() {
 }
 
 export const getCatalog = onCall(catalogOptions, async () => {
-  if (catalogCache && Date.now() < catalogCacheExpiresAt) return catalogCache;
+  const revision = await readCatalogRevision();
+  if (catalogCache && catalogCacheRevision === revision && Date.now() < catalogCacheExpiresAt) return catalogCache;
   catalogLoadPromise ||= loadCatalog().then(payload => {
     catalogCache = payload;
+    catalogCacheRevision = revision;
     catalogCacheExpiresAt = Date.now() + CATALOG_CACHE_MS;
     return payload;
   }).finally(() => { catalogLoadPromise = null; });
@@ -655,7 +669,7 @@ export const adminUpsert = onCall(adminOptions, async request => {
   const payload = normalizeAdminPayload(collection, raw);
   await ref.set({ ...payload, updatedAt: FieldValue.serverTimestamp(), ...(before.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
   await db.collection("activityLogs").add({ action: before.exists ? "update" : "create", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
-  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) invalidateCatalogCache();
+  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) await markCatalogChanged();
   if (before.exists && ["content", "staff", "packages", "offers"].includes(collection)) {
     const keep = new Set([payload.imageUrl, payload.videoUrl].map(managedStoragePath).filter(Boolean));
     await deleteManagedMedia(before.data(), keep);
@@ -675,7 +689,7 @@ export const adminDelete = onCall(adminOptions, async request => {
   } else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
   await db.collection(collection).doc(id).delete();
   await db.collection("activityLogs").add({ action: "delete", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
-  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) invalidateCatalogCache();
+  if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) await markCatalogChanged();
   if (target.exists && ["content", "staff", "packages", "offers"].includes(collection)) await deleteManagedMedia(target.data());
   return { ok: true };
 });
