@@ -773,9 +773,9 @@ function renderField([name, label, type, required = false, options = null, full 
   if (type === "boolean") return `<label class="${className}">${label}<select name="${name}"><option value="true" ${value !== false ? "selected" : ""}>نعم</option><option value="false" ${value === false ? "selected" : ""}>لا</option></select></label>`;
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
   const inputType = ["video-file", "media-file"].includes(type) ? "file" : type;
-  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm,video/quicktime"' : type === "media-file" ? 'accept="image/*,video/mp4,video/webm,video/quicktime"' : "";
+  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : type === "media-file" ? 'accept="image/*,video/mp4,video/webm"' : "";
   const uploadClass = inputType === "file" ? "media-upload-field full" : className;
-  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : type === "media-file" ? "صورة، أو فيديو MP4/WebM/MOV أقل من 30MB" : "";
+  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : type === "media-file" ? "صورة، أو فيديو MP4 (H.264) / WebM أقل من 30MB" : "";
   return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
 

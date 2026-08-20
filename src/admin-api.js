@@ -143,10 +143,14 @@ export async function uploadImage(file, folder = "content") {
 }
 
 export async function uploadVideo(file, folder = "content") {
-  const allowed = ["video/mp4", "video/webm", "video/quicktime"];
+  const allowed = ["video/mp4", "video/webm"];
   if (!file) throw new Error("اختر فيديو من الجهاز");
-  if (!allowed.includes(file.type)) throw new Error(`نوع الفيديو غير مدعوم (${file.type || "غير معروف"}). استخدم MP4 أو WebM أو MOV`);
+  if (!allowed.includes(file.type)) throw new Error("الفيديو بصيغة MOV غير مناسب للموقع. حوّله إلى MP4 بترميز H.264 ثم أعد رفعه");
   if (file.size >= 30 * 1024 * 1024) throw new Error(`حجم الفيديو ${Math.ceil(file.size / 1024 / 1024)}MB؛ الحد الأقصى 30MB`);
+  if (file.type === "video/mp4") {
+    const header = new TextDecoder("latin1").decode(await file.slice(0, Math.min(file.size, 4 * 1024 * 1024)).arrayBuffer());
+    if (header.includes("hvc1") || header.includes("hev1")) throw new Error("الفيديو يستخدم HEVC/H.265 وقد يظهر شاشة سوداء. صدّره MP4 بترميز H.264 ثم أعد رفعه");
+  }
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
