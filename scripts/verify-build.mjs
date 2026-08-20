@@ -83,6 +83,8 @@ assert.match(worker, /const VERSION = "v57"/);
 assert.match(worker, /sensitiveNavigation/);
 assert.match(index, /id="networkStatus"/);
 assert.match(admin, /id="userAccountForm"/);
+assert.match(admin, /id="accessDialog"/);
+assert.match(admin, /id="sidebarCollapse"/);
 assert.match(firebaseConfig, /window\.__VAPID_KEY__\s*=\s*"[A-Za-z0-9_-]{80,}"/);
 assert.match(firebaseConfig, /window\.__APP_CHECK_SITE_KEY__\s*=\s*"[A-Za-z0-9_-]{20,}"/);
 assert.match(appSource, /branchId:/);

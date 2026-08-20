@@ -1398,11 +1398,27 @@ export const setUserRole = onCall(adminOptions, async request => {
   const role = sanitizeText(request.data?.role, 30);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
   const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
-  if (!uid || !ADMIN_ROLES.includes(role)) throw new HttpsError("invalid-argument", "بيانات الصلاحية غير صحيحة");
-  if (role !== "admin" && !branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا الحساب");
+  if (!uid || !["manager", "cashier"].includes(role)) throw new HttpsError("invalid-argument", "يمكن تعديل الحساب إلى مدير أو كاشير فقط");
+  if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "لا يمكنك تعديل صلاحيات حسابك الحالي");
+  if (!branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا الحساب");
+  const userRef = db.doc(`users/${uid}`);
+  const beforeSnapshot = await userRef.get();
+  if (!beforeSnapshot.exists || beforeSnapshot.data()?.role === "admin") throw new HttpsError("failed-precondition", "لا يمكن تعديل حساب الأدمن من هذه الشاشة");
+  const before = beforeSnapshot.data();
   const { getAuth } = await import("firebase-admin/auth");
   await getAuth().setCustomUserClaims(uid, { role, permissions, branchIds });
-  await db.doc(`users/${uid}`).set({ role, permissions, branchIds, email: sanitizeText(request.data?.email, 200), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const now = FieldValue.serverTimestamp();
+  const batch = db.batch();
+  batch.set(userRef, { role, permissions, branchIds, email: sanitizeText(request.data?.email, 200) || before.email || "", updatedAt: now }, { merge: true });
+  batch.set(db.collection("activityLogs").doc(), {
+    action: "set-user-role", collection: "users", entityId: uid,
+    targetUserId: uid, targetUserName: sanitizeText(before.name, 80), targetUserEmail: sanitizeText(before.email || request.data?.email, 200),
+    beforeRole: sanitizeText(before.role, 30), afterRole: role,
+    permissionsAdded: permissions.filter(value => !(before.permissions || []).includes(value)),
+    permissionsRemoved: (before.permissions || []).filter(value => !permissions.includes(value)),
+    branchIds, userId: request.auth.uid, userName: sanitizeText(request.auth.token.name, 80), userEmail: sanitizeText(request.auth.token.email, 200), createdAt: now
+  });
+  await batch.commit();
   return { ok: true };
 });
 

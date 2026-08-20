@@ -1,7 +1,7 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
-import { adjustCustomerWallet, changeBooking, createPosOrder, createUserAccount, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { adjustCustomerWallet, changeBooking, changeUserRole, createPosOrder, createUserAccount, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -15,7 +15,7 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", editingUserId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
@@ -138,9 +138,41 @@ function renderPermissionPicker(role = $("#accountRole")?.value || "cashier") {
   $("#permissionPicker").innerHTML = Object.entries(permissionLabels).map(([value, label]) => `<label><input type="checkbox" name="permissions" value="${value}" ${selected.has(value) ? "checked" : ""}> ${label}</label>`).join("");
 }
 
+function renderAccessPermissionPicker(role, values = roleDefaults[role] || []) {
+  const selected = new Set(values);
+  $("#accessPermissionPicker").innerHTML = Object.entries(permissionLabels).map(([value, label]) => `<label><input type="checkbox" name="permissions" value="${value}" ${selected.has(value) ? "checked" : ""}> ${label}</label>`).join("");
+}
+
+function openAccessEditor(id) {
+  const item = (state.collections.get("users") || []).find(user => user.id === id);
+  if (!item || item.role === "admin" || item.id === state.user?.uid) return toast("لا يمكن تعديل هذا الحساب من هنا", true);
+  state.editingUserId = id;
+  $("#accessName").value = item.name || "";
+  $("#accessEmail").value = item.email || "";
+  $("#accessRole").value = ["manager", "cashier"].includes(item.role) ? item.role : "cashier";
+  $$('#accessForm input[name="branchIds"]').forEach(input => { input.checked = (item.branchIds || []).includes(input.value); });
+  renderAccessPermissionPicker($("#accessRole").value, item.permissions || roleDefaults[$("#accessRole").value]);
+  $("#accessDialog").showModal();
+}
+
+async function submitAccessEdit(event) {
+  event.preventDefault();
+  const item = (state.collections.get("users") || []).find(user => user.id === state.editingUserId);
+  if (!item) return toast("الحساب غير موجود", true);
+  const form = new FormData(event.currentTarget);
+  const button = $("#accessSave");
+  await withButtonBusy(button, async () => {
+    await changeUserRole(item.id, item.email || "", form.get("role"), form.getAll("permissions"), form.getAll("branchIds"));
+    await loadCollection("users", true);
+    renderUserAccounts();
+    $("#accessDialog").close();
+    toast("تم تحديث الصلاحيات وتسجيل العملية");
+  }).catch(error => toast(error.message || "تعذر تحديث الصلاحيات", true));
+}
+
 function renderUserAccounts() {
   const items = state.collections.get("users") || [];
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "كاشير (حساب قديم)" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "كاشير (حساب قديم)" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 async function submitUserAccount(event) {
@@ -613,6 +645,7 @@ function renderCollection(collection) {
 
 function entityCard(collection, item, readonly = false) {
   if (collection === "customers") return customerCard(item);
+  if (collection === "activityLogs") return activityCard(item);
   if (collection === "reviews") return reviewCard(item);
   const title = item.nameAr || item.name || item.titleAr || item.code || item.date || item.key || item.customerName || item.email || item.action || item.id;
   const category = collection === "services" ? (state.collections.get("categories") || []).find(value => value.id === item.categoryId) : null;
@@ -626,6 +659,15 @@ function entityCard(collection, item, readonly = false) {
     : item.addressAr || item.specialtyAr || item.reasonAr || item.bodyAr || item.phone || item.collection || item.role || item.id;
   const contentPreview = collection === "content" ? `<div class="entity-media">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="" loading="lazy" decoding="async">` : `<span>${isVideoContent(item) ? "▶" : "▧"}</span>`}${isVideoContent(item) ? '<b>فيديو</b>' : ""}</div><p class="entity-branch">${branchScopeLabel(item.branchIds)}</p>` : "";
   return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : `<footer>${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
+}
+
+function activityCard(item) {
+  const actions = { create: "إضافة سجل", update: "تعديل سجل", delete: "حذف سجل", "set-user-role": "تعديل صلاحيات حساب", "secure-delete-user": "حذف حساب", "wallet-adjustment": "تعديل محفظة", payment: "تسجيل دفع", refund: "استرداد مبلغ", "create-pos-order": "إنشاء شيك", "update-booking": "تعديل حجز" };
+  const actor = item.userName || item.userEmail || item.userId || "حساب غير معروف";
+  const actorDetail = [item.userEmail && item.userName ? item.userEmail : "", item.userId ? `UID: ${item.userId}` : ""].filter(Boolean).join(" • ");
+  const target = item.targetUserName || item.targetUserEmail || item.deletedUserName || item.deletedUserEmail || item.entityId || "—";
+  const change = item.action === "set-user-role" ? `${({ manager: "مدير", cashier: "كاشير" })[item.beforeRole] || item.beforeRole || "—"} ← ${({ manager: "مدير", cashier: "كاشير" })[item.afterRole] || item.afterRole || "—"}` : (item.collection || "");
+  return `<article class="activity-card"><div class="activity-action"><b>${escapeHtml(actions[item.action] || item.action || "نشاط")}</b><time>${escapeHtml(dateTime(item.createdAt))}</time></div><div><span>نفّذه</span><strong>${escapeHtml(actor)}</strong>${actorDetail ? `<small>${escapeHtml(actorDetail)}</small>` : ""}</div><div><span>على</span><strong>${escapeHtml(target)}</strong><small>${escapeHtml(change)}</small></div></article>`;
 }
 
 function reviewCard(item) {
@@ -880,6 +922,7 @@ document.addEventListener("click", async event => {
   const deleteRevenue = event.target.closest("[data-secure-delete-revenue]"); if (deleteRevenue) openSecureDelete("revenue", deleteRevenue.dataset.secureDeleteRevenue, deleteRevenue.dataset.secureDeleteLabel);
   const deleteExpense = event.target.closest("[data-secure-delete-expense]"); if (deleteExpense) openSecureDelete("expense", deleteExpense.dataset.secureDeleteExpense, deleteExpense.dataset.secureDeleteLabel);
   const deleteUser = event.target.closest("[data-secure-delete-user]"); if (deleteUser) openSecureDelete("user", deleteUser.dataset.secureDeleteUser, deleteUser.dataset.secureDeleteLabel);
+  const editUserAccess = event.target.closest("[data-edit-user-access]"); if (editUserAccess) openAccessEditor(editUserAccess.dataset.editUserAccess);
   const editExpense = event.target.closest("[data-edit-expense]"); if (editExpense) startExpenseEdit(editExpense.dataset.editExpense);
   const posAdd = event.target.closest("[data-pos-add]"); if (posAdd) addPosItem(posAdd.dataset.posAdd, posAdd.dataset.posKind);
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
@@ -912,7 +955,16 @@ function toggleAdminMenu() {
   $("#sidebarBackdrop").classList.toggle("show", open);
   document.body.style.overflow = open ? "hidden" : "";
 }
+function setSidebarCollapsed(collapsed) {
+  $("#adminApp").classList.toggle("sidebar-collapsed", collapsed);
+  const button = $("#sidebarCollapse");
+  button.textContent = collapsed ? "‹" : "›";
+  button.title = collapsed ? "إظهار القائمة" : "إخفاء القائمة";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  localStorage.setItem("mz-admin-sidebar-collapsed", collapsed ? "true" : "false");
+}
 $("#adminMenu").addEventListener("click", toggleAdminMenu);
+$("#sidebarCollapse").addEventListener("click", () => setSidebarCollapsed(!$("#adminApp").classList.contains("sidebar-collapsed")));
 $("#sidebarBackdrop").addEventListener("click", closeAdminMenu);
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeAdminMenu(); });
 $("#adminTheme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
@@ -920,6 +972,10 @@ $("#logoutButton").addEventListener("click", async () => { await logout(); locat
 $("#pushButton").addEventListener("click", async () => { try { await enablePush(); toast("تم تفعيل الإشعارات"); } catch { toast("أضف VAPID Key واسمح بالإشعارات أولًا", true); } });
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
+$("#accessClose").addEventListener("click", () => $("#accessDialog").close());
+$("#accessCancel").addEventListener("click", () => $("#accessDialog").close());
+$("#accessRole").addEventListener("change", event => renderAccessPermissionPicker(event.target.value));
+$("#accessForm").addEventListener("submit", submitAccessEdit);
 $("#customerDrawerClose").addEventListener("click", () => $("#customerDrawer").close());
 $("#entityForm").addEventListener("submit", saveEditor);
 [$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
@@ -963,6 +1019,7 @@ $("#installAdmin").addEventListener("click", async () => { if (!deferredInstallP
 setupPanels();
 $("#reviewStatusFilter").addEventListener("change", () => renderCollection("reviews"));
 setTheme(localStorage.getItem("mz-admin-theme") === "light" ? "light" : "dark");
+setSidebarCollapsed(localStorage.getItem("mz-admin-sidebar-collapsed") === "true");
 $("#expenseDate").value = cairoDateKey();
 $("#payrollMonth").value = cairoDateKey().slice(0, 7);
 toggleExpenseInventory();

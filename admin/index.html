@@ -48,6 +48,7 @@
         <button data-section="users">♟ حسابات العاملين والصلاحيات</button>
       </nav>
     </aside>
+    <button class="desktop-sidebar-toggle" id="sidebarCollapse" type="button" aria-controls="sidebar" aria-expanded="true" title="إخفاء القائمة">›</button>
     <main class="admin-main">
       <header class="admin-header">
         <div class="header-title"><button class="square-button mobile-menu" id="adminMenu" type="button">☰</button><div><span id="welcomeText">لوحة إدارة مزين مصر</span><h1 id="pageTitle">الرئيسية والإحصائيات</h1></div></div>
@@ -173,6 +174,19 @@
   </dialog>
   <dialog class="editor-dialog" id="scannerDialog"><div class="editor-shell scanner-shell"><header><div><span>بحث سريع</span><h2>ماسح QR وBarcode</h2></div><button type="button" class="dialog-close" id="scannerClose">×</button></header><div class="scanner-body"><label>الكاميرا<select id="scannerCamera"><option value="environment">الخلفية</option><option value="user">الأمامية</option></select></label><video id="scannerVideo" playsinline muted></video><p>امسح كود العميل أو الحجز، أو أدخل الكود يدويًا. يتوقف المسح تلقائيًا بعد أول قراءة.</p><div class="toolbar"><input id="scannerCode" placeholder="MZ-... أو mzc_..."><button class="small-button primary" id="findScannedBooking">فتح النتيجة</button></div></div></div></dialog>
   <dialog class="customer-drawer" id="customerDrawer"><div class="customer-drawer-shell"><header><div><span>ملف العميل</span><h2 id="customerDrawerTitle">بيانات العميل</h2></div><button type="button" class="dialog-close" id="customerDrawerClose">×</button></header><div class="customer-drawer-body" id="customerDrawerBody"></div></div></dialog>
+  <dialog class="editor-dialog" id="accessDialog">
+    <form class="editor-shell access-editor-shell" id="accessForm">
+      <header><div><span>إدارة الوصول</span><h2>تعديل صلاحيات الحساب</h2></div><button type="button" class="dialog-close" id="accessClose">×</button></header>
+      <div class="editor-fields">
+        <label>الاسم<input id="accessName" readonly></label>
+        <label>البريد الإلكتروني<input id="accessEmail" type="email" readonly></label>
+        <label class="full">نوع الحساب<select id="accessRole" name="role"><option value="cashier">كاشير</option><option value="manager">مدير</option></select></label>
+        <fieldset class="permission-picker full"><legend>الفروع المسموح بها</legend><div><label><input type="checkbox" name="branchIds" value="talkha"> فرع طلخا</label><label><input type="checkbox" name="branchIds" value="mashaya"> فرع المشاية</label></div></fieldset>
+        <fieldset class="permission-picker full"><legend>صلاحيات الحساب</legend><div id="accessPermissionPicker"></div></fieldset>
+      </div>
+      <footer><button type="button" class="small-button" id="accessCancel">إلغاء</button><button type="submit" class="small-button primary" id="accessSave">حفظ الصلاحيات</button></footer>
+    </form>
+  </dialog>
   <dialog class="editor-dialog" id="secureDeleteDialog">
     <form class="editor-shell secure-delete-shell" id="secureDeleteForm">
       <header><div><span>حماية البيانات</span><h2>تأكيد الحذف النهائي</h2></div><button type="button" class="dialog-close" id="secureDeleteClose">×</button></header>
