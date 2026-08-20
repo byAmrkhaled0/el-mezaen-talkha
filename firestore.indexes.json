@@ -39,6 +39,14 @@
       "collectionGroup": "revenueLedger",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "staffId", "order": "ASCENDING" },
+        { "fieldPath": "dateKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "branchId", "order": "ASCENDING" },
         { "fieldPath": "dateKey", "order": "DESCENDING" }
       ]
@@ -58,6 +66,31 @@
         { "fieldPath": "branchId", "order": "ASCENDING" },
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "dateKey", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phoneHash", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "walletTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "whatsappOptIn", "order": "ASCENDING" },
+        { "fieldPath": "lastBranchId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     }
   ],

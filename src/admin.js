@@ -1,6 +1,6 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
-import { changeBooking, createPosOrder, createUserAccount, currentAccess, deleteEntity, enablePush, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, secureDeleteRecord, updateExpense, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { adjustCustomerWallet, changeBooking, createPosOrder, createUserAccount, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -15,7 +15,7 @@ const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
 const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
-const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
+const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
 const fields = {
@@ -89,6 +89,8 @@ function setupPanels() {
     const hint = type === "news" ? "أضف صورة أو فيديو، وحدد الفرع الذي يظهر فيه المنشور." : "حدد الفرع وارفع صورة واضحة ومحسنة للهاتف.";
     panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
   });
+  const rewardsForm=$("#rewardsSettings");if(rewardsForm&&!rewardsForm.elements.whatsappReceiptsEnabled){rewardsForm.querySelector('button[type="submit"]')?.insertAdjacentHTML("beforebegin",'<label>إرسال شيكات واتساب<select name="whatsappReceiptsEnabled"><option value="false">متوقف</option><option value="true">مفعل</option></select></label><label>قالب الشيك في Meta<input name="whatsappReceiptTemplate" pattern="[a-z0-9_]*"></label><label>حملات واتساب<select name="whatsappCampaignsEnabled"><option value="false">متوقفة</option><option value="true">مفعلة</option></select></label><label class="full">Customer IDs للاختبار بفواصل<input name="whatsappTestCustomerIds"></label>')}
+  const discountLabel=$("#posDiscount")?.closest("label");if(discountLabel&&!$("#posRedeemPoints"))discountLabel.insertAdjacentHTML("afterend",'<div class="pos-customer-fields"><label>استبدال نقاط<input id="posRedeemPoints" type="number" min="0" step="1" value="0"></label><label>استبدال كاش باك<input id="posRedeemCashback" type="number" min="0" step="0.01" value="0"></label></div>');
 }
 
 function toast(message, error = false) {
@@ -114,13 +116,16 @@ async function showSection(id) {
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
   if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id)) await loadDashboard();
-  const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
+  const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
   for (const collection of map[id] || []) await loadCollection(collection, true);
   if (id === "revenue") renderRevenue();
   if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id)) await loadBusiness();
   if (id === "pos") renderPos();
   if (id === "users") renderUserAccounts();
+  if (id === "campaigns") renderCampaigns();
 }
+
+function renderCampaigns(){const target=$("#campaignList");if(!target)return;const items=state.collections.get("campaigns")||[];target.innerHTML=items.map(item=>`<article class="entity-card"><h3>${escapeHtml(item.name||item.id)}</h3><p>${escapeHtml(item.state||"DRAFT")} • أرسل ${Number(item.sentCount||0)} • فشل ${Number(item.failedCount||0)} • ${item.testMode!==false?"وضع اختبار":"إنتاج"}</p><footer>${["QUEUED","SENDING"].includes(item.state)?`<button data-campaign-action="PAUSE" data-campaign-id="${escapeAttr(item.id)}">إيقاف مؤقت</button>`:""}${item.state==="PAUSED"?`<button data-campaign-action="RESUME" data-campaign-id="${escapeAttr(item.id)}">استكمال</button>`:""}${!["COMPLETED","CANCELLED"].includes(item.state)?`<button class="delete" data-campaign-action="CANCEL" data-campaign-id="${escapeAttr(item.id)}">إلغاء</button>`:""}</footer></article>`).join("")||'<div class="entity-card"><p>لا توجد حملات.</p></div>'}
 
 function applyAccess() {
   $$('[data-section]').forEach(button => { button.hidden = state.role !== "admin" && !state.permissions.has(button.dataset.section); });
@@ -224,6 +229,31 @@ function renderBookings() {
     const waMessage = encodeURIComponent(`مرحبًا ${item.customer?.firstName || ""}، بخصوص حجزك في مزين مصر – ${branchName} رقم ${item.code}: حالته الآن ${statusLabel(item.status)}.`);
     return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b><select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select><div class="row-actions">${item.paymentStatus === "unpaid" ? `<button class="pay" data-booking-action="markPaid" data-booking-id="${escapeAttr(item.id)}">تم الدفع</button>` : ""}${item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button><button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button><button data-booking-action="completed" data-booking-id="${escapeAttr(item.id)}">إكمال</button>${state.role === "admin" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}<a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
   }).join("") || emptyRow(9);
+  $$('[data-print-booking]').forEach(button=>{if(!button.parentElement.querySelector('[data-whatsapp-receipt]'))button.insertAdjacentHTML('afterend',`<button data-whatsapp-receipt="${escapeAttr(button.dataset.printBooking)}">فتح الشيك في واتساب</button>`)});
+}
+
+function openReceiptInWhatsapp(id) {
+  const item = state.dashboard.bookings.find(value => value.id === id);
+  if (!item) return toast("تعذر العثور على الشيك", true);
+  const phone = String(item.phone || "").replace(/\D/g, "").replace(/^00/, "").replace(/^0/, "20");
+  if (!/^20(?:10|11|12|15)\d{8}$/.test(phone)) return toast("رقم واتساب العميل غير صحيح", true);
+  const branch = item.branchNameAr || branchLabel(item.branchId);
+  const lines = (item.items || []).map(line => {
+    const worker = line.workerNameAr || item.staffNameAr;
+    return `• ${line.nameAr || "بند"}${worker ? ` — ${worker}` : ""} × ${line.qty || 1}: ${money(line.lineTotal ?? line.price)}`;
+  });
+  const message = [
+    "مزين مصر",
+    `الفرع: ${branch}`,
+    `رقم الشيك: ${item.code || item.id}`,
+    `العميل: ${item.customerName || "عميل نقدي"}`,
+    ...lines,
+    `الخصم: ${money(item.discountAmount)}`,
+    `الإجمالي: ${money(item.total)}`,
+    `حالة الدفع: ${paymentLabel(item.paymentStatus)}`,
+    globalThis.__SITE_URL__ || "https://el-mezaen-talkha.vercel.app"
+  ].join("\n");
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
 }
 
 function printReceipt(id) {
@@ -231,26 +261,26 @@ function printReceipt(id) {
   if (!item) return;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   JsBarcode(svg, item.code, { format: "CODE128", displayValue: true, height: 52, fontSize: 13, margin: 4 });
-  const lines = (item.items || []).map(line => `<tr><td>${escapeHtml(line.nameAr)}${line.option ? `<br><small>التحضير: ${escapeHtml(line.option)}</small>` : ""}</td><td>${line.qty || 1}</td><td>${money(line.lineTotal ?? line.price)}</td></tr>`).join("");
+  const lines = (item.items || []).map(line => `<tr><td>${escapeHtml(line.nameAr)}${line.option ? `<br><small>التحضير: ${escapeHtml(line.option)}</small>` : ""}${line.workerNameAr ? `<br><small>العامل: ${escapeHtml(line.workerNameAr)}</small>` : ""}</td><td>${line.qty || 1}</td><td>${money(line.lineTotal ?? line.price)}</td></tr>`).join("");
   const popup = window.open("", "_blank", "width=420,height=700");
   if (!popup) return toast("اسمح بالنوافذ المنبثقة لطباعة الشيك", true);
   popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><title>${escapeHtml(item.code)}</title><style>body{font-family:Arial;padding:24px;color:#111}header{text-align:center;border-bottom:2px dashed #333;padding-bottom:14px}img{width:72px}table{width:100%;border-collapse:collapse;margin:18px 0}td,th{padding:8px;border-bottom:1px dashed #aaa;text-align:right}.total{font-size:22px;font-weight:bold;display:flex;justify-content:space-between}.meta{line-height:1.8}svg{max-width:100%}@media print{button{display:none}}</style></head><body><header><img src="/assets/el-mezaen-logo.jpeg"><h2>مزين مصر – ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</h2><p>${item.source === "pos" ? "شيك بيع من المحل" : "شيك حجز"}</p>${svg.outerHTML}</header><div class="meta"><b>الفرع:</b> ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}<br><b>العميل:</b> ${escapeHtml(item.customerName)}<br><b>الهاتف:</b> ${escapeHtml(item.phone)}<br><b>عدد الأفراد:</b> ${item.partySize || 1}<br><b>العامل:</b> ${escapeHtml(item.staffNameAr)}<br><b>الموعد:</b> ${escapeHtml(item.bookingDate || "طلب منتجات")} ${escapeHtml(item.bookingTime || "")}</div><table><thead><tr><th>البند</th><th>العدد</th><th>السعر</th></tr></thead><tbody>${lines}</tbody></table><p>المجموع الفرعي: ${money(item.subtotal)}</p><p>الخصم: ${money(item.discountAmount)}</p><div class="total"><span>الإجمالي</span><span>${money(item.total)}</span></div><p>حالة الدفع: ${paymentLabel(item.paymentStatus)}</p><button onclick="print()">طباعة</button></body></html>`);
   popup.document.close();
 }
 
-let scanStream;
+let scanStream;let scanLocked=false;let scanLastValue="";let scanLastAt=0;
 async function openScanner() {
   $("#scannerDialog").showModal();
   if (!("BarcodeDetector" in window)) return toast("يمكنك كتابة الكود يدويًا؛ المسح بالكاميرا غير مدعوم في هذا المتصفح", true);
   try {
-    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    scanLocked=false;scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: $("#scannerCamera").value || "environment" } });
     $("#scannerVideo").srcObject = scanStream; await $("#scannerVideo").play();
     const detector = new BarcodeDetector({ formats: ["code_128", "qr_code"] });
-    const tick = async () => { if (!scanStream) return; const codes = await detector.detect($("#scannerVideo")).catch(() => []); if (codes[0]?.rawValue) { $("#scannerCode").value = codes[0].rawValue; findScanned(); return; } requestAnimationFrame(tick); }; tick();
-  } catch { toast("تعذر تشغيل الكاميرا؛ استخدم البحث اليدوي", true); }
+    const tick = async () => { if (!scanStream || scanLocked) return; const codes = await detector.detect($("#scannerVideo")).catch(() => []); const value=codes[0]?.rawValue||"";if(value&&!(value===scanLastValue&&Date.now()-scanLastAt<3000)){scanLastValue=value;scanLastAt=Date.now();scanLocked=true;$("#scannerCode").value=value;await findScanned();return}requestAnimationFrame(tick);};tick();
+  } catch (error) { const denied=error?.name==="NotAllowedError";toast(denied?"تم رفض إذن الكاميرا؛ اسمح به أو استخدم الإدخال اليدوي":"الكاميرا غير متاحة أو مستخدمة بتطبيق آخر؛ استخدم الإدخال اليدوي",true); }
 }
-function closeScanner() { scanStream?.getTracks().forEach(track => track.stop()); scanStream = null; $("#scannerDialog").close(); }
-function findScanned() { const code = $("#scannerCode").value.trim().toUpperCase(); const found = state.dashboard.bookings.find(item => String(item.code).toUpperCase() === code); if (!found) return toast("لم يتم العثور على الحجز", true); closeScanner(); $("#bookingSearch").value = found.code; renderBookings(); document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); toast("تم فتح الحجز"); }
+function closeScanner() { scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;scanLocked=false; if($("#scannerDialog").open)$("#scannerDialog").close(); }
+async function findScanned() { const raw=$("#scannerCode").value.trim();if(!raw){scanLocked=false;return}if(raw.toLowerCase().startsWith("mzc_")){try{const result=await scanCustomerCode(raw);closeScanner();await loadCollection("customers",true);selectPosCustomer(result.customer.id);showSection("pos");toast(`تم فتح العميل ${result.customer.firstName||""}`)}catch(error){scanLocked=false;toast(error.message||"كود العميل غير صحيح",true)}return}const code=raw.toUpperCase();const found=state.dashboard.bookings.find(item=>String(item.code).toUpperCase()===code);if(!found){scanLocked=false;return toast("لم يتم العثور على الحجز أو المنتج",true)}closeScanner();$("#bookingSearch").value=found.code;renderBookings();document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});toast("تم فتح الحجز");}
 
 function renderRevenue() {
   const serviceSelect = $("#revenueService");
@@ -360,7 +390,7 @@ function renderPos() {
   if (!$("#posItems")) return;
   const customers = state.collections.get("customers") || [];
   const customerValue = $("#posCustomer").value;
-  $("#posCustomer").innerHTML = '<option value="">عميل جديد</option>' + customers.map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)} • ${escapeHtml(item.phone)}</option>`).join("");
+  $("#posCustomer").innerHTML = '<option value="">عميل جديد</option>' + customers.map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)} • ${escapeHtml(item.phone)} • ${Number(item.pointsBalance||0)} نقطة • ${money(item.cashbackBalance)}</option>`).join("");
   $("#posCustomer").value = customers.some(item => item.id === customerValue) ? customerValue : "";
   const branchId = $("#posBranch").value;
   const staffValue = $("#posStaff").value;
@@ -390,7 +420,8 @@ function renderPosCart() {
     const item = index.get(`${line.kind}:${line.id}`);
     const options = item.section === "drink" && item.drinkOptions?.length ? `<select data-pos-option="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="تحضير ${escapeAttr(item.nameAr)}">${item.drinkOptions.map(option => `<option value="${escapeAttr(option)}" ${option === line.option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>` : "";
     const quantity = ["inventory", "product", "drink"].includes(line.kind) ? `<input type="number" min="1" max="${line.kind === "inventory" ? Math.max(1, item.stockQty) : 20}" value="${line.qty}" data-pos-qty="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="الكمية">` : "";
-    return `<div class="pos-cart-line"><div><b>${escapeHtml(item.nameAr)}</b><small>${money(item.price)} × ${line.qty}${line.option ? ` • ${escapeHtml(line.option)}` : ""}</small></div><div class="pos-line-controls">${options}${quantity}</div><strong>${money(item.price * line.qty)}</strong><button type="button" data-pos-remove="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}">×</button></div>`;
+    const staff=(state.collections.get("staff")||[]).filter(member=>member.active!==false&&member.available!==false&&(!member.branchIds?.length||member.branchIds.includes($("#posBranch").value)));const needsWorker=["service","package","offer"].includes(line.kind);const worker=needsWorker?`<select data-pos-worker="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="العامل لخدمة ${escapeAttr(item.nameAr)}"><option value="none">بدون عامل</option>${staff.map(member=>`<option value="${escapeAttr(member.id)}" ${member.id===(line.workerId||$("#posStaff").value)?"selected":""}>${escapeHtml(member.nameAr)}</option>`).join("")}</select>`:"";
+    return `<div class="pos-cart-line"><div><b>${escapeHtml(item.nameAr)}</b><small>${money(item.price)} × ${line.qty}${line.option ? ` • ${escapeHtml(line.option)}` : ""}</small></div><div class="pos-line-controls">${worker}${options}${quantity}</div><strong>${money(item.price * line.qty)}</strong><button type="button" data-pos-remove="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}">×</button></div>`;
   }).join("") || '<p>لم تتم إضافة أصناف بعد.</p>';
   const subtotal = state.posCart.reduce((sum, line) => sum + Number(index.get(`${line.kind}:${line.id}`)?.price || 0) * line.qty, 0);
   const discount = Math.max(0, Math.min(subtotal, Number($("#posDiscount").value || 0)));
@@ -414,10 +445,11 @@ async function submitPosOrder(event) {
   button.disabled = true;
   state.posIdempotencyKey ||= crypto.randomUUID();
   try {
-    const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart, discountAmount: Number($("#posDiscount").value || 0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
+    const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
     state.posCart = [];
     state.posIdempotencyKey = "";
     $("#posDiscount").value = "0";
+    if($("#posRedeemPoints"))$("#posRedeemPoints").value="0";if($("#posRedeemCashback"))$("#posRedeemCashback").value="0";
     await Promise.all([loadDashboard(), loadBusiness(true)]);
     renderPos();
     toast(`تم حفظ الطلب ${result.bookingCode} وتجهيز الشيك`);
@@ -589,7 +621,7 @@ function customerCard(item) {
   const name = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "عميل بدون اسم";
   const initial = name.replace(/^ال/, "").trim().charAt(0) || "ع";
   const phone = String(item.phone || "");
-  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>آخر فرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>عدد الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر حجز</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div></dl></article>`;
+  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>آخر فرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>عدد الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر حجز</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance||0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div></dl><footer>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">تعديل المحفظة</button>`:""}<button data-whatsapp-consent="${escapeAttr(item.id)}" data-current-consent="${item.whatsappOptIn===true}">${item.whatsappOptIn===true?"إلغاء موافقة التسويق":"تسجيل موافقة واتساب"}</button></footer></article>`;
 }
 
 function branchScopeLabel(ids) {
@@ -746,7 +778,7 @@ async function updateBookingAction(id, action) {
 }
 
 function fillSettings(item) {
-  [$("#scheduleSettings"), $("#contactSettings"), $("#siteSettings")].forEach(form => {
+  [$("#scheduleSettings"), $("#contactSettings"), $("#siteSettings"), $("#rewardsSettings")].forEach(form => {
     if (!form) return;
     [...form.elements].forEach(input => { if (input.name && item[input.name] != null) input.value = item[input.name]; });
   });
@@ -801,6 +833,7 @@ document.addEventListener("click", async event => {
   const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId);
   const booking = event.target.closest("[data-booking-action]"); if (booking) updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction);
   const printButton = event.target.closest("[data-print-booking]"); if (printButton) printReceipt(printButton.dataset.printBooking);
+  const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)openReceiptInWhatsapp(receipt.dataset.whatsappReceipt);
   const deleteBooking = event.target.closest("[data-secure-delete-booking]"); if (deleteBooking) openSecureDelete("booking", deleteBooking.dataset.secureDeleteBooking, deleteBooking.dataset.secureDeleteLabel);
   const deleteRevenue = event.target.closest("[data-secure-delete-revenue]"); if (deleteRevenue) openSecureDelete("revenue", deleteRevenue.dataset.secureDeleteRevenue, deleteRevenue.dataset.secureDeleteLabel);
   const deleteExpense = event.target.closest("[data-secure-delete-expense]"); if (deleteExpense) openSecureDelete("expense", deleteExpense.dataset.secureDeleteExpense, deleteExpense.dataset.secureDeleteLabel);
@@ -811,6 +844,9 @@ document.addEventListener("click", async event => {
   const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; renderCollection("services"); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const salary = event.target.closest("[data-pay-salary]"); if (salary) paySalary(salary.dataset.paySalary);
   const review = event.target.closest("[data-review-action]"); if (review) updateReview(review.dataset.reviewId, review.dataset.reviewAction, review.dataset.reviewFeatured === "true");
+  const wallet=event.target.closest("[data-wallet-adjust]");if(wallet){const points=Number(prompt("تعديل النقاط (+ أو -)","0")||0);const cashback=Number(prompt("تعديل الكاش باك (+ أو -)","0")||0);const reason=prompt("سبب التعديل")||"";if(reason&&(points||cashback)){try{await adjustCustomerWallet({customerId:wallet.dataset.walletAdjust,points,cashback,reason,idempotencyKey:crypto.randomUUID()});await loadCollection("customers",true);toast("تم تعديل المحفظة وتسجيل الحركة")}catch(error){toast(error.message||"تعذر التعديل",true)}}}
+  const campaignAction=event.target.closest("[data-campaign-action]");if(campaignAction){try{await updateWhatsappCampaignState(campaignAction.dataset.campaignId,campaignAction.dataset.campaignAction);await loadCollection("campaigns",true);renderCampaigns();toast("تم تحديث الحملة")}catch(error){toast(error.message,true)}}
+  const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟")){try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}}}
 });
 document.addEventListener("input", event => {
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
@@ -818,6 +854,7 @@ document.addEventListener("input", event => {
   if (event.target.matches("[data-pos-qty]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posQty && item.kind === event.target.dataset.posKind); if (line) { const catalogItem = posCatalogItems().find(item => item.id === line.id && item.kind === line.kind); const max = line.kind === "inventory" ? Math.max(1, Number(catalogItem?.stockQty || 1)) : 20; line.qty = Math.max(1, Math.min(max, Math.floor(Number(event.target.value || 1)))); renderPosCart(); } }
 });
 document.addEventListener("change", event => {
+  if(event.target.matches("[data-pos-worker]")){const line=state.posCart.find(item=>item.id===event.target.dataset.posWorker&&item.kind===event.target.dataset.posKind);if(line)line.workerId=event.target.value}
   if (event.target.matches("[data-pos-option]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posOption && item.kind === event.target.dataset.posKind); if (line) { line.option = event.target.value; renderPosCart(); } }
   if (["expenseFrom", "expenseTo", "expenseBranchFilter", "expenseCategoryFilter"].includes(event.target.id)) renderExpenses();
   if (event.target.id === "expenseBranch") refreshExpenseInventoryOptions();
@@ -842,7 +879,8 @@ $("#pushButton").addEventListener("click", async () => { try { await enablePush(
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
 $("#entityForm").addEventListener("submit", saveEditor);
-[$("#scheduleSettings"), $("#siteSettings")].forEach(form => form.addEventListener("submit", saveSettingsForm));
+[$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
+$("#campaignForm")?.addEventListener("submit",async event=>{event.preventDefault();const button=event.currentTarget.querySelector("button");button.disabled=true;try{const data=Object.fromEntries(new FormData(event.currentTarget));await createWhatsappCampaign({...data,testMode:data.testMode==="true",recipientCap:Number(data.recipientCap||100)});await loadCollection("campaigns",true);renderCampaigns();toast("تم وضع الحملة في قائمة الإرسال الآمنة")}catch(error){toast(error.message||"تعذر إنشاء الحملة",true)}finally{button.disabled=false}});
 $("#bookingSearch").addEventListener("input", renderBookings);
 $("#bookingStatusFilter").addEventListener("change", renderBookings);
 $("#bookingBranchFilter").addEventListener("change", renderBookings);
@@ -861,6 +899,7 @@ $("#posSectionFilter").addEventListener("change", () => { $("#posItemSearch").va
 $("#posCategoryFilter").addEventListener("change", renderPos);
 $("#serviceCategoryFilter").addEventListener("change", () => renderCollection("services"));
 $("#posCustomer").addEventListener("change", event => selectPosCustomer(event.target.value));
+let phoneLookupTimer;$("#posPhone").addEventListener("input",event=>{clearTimeout(phoneLookupTimer);const phone=event.target.value;if(String(phone).replace(/\D/g,"").length<11)return;phoneLookupTimer=setTimeout(async()=>{try{const result=await findCustomerByPhone(phone);if(result.customer){$("#posFirstName").value=result.customer.firstName||"";$("#posLastName").value=result.customer.lastName||"";toast("تم العثور على العميل بدون تحميل قاعدة العملاء كاملة")}}catch{}},350)});
 $("#expenseForm").addEventListener("submit", submitExpense);
 $("#expenseCategory").addEventListener("change", toggleExpenseInventory);
 $("#expenseCancelEdit").addEventListener("click", resetExpenseForm);

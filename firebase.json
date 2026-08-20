@@ -17,6 +17,10 @@
         "headers": [{ "key": "X-Robots-Tag", "value": "noindex,nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }]
       },
       {
+        "source": "/account/**",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex,nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }]
+      },
+      {
         "source": "/firebase-config.js",
         "headers": [{ "key": "Cache-Control", "value": "private,no-store,max-age=0" }]
       },
@@ -32,11 +36,16 @@
       }
     ],
     "rewrites": [
+      { "source": "/favicon.ico", "destination": "/assets/icon-192.png" },
       { "source": "/admin/**", "destination": "/admin/index.html" },
       { "source": "/login/**", "destination": "/login/index.html" },
+      { "source": "/account/**", "destination": "/account/index.html" },
       { "source": "/services/**", "destination": "/services/index.html" },
       { "source": "/team/**", "destination": "/team/index.html" },
-      { "source": "**", "destination": "/index.html" }
+      { "source": "/branches/talkha/**", "destination": "/branches/talkha/index.html" },
+      { "source": "/branches/mashaya/**", "destination": "/branches/mashaya/index.html" },
+      { "source": "/hair-systems/**", "destination": "/hair-systems/index.html" },
+      { "source": "/booking/**", "destination": "/index.html" }
     ]
   },
   "functions": [{ "source": "functions", "codebase": "default", "ignore": ["node_modules", ".git", "*.log"] }],

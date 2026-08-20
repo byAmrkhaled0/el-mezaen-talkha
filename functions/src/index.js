@@ -3,13 +3,18 @@ import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { getFunctions as getAdminFunctions } from "firebase-admin/functions";
+import { defineSecret } from "firebase-functions/params";
+import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
+const whatsappToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
+const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 80, maxInstances: 100, timeoutSeconds: 30 };
 const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
@@ -18,13 +23,13 @@ const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "s
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 // Keep "worker" only as a legacy cashier role so previously-created accounts still work.
 const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
-const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "reviews", "schedule", "gallery", "celebrities", "posts", "settings", "activity", "users"];
+const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "celebrities", "posts", "settings", "activity", "users"];
 const ROLE_DEFAULT_PERMISSIONS = {
   manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
   cashier: ["dashboard", "pos", "bookings", "customers"],
   worker: ["dashboard", "pos", "bookings", "customers"]
 };
-const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
+const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
@@ -32,6 +37,11 @@ const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.C
 let catalogCache = null;
 let catalogCacheExpiresAt = 0;
 let catalogLoadPromise = null;
+
+export const health = onRequest({ region, cors: false, memory: "256MiB", maxInstances: 10, timeoutSeconds: 10 }, async (_request, response) => {
+  try { await db.doc("settings/public").get(); response.set("Cache-Control", "no-store").status(200).json({ ready: true, version: process.env.K_REVISION || "local", environment: process.env.GCLOUD_PROJECT ? "production" : "local", firestore: "ready" }); }
+  catch { response.set("Cache-Control", "no-store").status(503).json({ ready: false, version: process.env.K_REVISION || "local", firestore: "unavailable" }); }
+});
 
 const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
@@ -117,6 +127,31 @@ function requireRecentAdmin(request) {
 }
 
 function sanitizeText(value, max = 200) { return String(value || "").trim().slice(0, max); }
+
+function customerQrToken() { return `mzc_${randomBytes(24).toString("base64url")}`; }
+
+async function applyRewards(transaction, { booking, customerRef, settings, now, reverse = false, redemption = null }) {
+  if (!booking?.code || !customerRef) return;
+  const guardRef = db.doc(`rewardGuards/${booking.code}`);
+  const guard = await transaction.get(guardRef);
+  const reward = guard.exists ? guard.data() : calculateRewards(booking.total, settings);
+  if (!reverse && guard.exists) return;
+  if (reverse && (!guard.exists || reward.reversed)) return;
+  const points = Number(reward.points || 0);
+  const cashback = Number(reward.cashback || 0);
+  const redeemPoints = reverse ? -Math.max(0, Number(reward.redeemedPoints || 0)) : Math.max(0, Number(redemption?.points || 0)); const redeemCashback = reverse ? -Math.max(0, Number(reward.redeemedCashback || 0)) : Math.max(0, Number(redemption?.cashback || 0));
+  if (!points && !cashback && !redeemPoints && !redeemCashback) {
+    if (!reverse) transaction.create(guardRef, { bookingId: booking.code, customerId: customerRef.id, points: 0, cashback: 0, createdAt: now });
+    return;
+  }
+  const factor = reverse ? -1 : 1;
+  const transactionRef = db.doc(`walletTransactions/${booking.code}_${reverse ? "reversal" : "earned"}`);
+  transaction.set(customerRef, { pointsBalance: FieldValue.increment(points * factor - redeemPoints), cashbackBalance: FieldValue.increment(cashback * factor - redeemCashback), walletUpdatedAt: now }, { merge: true });
+  transaction.create(transactionRef, { customerId: customerRef.id, bookingId: booking.code, type: reverse ? "REFUND_REVERSAL" : "REWARDS_EARNED", points: points * factor, cashback: cashback * factor, createdAt: now });
+  if (!reverse && (redeemPoints || redeemCashback)) transaction.create(db.doc(`walletTransactions/${booking.code}_redeemed`), { customerId: customerRef.id, bookingId: booking.code, type: "WALLET_REDEEMED", points: -redeemPoints, cashback: -redeemCashback, redemptionValue: Number(redemption.value || 0), createdAt: now });
+  if (reverse) transaction.update(guardRef, { reversed: true, reversedAt: now });
+  else transaction.create(guardRef, { bookingId: booking.code, customerId: customerRef.id, points, cashback, redeemedPoints: redeemPoints, redeemedCashback: redeemCashback, redemptionValue: Number(redemption?.value || 0), reversed: false, createdAt: now });
+}
 
 function validatePayloadSize(value, maxBytes = 32 * 1024) {
   let bytes = 0;
@@ -316,7 +351,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
 
   try {
     return await db.runTransaction(async transaction => {
-      const baseReads = await Promise.all([transaction.get(requestGuardRef), transaction.get(duplicateRef), couponRef ? transaction.get(couponRef) : null, couponUsageRef ? transaction.get(couponUsageRef) : null]);
+      const baseReads = await Promise.all([transaction.get(requestGuardRef), transaction.get(duplicateRef), couponRef ? transaction.get(couponRef) : null, couponUsageRef ? transaction.get(couponUsageRef) : null, transaction.get(customerRef)]);
       if (baseReads[0].exists) throw new Error("DUPLICATE_REQUEST");
       if (baseReads[1].exists) throw new Error("DUPLICATE_BOOKING");
       let assigned = null;
@@ -395,7 +430,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       transaction.create(bookingRef, record);
       transaction.create(requestGuardRef, { bookingId: code, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
       transaction.create(duplicateRef, { bookingId: code, createdAt: now });
-      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
+      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
       if (assigned?.id) transaction.update(db.doc(`staff/${assigned.id}`), { bookingCount: FieldValue.increment(1), updatedAt: now });
       assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now }));
       inventoryItems.forEach(item => {
@@ -517,7 +552,7 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
 export const getAdminCollection = onCall(adminOptions, async request => {
   const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
-  const allowed = [...ADMIN_COLLECTIONS, "customers", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
+  const allowed = [...ADMIN_COLLECTIONS, "customers", "walletTransactions", "campaigns", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
   if (!allowed.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   const permission = COLLECTION_PERMISSIONS[collection];
   const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "customers", "drinks", "inventoryItems"].includes(collection);
@@ -529,7 +564,11 @@ export const getAdminCollection = onCall(adminOptions, async request => {
     const snapshot = await db.doc("settings/public").get();
     return { items: snapshot.exists ? [cleanDoc(snapshot)] : [] };
   }
-  const snapshot = await db.collection(collection).limit(Math.min(500, Number(request.data?.limit || 200))).get();
+  const pageSize = Math.max(1, Math.min(200, Number(request.data?.limit || 100)));
+  const cursor = sanitizeText(request.data?.cursor, 200);
+  let collectionQuery = db.collection(collection).orderBy("__name__").limit(pageSize);
+  if (cursor) collectionQuery = collectionQuery.startAfter(cursor);
+  const snapshot = await collectionQuery.get();
   let items = snapshot.docs.map(cleanDoc);
   const allowedBranches = branchesFor(request);
   if (role !== "admin" && collection !== "users") items = items.filter(item => itemInAllowedBranch(item, allowedBranches));
@@ -539,7 +578,7 @@ export const getAdminCollection = onCall(adminOptions, async request => {
     if (collection === "inventoryItems") items = items.map(({ costPrice, minStock, ...item }) => item);
   }
   if (role !== "admin" && collection === "content") items = items.filter(item => hasPermission(request, contentPermission(item.type)));
-  return { items };
+  return { items, nextCursor: snapshot.size === pageSize ? snapshot.docs.at(-1)?.id || null : null };
 });
 
 function normalizeAdminPayload(collection, raw) {
@@ -547,9 +586,9 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.id;
   delete payload.createdAt;
   delete payload.updatedAt;
-  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
-  ["active", "available", "showCountdown", "startsFrom", "closed", "featured"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
-  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
+  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
+  ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
+  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
   ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
   if (collection === "coupons") payload.code = sanitizeText(payload.code || raw.id, 30).toUpperCase();
@@ -813,13 +852,13 @@ export const createPosOrder = onCall(adminOptions, async request => {
     try { catalogItems = await fetchPricedItems(catalogLines, branch.id); }
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
   }
-  const staffId = sanitizeText(request.data?.staffId || "none", 100);
-  let staff = null;
-  if (staffId !== "none") {
-    const staffSnapshot = await db.doc(`staff/${staffId}`).get();
-    if (!staffSnapshot.exists || staffSnapshot.data().active === false) throw new HttpsError("failed-precondition", "العامل غير متاح");
-    staff = cleanDoc(staffSnapshot);
-    if (Array.isArray(staff.branchIds) && staff.branchIds.length && !staff.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "العامل غير متاح في الفرع المختار");
+  const legacyStaffId = sanitizeText(request.data?.staffId || "none", 100);
+  const requestedWorkerIds = [...new Set(rawLines.map(line => sanitizeText(line.workerId || legacyStaffId, 100)).filter(id => id && id !== "none"))];
+  const staffSnapshots = requestedWorkerIds.length ? await db.getAll(...requestedWorkerIds.map(id => db.doc(`staff/${id}`))) : [];
+  const workers = new Map(staffSnapshots.map(snapshot => [snapshot.id, cleanDoc(snapshot)]));
+  for (const workerId of requestedWorkerIds) {
+    const worker = workers.get(workerId);
+    if (!worker || worker.active === false || (Array.isArray(worker.branchIds) && worker.branchIds.length && !worker.branchIds.includes(branch.id))) throw new HttpsError("failed-precondition", "أحد العمال غير متاح في الفرع المختار");
   }
   const method = sanitizeText(request.data?.paymentMethod || "cash", 30);
   if (!["cash", "vodafone_cash", "instapay", "other"].includes(method)) throw new HttpsError("invalid-argument", "طريقة الدفع غير صحيحة");
@@ -853,17 +892,34 @@ export const createPosOrder = onCall(adminOptions, async request => {
       const messages = { DRINK_UNAVAILABLE: "أحد المشروبات غير متاح في هذا الفرع", DRINK_PRICE: "سعر أحد المشروبات غير صحيح", DRINK_OPTION: "اختيار تحضير المشروب غير صحيح" };
       throw new HttpsError("failed-precondition", messages[error.message] || "بيانات المشروب غير صحيحة");
     }
-    const items = [...catalogItems, ...inventoryItems, ...drinkItems];
+    const workerByLine = new Map(rawLines.map(line => [`${line.kind}:${line.id}`, sanitizeText(line.workerId || legacyStaffId, 100) || "none"]));
+    const items = normalizeLineWorkers([...catalogItems, ...inventoryItems, ...drinkItems].map(item => {
+      const workerId = item.staffRequired ? (workerByLine.get(`${item.kind}:${item.id}`) || legacyStaffId) : "none";
+      const worker = workers.get(workerId);
+      return { ...item, workerId, workerNameAr: worker?.nameAr || "بدون عامل", workerNameEn: worker?.nameEn || "No staff" };
+    }), legacyStaffId);
     const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
     const discountAmount = Math.max(0, Math.min(subtotal, Number(request.data?.discountAmount || 0)));
-    const total = subtotal - discountAmount;
+    const beforeWalletTotal = subtotal - discountAmount;
     const now = FieldValue.serverTimestamp();
     const publicItems = items.map(({ ref, ...item }) => item);
-    const revenueBreakdown = calculateRevenueBreakdown(publicItems, total);
-    transaction.create(bookingRef, { code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: staff?.id || "none", staffNameAr: staff?.nameAr || "بدون عامل", staffNameEn: staff?.nameEn || "No staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, discountPercent: subtotal ? Math.round(discountAmount / subtotal * 10000) / 100 : 0, total, status: "completed", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", createdAt: now, updatedAt: now, paidAt: paid ? now : null });
-    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, lastBranchId: branch.id, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
-    if (staff) transaction.update(db.doc(`staff/${staff.id}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(revenueBreakdown.services) } : {}), updatedAt: now });
-    if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, type: "payment", paymentMethod: method, staffId: staff?.id || "none", itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
+    const primaryWorkerId = publicItems.find(item => item.workerId && item.workerId !== "none")?.workerId || "none";
+    const primaryWorker = workers.get(primaryWorkerId);
+    const customerSnapshot = await transaction.get(customerRef);
+    const settings = await readSettings();
+    const requestedPoints=Math.max(0,Math.floor(Number(request.data?.redeemPoints||0)));const requestedCashback=Math.max(0,Math.round(Number(request.data?.redeemCashback||0)*100)/100);const pointValue=Math.max(0,Number(settings.pointValue||0.1));const redemptionValue=requestedPoints*pointValue+requestedCashback;const maxRedemption=beforeWalletTotal*Math.max(0,Math.min(100,Number(settings.maximumRedemptionPercent||0)))/100;
+    if((requestedPoints||requestedCashback)&&(!paid||settings.walletRedemptionEnabled!==true))throw new HttpsError("failed-precondition","استبدال المحفظة يحتاج شيكًا مدفوعًا وتفعيل الميزة");
+    if(requestedPoints>Number(customerSnapshot.data()?.pointsBalance||0)||requestedCashback>Number(customerSnapshot.data()?.cashbackBalance||0)||redemptionValue>maxRedemption||redemptionValue<Math.max(0,Number(settings.minimumRedemption||0)))throw new HttpsError("failed-precondition","قيمة استبدال المحفظة غير مسموحة");
+    const total=Math.max(0,beforeWalletTotal-redemptionValue);const revenueBreakdown=calculateRevenueBreakdown(publicItems,total);
+    const redemption=(requestedPoints||requestedCashback)?{points:requestedPoints,cashback:requestedCashback,value:redemptionValue}:null;
+    const bookingRecord = { code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, status: "completed", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", createdAt: now, updatedAt: now, paidAt: paid ? now : null };
+    if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
+    transaction.create(bookingRef, bookingRecord);
+    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
+    const workerRevenue = new Map();
+    const workerItems=publicItems.filter(item=>item.workerId&&item.workerId!=="none");const workerSubtotal=workerItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);workerItems.forEach(item=>workerRevenue.set(item.workerId,(workerRevenue.get(item.workerId)||0)+(paid&&workerSubtotal?Number(item.lineTotal||0)/workerSubtotal*Number(revenueBreakdown.services||0):0)));
+    workerRevenue.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(amount) } : {}), updatedAt: now }));
+    if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, workerBreakdown: Object.fromEntries(workerRevenue), type: "payment", paymentMethod: method, staffId: primaryWorkerId, itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
     inventoryItems.forEach(item => {
       transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
@@ -880,11 +936,12 @@ export const recordPayrollPayment = onCall(adminOptions, async request => {
   const staffId = sanitizeText(request.data?.staffId, 100);
   const adjustment = Number(request.data?.adjustment || 0);
   if (!/^\d{4}-\d{2}$/.test(month) || !staffId || !Number.isFinite(adjustment) || Math.abs(adjustment) > 1000000) throw new HttpsError("invalid-argument", "بيانات صرف الراتب غير صحيحة");
-  const [staffSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("revenueLedger").limit(5000).get()]);
+  const nextMonth = nextMonthKey(month);
+  const [staffSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("revenueLedger").where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get()]);
   if (!staffSnapshot.exists) throw new HttpsError("not-found", "العامل غير موجود");
   const staff = staffSnapshot.data();
   if (!itemInAllowedBranch(staff, branchesFor(request))) throw new HttpsError("permission-denied", "العامل تابع لفرع آخر");
-  const revenue = ledgerSnapshot.docs.map(snapshot => snapshot.data()).filter(item => item.staffId === staffId && String(item.dateKey || "").startsWith(month)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const revenue = ledgerSnapshot.docs.reduce((sum, snapshot) => sum + Number(snapshot.data().workerBreakdown?.[staffId] ?? snapshot.data().amount ?? 0), 0);
   const calculated = calculatePayroll({ ...staff, revenue, adjustment });
   if (calculated.netSalary <= 0) throw new HttpsError("failed-precondition", "حدد الراتب الأساسي للعامل من قسم فريق العمل أولًا");
   const payrollRef = db.doc(`payrollPayments/${month}_${staffId}`);
@@ -922,8 +979,8 @@ async function deleteBookingPermanently(id, request) {
     const relatedRefs = [staffRef, customerRef, couponRef, couponUsageRef, ...inventoryRefs].filter(Boolean);
     const relatedSnapshots = relatedRefs.length ? await transaction.getAll(...relatedRefs) : [];
     const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
-    const customerBookings = customerRef ? await transaction.get(db.collection("bookings").where("phoneHash", "==", booking.phoneHash).limit(500)) : null;
-    const previousBooking = customerBookings?.docs.filter(snapshot => snapshot.id !== id).sort((a, b) => Number(b.data().createdAt?.toMillis?.() || 0) - Number(a.data().createdAt?.toMillis?.() || 0))[0]?.data();
+    const customerBookings = customerRef ? await transaction.get(db.collection("bookings").where("phoneHash", "==", booking.phoneHash).orderBy("createdAt", "desc").limit(2)) : null;
+    const previousBooking = customerBookings?.docs.find(snapshot => snapshot.id !== id)?.data();
 
     ledgerSnapshots.forEach(snapshot => transaction.delete(snapshot.ref));
     (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
@@ -1103,6 +1160,9 @@ export const updateBooking = onCall(adminOptions, async request => {
         (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
         if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
       }
+      if (action === "completed" && booking.paymentStatus === "paid" && booking.phoneHash) {
+        await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings: await readSettings(), now });
+      }
       transaction.update(ref, { status: action, ...(["rejected", "cancelled"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), updatedAt: now });
       return { ok: true, status: action };
     }
@@ -1117,12 +1177,204 @@ export const updateBooking = onCall(adminOptions, async request => {
     if (ledger.exists) return { ok: true, idempotent: true, paymentStatus: transition.status };
     const dateKey = new Date().toISOString().slice(0, 10);
     const revenueBreakdown = calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount);
+    if (booking.phoneHash && ((action === "markPaid" && booking.status === "completed") || action === "refund")) {
+      await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings: await readSettings(), now, reverse: action === "refund" });
+    }
     transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
     transaction.update(ref, { paymentStatus: transition.status, paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, updatedAt: now });
-    if (booking.staffId && booking.staffId !== "none") transaction.update(db.doc(`staff/${booking.staffId}`), { revenueTotal: FieldValue.increment(revenueBreakdown.services), updatedAt: now });
+    const workerBreakdown = new Map();
+    const attributedItems=normalizeLineWorkers(booking.items||[],booking.staffId).filter(item=>item.workerId&&item.workerId!=="none");const attributedSubtotal=attributedItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);attributedItems.forEach(item=>workerBreakdown.set(item.workerId,(workerBreakdown.get(item.workerId)||0)+(attributedSubtotal?Number(item.lineTotal||0)/attributedSubtotal*Number(revenueBreakdown.services||0):0)));
+    workerBreakdown.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { revenueTotal: FieldValue.increment(amount), updatedAt: now }));
     if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
     return { ok: true, paymentStatus: transition.status };
   });
+});
+
+function authenticatedCustomer(request) {
+  if (!request.auth || request.auth.token.role) throw new HttpsError("unauthenticated", "سجّل دخول العميل أولًا");
+  let phone;
+  try { phone = normalizePhone(request.auth.token.phone_number); }
+  catch { throw new HttpsError("failed-precondition", "حساب العميل غير مرتبط برقم هاتف صحيح"); }
+  return { uid: request.auth.uid, phone, customerId: hash(phone) };
+}
+
+export const getCustomerPortal = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
+  await enforceRateLimit(request, "customer_portal", 60, 15 * 60 * 1000, identity.uid);
+  const customerRef = db.doc(`customers/${identity.customerId}`);
+  const [customerSnapshot, bookingsSnapshot, walletSnapshot, offersSnapshot] = await Promise.all([
+    customerRef.get(),
+    db.collection("bookings").where("phoneHash", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
+    db.collection("walletTransactions").where("customerId", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
+    db.collection("offers").where("active", "==", true).limit(20).get()
+  ]);
+  if (!customerSnapshot.exists) throw new HttpsError("not-found", "لا يوجد ملف عميل لهذا الرقم بعد؛ نفّذ أول حجز ثم حاول مرة أخرى");
+  const customer = customerSnapshot.data();
+  const qrToken = customer.qrToken || customerQrToken();
+  if (!customer.qrToken) await customerRef.set({ qrToken, authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  else if (customer.authUid !== identity.uid) await customerRef.set({ authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const bookings = bookingsSnapshot.docs.map(cleanDoc);
+  return {
+    customer: { firstName: customer.firstName || "", lastName: customer.lastName || "", qrToken, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
+    upcomingBookings: bookings.filter(item => ["pending", "confirmed"].includes(item.status)).slice(0, 10),
+    bookingHistory: bookings.slice(0, 20),
+    lastBooking: bookings.find(item => !["cancelled", "rejected"].includes(item.status)) || null,
+    walletActivity: walletSnapshot.docs.map(cleanDoc),
+    offers: offersSnapshot.docs.map(cleanDoc)
+  };
+});
+
+export const saveFavoriteBarber = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
+  const staffId = sanitizeText(request.data?.staffId, 100);
+  const customerRef = db.doc(`customers/${identity.customerId}`);
+  const staffRef = db.doc(`staff/${staffId}`);
+  const [customer, staff] = await Promise.all([customerRef.get(), staffRef.get()]);
+  if (!customer.exists) throw new HttpsError("not-found", "العميل غير موجود");
+  if (!staff.exists || staff.data().active === false) throw new HttpsError("failed-precondition", "الحلاق غير متاح");
+  await customerRef.update({ favoriteStaffId: staffId, favoriteStaffNameAr: sanitizeText(staff.data().nameAr, 100), authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true, staffId };
+});
+
+export const scanCustomerCode = onCall(adminOptions, async request => {
+  requirePermission(request, hasPermission(request, "customers") ? "customers" : "pos");
+  const code = sanitizeText(request.data?.code, 200);
+  await enforceRateLimit(request, "customer_scan", 120, 15 * 60 * 1000, request.auth.uid);
+  if (!/^mzc_[A-Za-z0-9_-]{20,100}$/.test(code)) throw new HttpsError("invalid-argument", "كود العميل غير صحيح");
+  const snapshot = await db.collection("customers").where("qrToken", "==", code).limit(1).get();
+  if (snapshot.empty) throw new HttpsError("not-found", "العميل غير موجود أو تم إلغاء الكود");
+  const customer = cleanDoc(snapshot.docs[0]);
+  if (!itemInAllowedBranch(customer, branchesFor(request))) throw new HttpsError("permission-denied", "العميل تابع لفرع غير مسموح");
+  const bookings = await db.collection("bookings").where("phoneHash", "==", customer.id).orderBy("createdAt", "desc").limit(5).get();
+  return { customer: { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null }, bookings: bookings.docs.map(cleanDoc) };
+});
+
+export const findCustomerByPhone = onCall(adminOptions, async request => {
+  if (!hasPermission(request, "customers") && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية البحث عن العملاء");
+  let phone; try { phone=normalizePhone(request.data?.phone); } catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+  await enforceRateLimit(request,"customer_phone_lookup",120,15*60*1000,request.auth.uid);
+  const snapshot=await db.doc(`customers/${hash(phone)}`).get();if(!snapshot.exists)return {customer:null};const customer=cleanDoc(snapshot);if(!itemInAllowedBranch(customer,branchesFor(request)))throw new HttpsError("permission-denied","العميل تابع لفرع غير مسموح");return {customer};
+});
+
+export const adjustCustomerWallet = onCall(adminOptions, async request => {
+  requirePermission(request, "rewards");
+  const customerId = sanitizeText(request.data?.customerId, 100);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  const reason = sanitizeText(request.data?.reason, 300);
+  const points = Math.trunc(Number(request.data?.points || 0));
+  const cashback = Math.round(Number(request.data?.cashback || 0) * 100) / 100;
+  if (!customerId || !reason || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey) || !Number.isFinite(points) || !Number.isFinite(cashback) || (!points && !cashback)) throw new HttpsError("invalid-argument", "بيانات تعديل المحفظة غير صحيحة");
+  const customerRef = db.doc(`customers/${customerId}`);
+  const txRef = db.doc(`walletTransactions/adjust_${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
+  await db.runTransaction(async transaction => {
+    const [customer, existing] = await transaction.getAll(customerRef, txRef);
+    if (!customer.exists) throw new HttpsError("not-found", "العميل غير موجود");
+    if (existing.exists) return;
+    const nextPoints = Number(customer.data().pointsBalance || 0) + points;
+    const nextCashback = Number(customer.data().cashbackBalance || 0) + cashback;
+    if (nextPoints < 0 || nextCashback < 0) throw new HttpsError("failed-precondition", "الرصيد لا يسمح بهذا الخصم");
+    const now = FieldValue.serverTimestamp();
+    transaction.update(customerRef, { pointsBalance: FieldValue.increment(points), cashbackBalance: FieldValue.increment(cashback), walletUpdatedAt: now });
+    transaction.create(txRef, { customerId, type: "ADMIN_ADJUSTMENT", points, cashback, reason, createdBy: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "wallet-adjustment", collection: "customers", entityId: customerId, points, cashback, reason, userId: request.auth.uid, createdAt: now });
+  });
+  return { ok: true };
+});
+
+export const updateWhatsappConsent = onCall(adminOptions, async request => {
+  requirePermission(request, "customers");
+  const customerId = sanitizeText(request.data?.customerId, 100); const optedIn = request.data?.optedIn === true; const source = sanitizeText(request.data?.source || "in_branch", 60);
+  const customerRef = db.doc(`customers/${customerId}`); const historyRef = db.collection("whatsappConsentHistory").doc();
+  await db.runTransaction(async transaction => { const customer = await transaction.get(customerRef); if (!customer.exists) throw new HttpsError("not-found", "العميل غير موجود"); const now=FieldValue.serverTimestamp();transaction.update(customerRef,{whatsappOptIn:optedIn,whatsappConsentUpdatedAt:now,updatedAt:now});transaction.create(historyRef,{customerId,optedIn,source,updatedBy:request.auth.uid,createdAt:now}) });
+  return { ok: true, optedIn };
+});
+
+export const createWhatsappCampaign = onCall(adminOptions, async request => {
+  requirePermission(request, "campaigns");
+  const name = sanitizeText(request.data?.name, 120);
+  const templateName = sanitizeText(request.data?.templateName, 120);
+  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  const recipientCap = Math.max(1, Math.min(1000000, Math.floor(Number(request.data?.recipientCap || 100))));
+  if (!name || !/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("invalid-argument", "اسم الحملة أو القالب غير صحيح");
+  const settings = await readSettings();
+  if (settings.whatsappCampaignsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الحملات متوقف من إعدادات النظام");
+  const campaignRef = db.collection("campaigns").doc();
+  await campaignRef.create({ name, templateName, languageCode: sanitizeText(request.data?.languageCode || "ar", 10), branchId, state: "QUEUED", testMode: request.data?.testMode !== false, recipientCap, eligibleCount: null, sentCount: 0, failedCount: 0, lastCustomerId: null, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId: campaignRef.id });
+  return { ok: true, campaignId: campaignRef.id, state: "QUEUED" };
+});
+
+export const sendWhatsappReceipt = onCall({ ...adminOptions, secrets: [whatsappToken, whatsappPhoneNumberId] }, async request => {
+  requirePermission(request, "pos");
+  const bookingId = sanitizeText(request.data?.bookingId, 100);
+  const bookingSnapshot = await db.doc(`bookings/${bookingId}`).get();
+  if (!bookingSnapshot.exists) throw new HttpsError("not-found", "الشيك غير موجود");
+  const booking = bookingSnapshot.data(); requireBranchAccess(request, booking.branchId);
+  const settings = await readSettings();
+  if (settings.whatsappReceiptsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الشيكات عبر واتساب متوقف");
+  const templateName = sanitizeText(settings.whatsappReceiptTemplate, 120);
+  if (!/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("failed-precondition", "قالب شيك واتساب غير مضبوط");
+  const guardRef = db.doc(`whatsappOperations/receipt_${bookingId}`); const guard = await guardRef.get();
+  if (guard.data()?.status === "SENT") return { ok: true, idempotent: true };
+  const phone = normalizePhone(booking.phone).replace(/^0/, "20");
+  const itemText = (booking.items || []).map(item => `${item.nameAr}: ${item.workerNameAr || booking.staffNameAr || "—"}`).join("، ").slice(0, 900);
+  const response = await fetch(`https://graph.facebook.com/v22.0/${whatsappPhoneNumberId.value()}/messages`, { method: "POST", headers: { Authorization: `Bearer ${whatsappToken.value()}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: templateName, language: { code: "ar" }, components: [{ type: "body", parameters: [booking.branchNameAr || booking.branchId, booking.code || bookingId, itemText, String(booking.total || 0), booking.paymentStatus || "unpaid"].map(text => ({ type: "text", text: String(text) })) }] } }) });
+  if (!response.ok) { await guardRef.set({ bookingId, status: "FAILED", statusCode: response.status, updatedAt: FieldValue.serverTimestamp() }, { merge: true }); throw new HttpsError("unavailable", "تعذر إرسال الشيك عبر Meta حاليًا"); }
+  await guardRef.set({ bookingId, customerId: booking.phoneHash || null, status: "SENT", sentBy: request.auth.uid, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true };
+});
+
+export const updateWhatsappCampaignState = onCall(adminOptions, async request => {
+  requirePermission(request, "campaigns");
+  const campaignId = sanitizeText(request.data?.campaignId, 100);
+  const action = sanitizeText(request.data?.action, 20).toUpperCase();
+  const states = { PAUSE: "PAUSED", RESUME: "QUEUED", CANCEL: "CANCELLED" };
+  if (!campaignId || !states[action]) throw new HttpsError("invalid-argument", "طلب الحملة غير صحيح");
+  const ref = db.doc(`campaigns/${campaignId}`);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError("not-found", "الحملة غير موجودة");
+  if (["COMPLETED", "CANCELLED"].includes(snapshot.data().state)) throw new HttpsError("failed-precondition", "الحملة منتهية");
+  await ref.update({ state: states[action], updatedAt: FieldValue.serverTimestamp() });
+  if (action === "RESUME") await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId });
+  return { ok: true, state: states[action] };
+});
+
+export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 }, secrets: [whatsappToken, whatsappPhoneNumberId] }, async request => {
+  const campaignId = sanitizeText(request.data?.campaignId, 100);
+  const ref = db.doc(`campaigns/${campaignId}`);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || !["QUEUED", "SENDING"].includes(snapshot.data().state)) return;
+  const campaign = snapshot.data();
+  const settings = await readSettings();
+  if (settings.whatsappCampaignsEnabled !== true) { await ref.update({ state: "PAUSED", lastError: "FEATURE_DISABLED", updatedAt: FieldValue.serverTimestamp() }); return; }
+  const remaining = Number(campaign.recipientCap || 100) - Number(campaign.sentCount || 0);
+  if (remaining <= 0) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
+  let query = db.collection("customers").where("whatsappOptIn", "==", true);
+  if (campaign.branchId && campaign.branchId !== "all") query = query.where("lastBranchId", "==", campaign.branchId);
+  query = query.orderBy("__name__").limit(Math.min(100, remaining));
+  if (campaign.lastCustomerId) query = query.startAfter(campaign.lastCustomerId);
+  const customers = await query.get();
+  if (customers.empty) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
+  await ref.update({ state: "SENDING", updatedAt: FieldValue.serverTimestamp() });
+  let sent = 0; let failed = 0;
+  for (const customerSnapshot of customers.docs) {
+    const customer = customerSnapshot.data();
+    const recipientRef = db.doc(`campaignRecipients/${campaignId}_${customerSnapshot.id}`);
+    if ((await recipientRef.get()).exists) continue;
+    const allowed = !campaign.testMode || (Array.isArray(settings.whatsappTestCustomerIds) && settings.whatsappTestCustomerIds.includes(customerSnapshot.id));
+    if (!allowed) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SKIPPED_TEST_MODE", createdAt: FieldValue.serverTimestamp() }); continue; }
+    try {
+      const phone = normalizePhone(customer.phone).replace(/^0/, "20");
+      const response = await fetch(`https://graph.facebook.com/v22.0/${whatsappPhoneNumberId.value()}/messages`, { method: "POST", headers: { Authorization: `Bearer ${whatsappToken.value()}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
+      if (!response.ok) throw new Error(`META_${response.status}`);
+      await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SENT", sentAt: FieldValue.serverTimestamp() }); sent++;
+    } catch (error) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "FAILED", error: sanitizeText(error.message, 100), createdAt: FieldValue.serverTimestamp() }); failed++; }
+  }
+  const lastCustomerId = customers.docs.at(-1).id;
+  const nextSent = Number(campaign.sentCount || 0) + sent;
+  const complete = customers.size < 100 || nextSent >= Number(campaign.recipientCap || 100);
+  await ref.update({ state: complete ? (failed ? "PARTIAL" : "COMPLETED") : "QUEUED", sentCount: FieldValue.increment(sent), failedCount: FieldValue.increment(failed), lastCustomerId, updatedAt: FieldValue.serverTimestamp(), ...(complete ? { completedAt: FieldValue.serverTimestamp() } : {}) });
+  if (!complete) await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId }, { scheduleDelaySeconds: 2 });
 });
 
 export const registerPushToken = onCall(adminOptions, async request => {

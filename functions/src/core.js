@@ -168,3 +168,15 @@ export function paymentTransition(booking, action, method = "cash") {
   }
   throw new Error("INVALID_PAYMENT_ACTION");
 }
+
+export function calculateRewards(total, settings = {}) {
+  const amount = Math.max(0, Number(total || 0));
+  if (settings.loyaltyEnabled === false || amount < Math.max(0, Number(settings.rewardsMinimumSpend || 0))) return { points: 0, cashback: 0 };
+  const points = Math.max(0, Math.floor(amount * Math.max(0, Number(settings.pointsRate || 0))));
+  const cashback = Math.max(0, Math.round(amount * Math.max(0, Number(settings.cashbackPercent || 0)))) / 100;
+  return { points, cashback };
+}
+
+export function normalizeLineWorkers(items = [], legacyStaffId = "none") {
+  return items.map(item => ({ ...item, workerId: String(item.workerId || (item.staffRequired ? legacyStaffId : "none") || "none") }));
+}

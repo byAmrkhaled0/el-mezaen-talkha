@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
@@ -96,4 +96,13 @@ test("payment is idempotent and refund is negative", () => {
   assert.equal(paymentTransition({ paymentStatus: "paid", total: 200 }, "markPaid").changed, false);
   assert.equal(paymentTransition({ paymentStatus: "unpaid", total: 200 }, "markPaid", "cash").ledgerAmount, 200);
   assert.equal(paymentTransition({ paymentStatus: "paid", total: 200 }, "refund", "instapay").ledgerAmount, -200);
+});
+
+test("rewards use server settings and minimum spend", () => {
+  assert.deepEqual(calculateRewards(200, { loyaltyEnabled: true, pointsRate: .1, cashbackPercent: 5, rewardsMinimumSpend: 100 }), { points: 20, cashback: 10 });
+  assert.deepEqual(calculateRewards(50, { loyaltyEnabled: true, pointsRate: 1, cashbackPercent: 10, rewardsMinimumSpend: 100 }), { points: 0, cashback: 0 });
+});
+
+test("legacy receipt worker is adapted per service line", () => {
+  assert.deepEqual(normalizeLineWorkers([{ id: "cut", staffRequired: true }, { id: "wax", staffRequired: false }], "ali").map(item => item.workerId), ["ali", "none"]);
 });

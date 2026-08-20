@@ -404,6 +404,18 @@ async function refreshCatalog(silent = true) {
       if (entry.key && entry.en) translations.en[entry.key] = entry.en;
     }
     applyStaticTranslations(state.lang);
+    let repeat = null;
+    try { repeat = JSON.parse(sessionStorage.getItem("mz-repeat-booking") || "null"); } catch {}
+    if (repeat) {
+      state.branchId = state.catalog.branches.some(item => item.id === repeat.branchId && item.active !== false) ? repeat.branchId : "";
+      state.staffId = state.catalog.staff.some(item => item.id === repeat.staffId && item.active !== false && availableAtBranch(item)) ? repeat.staffId : "any";
+      const index = itemIndex();
+      state.cart = (repeat.items || []).filter(line => { const item = index.get(line.id); return item && availableAtBranch(item); }).map(line => ({ id: line.id, qty: Math.max(1, Number(line.qty || 1)), option: line.option || "" }));
+      sessionStorage.removeItem("mz-repeat-booking");
+      if (state.branchId) localStorage.setItem("mz-branch", state.branchId);
+      saveCart();
+      showToast("تم تجهيز آخر حجز؛ اختر التاريخ والموعد بعد مراجعة الأسعار الحالية");
+    }
     renderAll();
     return true;
   } catch (error) {

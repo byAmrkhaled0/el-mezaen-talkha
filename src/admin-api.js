@@ -94,6 +94,13 @@ export const deleteEntity = (collection, id) => call("adminDelete", { collection
 export const secureDeleteRecord = (kind, id) => call("adminSecureDelete", { kind, id });
 export const changeBooking = (id, action, paymentMethod) => call("updateBooking", { id, action, paymentMethod });
 export const createPosOrder = payload => call("createPosOrder", payload);
+export const scanCustomerCode = code => call("scanCustomerCode", { code });
+export const findCustomerByPhone = phone => call("findCustomerByPhone", { phone });
+export const adjustCustomerWallet = payload => call("adjustCustomerWallet", payload);
+export const createWhatsappCampaign = payload => call("createWhatsappCampaign", payload);
+export const updateWhatsappCampaignState = (campaignId, action) => call("updateWhatsappCampaignState", { campaignId, action });
+export const sendWhatsappReceipt = bookingId => call("sendWhatsappReceipt", { bookingId });
+export const updateWhatsappConsent = (customerId, optedIn) => call("updateWhatsappConsent", { customerId, optedIn, source: "admin" });
 export const recordExpense = payload => call("recordExpense", payload);
 export const updateExpense = payload => call("updateExpense", payload);
 export const recordPayrollPayment = payload => call("recordPayrollPayment", payload);

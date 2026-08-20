@@ -8,6 +8,7 @@
   "rewrites": [
     { "source": "/admin/:path*", "destination": "/admin/index.html" },
     { "source": "/login/:path*", "destination": "/login/index.html" },
+    { "source": "/account/:path*", "destination": "/account/index.html" },
     { "source": "/services/:path*", "destination": "/services/index.html" },
     { "source": "/team/:path*", "destination": "/team/index.html" }
     ,{ "source": "/hair-systems/:path*", "destination": "/hair-systems/index.html" }
