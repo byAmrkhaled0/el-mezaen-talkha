@@ -273,6 +273,15 @@ function renderPosReceipts() {
   target.innerHTML = receipts.map(item => `<tr><td><b>${escapeHtml(item.code || item.id)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName || "عميل نقدي")}<br><small>${escapeHtml(item.phone || "")}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</td><td>${escapeHtml(item.staffNameAr || "—")}</td><td><b>${money(item.total)}</b></td><td>${paymentLabel(item.paymentStatus)}</td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة</button><button data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال صورة الشيك</button></div></td></tr>`).join("") || emptyRow(7);
 }
 
+function setPosView(view = "new") {
+  const pos = $("#pos");
+  if (!pos) return;
+  pos.dataset.posView = view === "receipts" ? "receipts" : "new";
+  pos.classList.remove("mobile-ticket-open");
+  $$('#pos [data-pos-view]').forEach(button => button.classList.toggle("active", button.dataset.posView === pos.dataset.posView));
+  if (pos.dataset.posView === "receipts") renderPosReceipts();
+}
+
 async function openReceiptInWhatsapp(id) {
   const item = state.dashboard.bookings.find(value => value.id === id);
   if (!item) return toast("تعذر العثور على الشيك", true);
@@ -474,7 +483,12 @@ function renderPosCart() {
   }).join("") || '<p>لم تتم إضافة أصناف بعد.</p>';
   const subtotal = state.posCart.reduce((sum, line) => sum + Number(index.get(`${line.kind}:${line.id}`)?.price || 0) * line.qty, 0);
   const discount = Math.max(0, Math.min(subtotal, Number($("#posDiscount").value || 0)));
-  $("#posTotal").textContent = money(subtotal - discount);
+  const total = money(subtotal - discount);
+  const count = state.posCart.reduce((sum, line) => sum + Number(line.qty || 1), 0);
+  $("#posTotal").textContent = total;
+  if ($("#posMobileTotal")) $("#posMobileTotal").textContent = total;
+  if ($("#posMobileCount")) $("#posMobileCount").textContent = `${count} ${count === 1 ? "صنف" : "أصناف"}`;
+  if ($("#posCartCount")) $("#posCartCount").textContent = `${count} ${count === 1 ? "صنف" : "أصناف"}`;
 }
 
 function addPosItem(id, kind) {
@@ -907,6 +921,7 @@ async function withButtonBusy(button, task) {
 document.addEventListener("click", async event => {
   const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
   const go = event.target.closest("[data-go]"); if (go) await withButtonBusy(go,()=>showSection(go.dataset.go));
+  const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);
   const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const edit = event.target.closest("[data-edit-collection]"); if (edit) openEditor(edit.dataset.editCollection, edit.dataset.editId);
@@ -993,6 +1008,8 @@ $("#secureDeleteClose").addEventListener("click", closeSecureDelete);
 $("#secureDeleteCancel").addEventListener("click", closeSecureDelete);
 $("#secureDeleteForm").addEventListener("submit", submitSecureDelete);
 $("#posForm").addEventListener("submit", submitPosOrder);
+$("#posMobileSummary").addEventListener("click", () => $("#pos").classList.add("mobile-ticket-open"));
+$("#posTicketClose").addEventListener("click", () => $("#pos").classList.remove("mobile-ticket-open"));
 $("#posBranch").addEventListener("change", renderPos);
 $("#posSectionFilter").addEventListener("change", () => { $("#posItemSearch").value = ""; renderPos(); });
 $("#posCategoryFilter").addEventListener("change", renderPos);

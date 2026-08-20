@@ -70,14 +70,15 @@
         <article class="admin-panel compact-operations"><div class="panel-head"><div><h2>أحدث العمليات</h2><p>آخر الحجوزات والشيكات، وتتحدث تلقائيًا.</p></div><button class="small-button" data-go="bookings">عرض الكل</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
       </section>
 
-      <section class="admin-section" id="pos">
+      <section class="admin-section" id="pos" data-pos-view="new">
+        <nav class="pos-view-tabs" aria-label="شاشات نقطة البيع"><button class="active" type="button" data-pos-view="new">＋ شيك جديد</button><button type="button" data-pos-view="receipts">▤ الشيكات السابقة</button></nav>
         <div class="pos-layout">
           <article class="admin-panel pos-catalog-panel">
             <div class="panel-head wrap"><div><h2>طلب جديد من داخل المحل</h2><p>اختر القسم أولًا، ثم التصنيف أو ابحث باسم الصنف لتجهيز الشيك بسرعة.</p></div><div class="toolbar pos-filters"><select id="posSectionFilter" aria-label="قسم نقطة البيع"><option value="service">الخدمات</option><option value="package">الباقات</option><option value="product">البضاعة</option><option value="drink">المشروبات</option></select><select id="posCategoryFilter" aria-label="تصنيف الخدمات"><option value="">اختر تصنيف الخدمات</option><option value="all">كل تصنيفات الخدمات</option></select><input class="pos-search" id="posItemSearch" placeholder="ابحث باسم الخدمة أو الصنف"></div></div>
             <div class="pos-workspace"><aside class="pos-category-rail" id="posCategoryRail" aria-label="تصنيفات الخدمات"></aside><div class="pos-items" id="posItems"></div></div>
           </article>
           <article class="admin-panel pos-ticket-panel">
-            <div class="panel-head"><div><h2>الشيك الحالي</h2><p>الأسعار والرصيد يُراجعان من الخادم قبل الحفظ.</p></div></div>
+            <div class="panel-head"><div><h2>الشيك الحالي <small class="pos-cart-count" id="posCartCount">0 أصناف</small></h2><p>الأسعار والرصيد يُراجعان من الخادم قبل الحفظ.</p></div><button class="dialog-close pos-ticket-close" id="posTicketClose" type="button" aria-label="إغلاق الشيك">×</button></div>
             <form id="posForm" class="pos-form">
               <label>الفرع<select id="posBranch" name="branchId" required><option value="talkha">فرع طلخا</option><option value="mashaya">فرع المشاية</option></select></label>
               <label>عميل مسجل<select id="posCustomer"><option value="">عميل جديد</option></select></label>
@@ -92,7 +93,8 @@
             </form>
           </article>
         </div>
-        <article class="admin-panel pos-receipts-panel"><div class="panel-head"><div><h2>آخر الشيكات</h2><p>شيكات نقطة البيع فقط؛ الحجوزات لها شاشة مستقلة.</p></div></div><div class="table-scroll"><table><thead><tr><th>رقم الشيك</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الإجمالي</th><th>الدفع</th><th>الإجراءات</th></tr></thead><tbody id="posReceipts"></tbody></table></div></article>
+        <article class="admin-panel pos-receipts-panel"><div class="panel-head"><div><h2>الشيكات السابقة</h2><p>شيكات نقطة البيع فقط؛ الحجوزات لها شاشة مستقلة.</p></div><button class="small-button primary" type="button" data-pos-view="new">＋ فتح شيك جديد</button></div><div class="table-scroll"><table><thead><tr><th>رقم الشيك</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الإجمالي</th><th>الدفع</th><th>الإجراءات</th></tr></thead><tbody id="posReceipts"></tbody></table></div></article>
+        <button class="pos-mobile-summary" id="posMobileSummary" type="button"><span><small id="posMobileCount">0 أصناف</small><b>عرض الشيك</b></span><strong id="posMobileTotal">0 ج.م</strong></button>
       </section>
 
       <section class="admin-section" id="bookings">
