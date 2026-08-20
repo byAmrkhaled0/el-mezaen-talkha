@@ -1304,7 +1304,9 @@ export const createWhatsappCampaign = onCall(adminOptions, async request => {
   return { ok: true, campaignId: campaignRef.id, state: "QUEUED" };
 });
 
-export const sendWhatsappReceipt = onCall({ ...adminOptions, secrets: [whatsappToken, whatsappPhoneNumberId] }, async request => {
+// Meta secrets are intentionally not bound while the official integration is disabled.
+// Re-add both secrets to this function's options when Meta onboarding is completed.
+export const sendWhatsappReceipt = onCall(adminOptions, async request => {
   requirePermission(request, "pos");
   const bookingId = sanitizeText(request.data?.bookingId, 100);
   const bookingSnapshot = await db.doc(`bookings/${bookingId}`).get();
@@ -1312,13 +1314,15 @@ export const sendWhatsappReceipt = onCall({ ...adminOptions, secrets: [whatsappT
   const booking = bookingSnapshot.data(); requireBranchAccess(request, booking.branchId);
   const settings = await readSettings();
   if (settings.whatsappReceiptsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الشيكات عبر واتساب متوقف");
+  const accessToken = whatsappToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
+  if (!accessToken || !phoneNumberId) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
   const templateName = sanitizeText(settings.whatsappReceiptTemplate, 120);
   if (!/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("failed-precondition", "قالب شيك واتساب غير مضبوط");
   const guardRef = db.doc(`whatsappOperations/receipt_${bookingId}`); const guard = await guardRef.get();
   if (guard.data()?.status === "SENT") return { ok: true, idempotent: true };
   const phone = normalizePhone(booking.phone).replace(/^0/, "20");
   const itemText = (booking.items || []).map(item => `${item.nameAr}: ${item.workerNameAr || booking.staffNameAr || "—"}`).join("، ").slice(0, 900);
-  const response = await fetch(`https://graph.facebook.com/v22.0/${whatsappPhoneNumberId.value()}/messages`, { method: "POST", headers: { Authorization: `Bearer ${whatsappToken.value()}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: templateName, language: { code: "ar" }, components: [{ type: "body", parameters: [booking.branchNameAr || booking.branchId, booking.code || bookingId, itemText, String(booking.total || 0), booking.paymentStatus || "unpaid"].map(text => ({ type: "text", text: String(text) })) }] } }) });
+  const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: templateName, language: { code: "ar" }, components: [{ type: "body", parameters: [booking.branchNameAr || booking.branchId, booking.code || bookingId, itemText, String(booking.total || 0), booking.paymentStatus || "unpaid"].map(text => ({ type: "text", text: String(text) })) }] } }) });
   if (!response.ok) { await guardRef.set({ bookingId, status: "FAILED", statusCode: response.status, updatedAt: FieldValue.serverTimestamp() }, { merge: true }); throw new HttpsError("unavailable", "تعذر إرسال الشيك عبر Meta حاليًا"); }
   await guardRef.set({ bookingId, customerId: booking.phoneHash || null, status: "SENT", sentBy: request.auth.uid, sentAt: FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true };
@@ -1339,7 +1343,7 @@ export const updateWhatsappCampaignState = onCall(adminOptions, async request =>
   return { ok: true, state: states[action] };
 });
 
-export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 }, secrets: [whatsappToken, whatsappPhoneNumberId] }, async request => {
+export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 } }, async request => {
   const campaignId = sanitizeText(request.data?.campaignId, 100);
   const ref = db.doc(`campaigns/${campaignId}`);
   const snapshot = await ref.get();
@@ -1347,6 +1351,8 @@ export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { ma
   const campaign = snapshot.data();
   const settings = await readSettings();
   if (settings.whatsappCampaignsEnabled !== true) { await ref.update({ state: "PAUSED", lastError: "FEATURE_DISABLED", updatedAt: FieldValue.serverTimestamp() }); return; }
+  const accessToken = whatsappToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
+  if (!accessToken || !phoneNumberId) { await ref.update({ state: "PAUSED", lastError: "META_NOT_CONFIGURED", updatedAt: FieldValue.serverTimestamp() }); return; }
   const remaining = Number(campaign.recipientCap || 100) - Number(campaign.sentCount || 0);
   if (remaining <= 0) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
   let query = db.collection("customers").where("whatsappOptIn", "==", true);
@@ -1365,7 +1371,7 @@ export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { ma
     if (!allowed) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SKIPPED_TEST_MODE", createdAt: FieldValue.serverTimestamp() }); continue; }
     try {
       const phone = normalizePhone(customer.phone).replace(/^0/, "20");
-      const response = await fetch(`https://graph.facebook.com/v22.0/${whatsappPhoneNumberId.value()}/messages`, { method: "POST", headers: { Authorization: `Bearer ${whatsappToken.value()}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
+      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
       if (!response.ok) throw new Error(`META_${response.status}`);
       await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SENT", sentAt: FieldValue.serverTimestamp() }); sent++;
     } catch (error) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "FAILED", error: sanitizeText(error.message, 100), createdAt: FieldValue.serverTimestamp() }); failed++; }

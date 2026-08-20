@@ -1,5 +1,6 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
+import QRCode from "qrcode";
 import { adjustCustomerWallet, changeBooking, createPosOrder, createUserAccount, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
@@ -199,6 +200,7 @@ function renderDashboard() {
   renderBranchFilters();
   $("#recentBookings").innerHTML = state.dashboard.bookings.slice(0, 8).map(bookingRowMini).join("") || emptyRow(8);
   renderBookings();
+  renderPosReceipts();
   renderRevenue();
 }
 
@@ -223,37 +225,46 @@ function renderBookings() {
   const query = $("#bookingSearch").value.trim().toLowerCase();
   const filter = $("#bookingStatusFilter").value;
   const branchFilter = $("#bookingBranchFilter").value;
-  const bookings = state.dashboard.bookings.filter(item => (branchFilter === "all" || (item.branchId || "talkha") === branchFilter) && (filter === "all" || item.status === filter) && (!query || [item.code, item.customerName, item.phone, item.branchNameAr].some(value => String(value || "").toLowerCase().includes(query))));
+  const bookings = state.dashboard.bookings.filter(item => item.source !== "pos" && (branchFilter === "all" || (item.branchId || "talkha") === branchFilter) && (filter === "all" || item.status === filter) && (!query || [item.code, item.customerName, item.phone, item.branchNameAr].some(value => String(value || "").toLowerCase().includes(query))));
   $("#bookingsTable").innerHTML = bookings.map(item => {
     const branchName = item.branchNameAr || branchLabel(item.branchId);
     const waMessage = encodeURIComponent(`مرحبًا ${item.customer?.firstName || ""}، بخصوص حجزك في مزين مصر – ${branchName} رقم ${item.code}: حالته الآن ${statusLabel(item.status)}.`);
     return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b><select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select><div class="row-actions">${item.paymentStatus === "unpaid" ? `<button class="pay" data-booking-action="markPaid" data-booking-id="${escapeAttr(item.id)}">تم الدفع</button>` : ""}${item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button><button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button><button data-booking-action="completed" data-booking-id="${escapeAttr(item.id)}">إكمال</button>${state.role === "admin" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}<a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
   }).join("") || emptyRow(9);
-  $$('[data-print-booking]').forEach(button=>{if(!button.parentElement.querySelector('[data-whatsapp-receipt]'))button.insertAdjacentHTML('afterend',`<button data-whatsapp-receipt="${escapeAttr(button.dataset.printBooking)}">فتح الشيك في واتساب</button>`)});
+  $$('[data-print-booking]').forEach(button=>{if(!button.parentElement.querySelector('[data-whatsapp-receipt]'))button.insertAdjacentHTML('afterend',`<button data-whatsapp-receipt="${escapeAttr(button.dataset.printBooking)}">إرسال صورة الشيك</button>`)});
 }
 
-function openReceiptInWhatsapp(id) {
+function renderPosReceipts() {
+  const target = $("#posReceipts");
+  if (!target) return;
+  const receipts = state.dashboard.bookings.filter(item => item.source === "pos").slice(0, 12);
+  target.innerHTML = receipts.map(item => `<tr><td><b>${escapeHtml(item.code || item.id)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName || "عميل نقدي")}<br><small>${escapeHtml(item.phone || "")}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</td><td>${escapeHtml(item.staffNameAr || "—")}</td><td><b>${money(item.total)}</b></td><td>${paymentLabel(item.paymentStatus)}</td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة</button><button data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال صورة الشيك</button></div></td></tr>`).join("") || emptyRow(7);
+}
+
+async function openReceiptInWhatsapp(id) {
   const item = state.dashboard.bookings.find(value => value.id === id);
   if (!item) return toast("تعذر العثور على الشيك", true);
   const phone = String(item.phone || "").replace(/\D/g, "").replace(/^00/, "").replace(/^0/, "20");
   if (!/^20(?:10|11|12|15)\d{8}$/.test(phone)) return toast("رقم واتساب العميل غير صحيح", true);
   const branch = item.branchNameAr || branchLabel(item.branchId);
-  const lines = (item.items || []).map(line => {
-    const worker = line.workerNameAr || item.staffNameAr;
-    return `• ${line.nameAr || "بند"}${worker ? ` — ${worker}` : ""} × ${line.qty || 1}: ${money(line.lineTotal ?? line.price)}`;
-  });
-  const message = [
-    "مزين مصر",
-    `الفرع: ${branch}`,
-    `رقم الشيك: ${item.code || item.id}`,
-    `العميل: ${item.customerName || "عميل نقدي"}`,
-    ...lines,
-    `الخصم: ${money(item.discountAmount)}`,
-    `الإجمالي: ${money(item.total)}`,
-    `حالة الدفع: ${paymentLabel(item.paymentStatus)}`,
-    globalThis.__SITE_URL__ || "https://el-mezaen-talkha.vercel.app"
-  ].join("\n");
-  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  const lines = item.items || [];
+  const canvas = document.createElement("canvas"); canvas.width = 900; canvas.height = 610 + lines.length * 72;
+  const context = canvas.getContext("2d"); context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height); context.textAlign = "right"; context.direction = "rtl";
+  context.fillStyle = "#071a2c"; context.fillRect(0, 0, canvas.width, 150);
+  const logo = new Image(); logo.src = "/assets/el-mezaen-logo.jpeg"; await new Promise(resolve => { logo.onload=resolve;logo.onerror=resolve; });
+  if (logo.complete && logo.naturalWidth) context.drawImage(logo, 65, 25, 100, 100);
+  context.fillStyle = "#fff"; context.font = "700 40px Tajawal, Arial"; context.fillText("مزين مصر", 835, 67); context.font = "500 24px Tajawal, Arial"; context.fillText(`${branch} — شيك رقم ${item.code || item.id}`, 835, 112);
+  let y=205;context.fillStyle="#172b38";context.font="600 25px Tajawal, Arial";context.fillText(`العميل: ${item.customerName || "عميل نقدي"}`,835,y);y+=42;context.fillText(`التاريخ: ${item.bookingDate || new Date().toLocaleDateString("ar-EG")} ${item.bookingTime || ""}`,835,y);y+=42;context.strokeStyle="#d7e3e8";context.beginPath();context.moveTo(65,y);context.lineTo(835,y);context.stroke();y+=42;
+  context.font="700 23px Tajawal, Arial";context.fillText("الخدمة / العامل",835,y);context.textAlign="left";context.fillText("السعر",65,y);y+=24;
+  for(const line of lines){y+=48;context.textAlign="right";context.font="600 22px Tajawal, Arial";const worker=line.workerNameAr||item.staffNameAr||"";const label=`${line.nameAr||"بند"}${worker?` — ${worker}`:""} × ${line.qty||1}`;context.fillText(label.length>56?`${label.slice(0,53)}...`:label,835,y);context.textAlign="left";context.fillText(money(line.lineTotal??line.price),65,y);context.strokeStyle="#edf2f4";context.beginPath();context.moveTo(65,y+22);context.lineTo(835,y+22);context.stroke()}
+  y+=65;context.textAlign="right";context.fillStyle="#526b78";context.font="500 22px Tajawal, Arial";context.fillText(`الخصم: ${money(item.discountAmount)}`,835,y);y+=48;context.fillStyle="#007f99";context.font="700 36px Tajawal, Arial";context.fillText(`الإجمالي: ${money(item.total)}`,835,y);y+=48;context.fillStyle="#172b38";context.font="600 22px Tajawal, Arial";context.fillText(`حالة الدفع: ${paymentLabel(item.paymentStatus)}`,835,y);y+=60;context.textAlign="center";context.fillStyle="#6a7f89";context.font="500 19px Tajawal, Arial";context.fillText(globalThis.__SITE_URL__||"https://el-mezaen-talkha.vercel.app",450,y);
+  const blob = await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("تعذر إنشاء صورة الشيك")),"image/png"));
+  const file = new File([blob],`el-mezaen-receipt-${item.code||item.id}.png`,{type:"image/png"});
+  if(navigator.share&&navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`شيك مزين مصر ${item.code||""}`});return}catch(error){if(error?.name==="AbortError")return}}
+  let copied=false;if(globalThis.ClipboardItem&&navigator.clipboard?.write)try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);copied=true}catch{}
+  if(!copied){const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
+  window.open(`https://wa.me/${phone}`,"_blank","noopener,noreferrer");
+  toast(copied?"تم نسخ صورة الشيك؛ الصقها داخل واتساب بـ Ctrl+V ثم أرسل":"تم تنزيل صورة الشيك؛ أرفقها في محادثة واتساب ثم أرسل");
 }
 
 function printReceipt(id) {
@@ -402,6 +413,12 @@ function renderPos() {
   const section = $("#posSectionFilter")?.value || "service";
   const category = $("#posCategoryFilter")?.value || "";
   $("#posCategoryFilter").hidden = section !== "service";
+  const rail = $("#posCategoryRail");
+  if (rail) {
+    const categories = (state.collections.get("categories") || []).filter(item => item.active !== false).sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0));
+    rail.hidden = section !== "service";
+    rail.innerHTML = section === "service" ? `<button class="${category === "all" ? "active" : ""}" data-pos-category="all">كل الخدمات</button>${categories.map(item=>`<button class="${category === item.id ? "active" : ""}" data-pos-category="${escapeAttr(item.id)}">${escapeHtml(item.nameAr||item.id)}</button>`).join("")}` : "";
+  }
   const query = $("#posItemSearch").value.trim().toLowerCase();
   if (section === "service" && !category && !query) {
     $("#posItems").innerHTML = '<div class="filter-empty"><b>اختر تصنيف الخدمات</b><p>أو اكتب اسم الخدمة في البحث لعرضها مباشرة.</p></div>';
@@ -621,7 +638,19 @@ function customerCard(item) {
   const name = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "عميل بدون اسم";
   const initial = name.replace(/^ال/, "").trim().charAt(0) || "ع";
   const phone = String(item.phone || "");
-  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>آخر فرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>عدد الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر حجز</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance||0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div></dl><footer>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">تعديل المحفظة</button>`:""}<button data-whatsapp-consent="${escapeAttr(item.id)}" data-current-consent="${item.whatsappOptIn===true}">${item.whatsappOptIn===true?"إلغاء موافقة التسويق":"تسجيل موافقة واتساب"}</button></footer></article>`;
+  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div class="customer-identity"><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>الفرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance||0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div></dl><footer><button class="customer-open" data-open-customer="${escapeAttr(item.id)}">فتح</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">المحفظة</button>`:""}<button data-whatsapp-consent="${escapeAttr(item.id)}" data-current-consent="${item.whatsappOptIn===true}">${item.whatsappOptIn===true?"إلغاء التسويق":"موافقة واتساب"}</button></footer></article>`;
+}
+
+async function openCustomerDrawer(id) {
+  const item = (state.collections.get("customers") || []).find(value => value.id === id);
+  if (!item) return toast("تعذر العثور على العميل", true);
+  const name = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "عميل بدون اسم";
+  $("#customerDrawerTitle").textContent = name;
+  const token = item.qrToken || item.customerQrToken || "";
+  let qr = "";
+  if (token) try { qr = await QRCode.toDataURL(token, { width: 180, margin: 1 }); } catch {}
+  $("#customerDrawerBody").innerHTML = `<section class="customer-drawer-hero"><div class="customer-avatar">${escapeHtml(name.charAt(0))}</div><div><b>${escapeHtml(name)}</b><a href="tel:+2${escapeAttr(item.phone || "")}">${escapeHtml(item.phone || "لا يوجد رقم")}</a></div>${qr ? `<img src="${qr}" alt="QR العميل" width="110" height="110">` : ""}</section><dl class="customer-drawer-stats"><div><dt>آخر فرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>عدد الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance || 0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div><div><dt>الحلاق المفضل</dt><dd>${escapeHtml(item.favoriteWorkerNameAr || item.favoriteWorkerId || "—")}</dd></div><div><dt>موافقة التسويق</dt><dd>${item.whatsappOptIn === true ? "مسجلة" : "غير مسجلة"}</dd></div></dl><div class="customer-drawer-actions"><button data-customer-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">تعديل المحفظة</button>`:""}</div>`;
+  $("#customerDrawer").showModal();
 }
 
 function branchScopeLabel(ids) {
@@ -823,17 +852,30 @@ function paymentLabel(value) { return ({ unpaid: "لم يدفع", paid: "مدف�
 function paymentMethod(value) { return ({ cash: "نقدي", vodafone_cash: "فودافون كاش", instapay: "إنستاباي", other: "أخرى" })[value] || value || "—"; }
 function emptyRow(columns) { return `<tr><td colspan="${columns}">لا توجد بيانات.</td></tr>`; }
 
+async function withButtonBusy(button, task) {
+  if (!button || button.disabled) return;
+  const label = button.innerHTML;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = '<span class="button-spinner" aria-hidden="true"></span><span>جارٍ...</span>';
+  try { return await task(); }
+  finally { button.disabled = false; button.removeAttribute("aria-busy"); button.innerHTML = label; }
+}
+
 document.addEventListener("click", async event => {
-  const section = event.target.closest("[data-section]"); if (section) { if (section.dataset.section === "expenses") state.expenseInventoryKind = "all"; showSection(section.dataset.section); }
-  const go = event.target.closest("[data-go]"); if (go) showSection(go.dataset.go);
+  const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
+  const go = event.target.closest("[data-go]"); if (go) await withButtonBusy(go,()=>showSection(go.dataset.go));
   const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const edit = event.target.closest("[data-edit-collection]"); if (edit) openEditor(edit.dataset.editCollection, edit.dataset.editId);
-  const remove = event.target.closest("[data-delete-collection]"); if (remove) deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId);
-  const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId);
-  const booking = event.target.closest("[data-booking-action]"); if (booking) updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction);
+  const remove = event.target.closest("[data-delete-collection]"); if (remove) await withButtonBusy(remove,()=>deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId));
+  const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) await withButtonBusy(toggle,()=>toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId));
+  const booking = event.target.closest("[data-booking-action]"); if (booking) await withButtonBusy(booking,()=>updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction));
   const printButton = event.target.closest("[data-print-booking]"); if (printButton) printReceipt(printButton.dataset.printBooking);
-  const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)openReceiptInWhatsapp(receipt.dataset.whatsappReceipt);
+  const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)await withButtonBusy(receipt,()=>openReceiptInWhatsapp(receipt.dataset.whatsappReceipt));
+  const openCustomer=event.target.closest("[data-open-customer]");if(openCustomer)openCustomerDrawer(openCustomer.dataset.openCustomer);
+  const customerPos=event.target.closest("[data-customer-pos]");if(customerPos){$("#customerDrawer").close();await showSection("pos");$("#posCustomer").value=customerPos.dataset.customerPos;$("#posCustomer").dispatchEvent(new Event("change"))}
+  const posCategory=event.target.closest("[data-pos-category]");if(posCategory){$("#posCategoryFilter").value=posCategory.dataset.posCategory;renderPos()}
   const deleteBooking = event.target.closest("[data-secure-delete-booking]"); if (deleteBooking) openSecureDelete("booking", deleteBooking.dataset.secureDeleteBooking, deleteBooking.dataset.secureDeleteLabel);
   const deleteRevenue = event.target.closest("[data-secure-delete-revenue]"); if (deleteRevenue) openSecureDelete("revenue", deleteRevenue.dataset.secureDeleteRevenue, deleteRevenue.dataset.secureDeleteLabel);
   const deleteExpense = event.target.closest("[data-secure-delete-expense]"); if (deleteExpense) openSecureDelete("expense", deleteExpense.dataset.secureDeleteExpense, deleteExpense.dataset.secureDeleteLabel);
@@ -843,7 +885,7 @@ document.addEventListener("click", async event => {
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
   const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; renderCollection("services"); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const salary = event.target.closest("[data-pay-salary]"); if (salary) paySalary(salary.dataset.paySalary);
-  const review = event.target.closest("[data-review-action]"); if (review) updateReview(review.dataset.reviewId, review.dataset.reviewAction, review.dataset.reviewFeatured === "true");
+  const review = event.target.closest("[data-review-action]"); if (review) await withButtonBusy(review,()=>updateReview(review.dataset.reviewId, review.dataset.reviewAction, review.dataset.reviewFeatured === "true"));
   const wallet=event.target.closest("[data-wallet-adjust]");if(wallet){const points=Number(prompt("تعديل النقاط (+ أو -)","0")||0);const cashback=Number(prompt("تعديل الكاش باك (+ أو -)","0")||0);const reason=prompt("سبب التعديل")||"";if(reason&&(points||cashback)){try{await adjustCustomerWallet({customerId:wallet.dataset.walletAdjust,points,cashback,reason,idempotencyKey:crypto.randomUUID()});await loadCollection("customers",true);toast("تم تعديل المحفظة وتسجيل الحركة")}catch(error){toast(error.message||"تعذر التعديل",true)}}}
   const campaignAction=event.target.closest("[data-campaign-action]");if(campaignAction){try{await updateWhatsappCampaignState(campaignAction.dataset.campaignId,campaignAction.dataset.campaignAction);await loadCollection("campaigns",true);renderCampaigns();toast("تم تحديث الحملة")}catch(error){toast(error.message,true)}}
   const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟")){try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}}}
@@ -878,6 +920,7 @@ $("#logoutButton").addEventListener("click", async () => { await logout(); locat
 $("#pushButton").addEventListener("click", async () => { try { await enablePush(); toast("تم تفعيل الإشعارات"); } catch { toast("أضف VAPID Key واسمح بالإشعارات أولًا", true); } });
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
+$("#customerDrawerClose").addEventListener("click", () => $("#customerDrawer").close());
 $("#entityForm").addEventListener("submit", saveEditor);
 [$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
 $("#campaignForm")?.addEventListener("submit",async event=>{event.preventDefault();const button=event.currentTarget.querySelector("button");button.disabled=true;try{const data=Object.fromEntries(new FormData(event.currentTarget));await createWhatsappCampaign({...data,testMode:data.testMode==="true",recipientCap:Number(data.recipientCap||100)});await loadCollection("campaigns",true);renderCampaigns();toast("تم وضع الحملة في قائمة الإرسال الآمنة")}catch(error){toast(error.message||"تعذر إنشاء الحملة",true)}finally{button.disabled=false}});
@@ -929,7 +972,7 @@ watchAuth(async user => {
   try {
     const access = await currentAccess(user);
     if (!access.role) { await logout(); location.replace("/login/"); return; }
-    state.user = user; state.role = access.role; state.permissions = new Set(access.role === "admin" ? Object.keys(permissionLabels).concat("users") : access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
+    state.user = user; state.role = access.role; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = new Set(access.role === "admin" ? Object.keys(permissionLabels).concat("users") : access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
     $("#welcomeText").textContent = `لوحة إدارة مزين مصر • ${access.role}`;
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
     applyAccess();

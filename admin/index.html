@@ -17,27 +17,32 @@
     <aside class="sidebar" id="sidebar">
       <a class="admin-brand" href="/"><img src="/assets/el-mezaen-mark-v2.webp" alt="رمز مزين مصر" width="55" height="65"><span><strong>مزين مصر</strong><small>لوحة الإدارة</small></span></a>
       <nav aria-label="أقسام لوحة الإدارة">
+        <span class="nav-group-title">التشغيل</span>
         <button class="active" data-section="dashboard">⌂ الرئيسية والإحصائيات</button>
         <button data-section="pos">▣ نقطة البيع والشيكات</button>
         <button data-section="bookings">▦ الحجوزات</button>
+        <button data-section="customers">♧ العملاء</button>
+        <span class="nav-group-title">المالية والمخزون</span>
         <button data-section="revenue">◈ الدفع والإيرادات</button>
         <button data-section="expenses">− المصروفات والمشتريات</button>
         <button data-section="inventory">▤ البضاعة والمخزون</button>
         <button data-section="drinks">☕ المشروبات</button>
         <button data-section="payroll">♙ رواتب وتارجت العمال</button>
+        <span class="nav-group-title">المحتوى</span>
         <button data-section="services">✂ الخدمات والتصنيفات</button>
         <button data-section="packages">♛ الباقات</button>
         <button data-section="offers">٪ العروض</button>
         <button data-section="coupons">⌁ أكواد الخصم</button>
         <button data-section="staff">♙ فريق العمل</button>
-        <button data-section="customers">♧ العملاء</button>
-        <button data-section="rewards">◆ الولاء والمحافظ</button>
-        <button data-section="campaigns">◉ حملات واتساب</button>
         <button data-section="reviews">★ تقييمات العملاء</button>
-        <button data-section="schedule">◷ المواعيد وأيام الإجازة</button>
         <button data-section="gallery">▧ الصور والمعرض</button>
         <button data-section="celebrities">★ صور المشاهير</button>
         <button data-section="posts">▤ من فروعنا / Media</button>
+        <span class="nav-group-title">التسويق</span>
+        <button data-section="rewards">◆ الولاء والمحافظ</button>
+        <button data-section="campaigns">◉ حملات واتساب</button>
+        <span class="nav-group-title">النظام</span>
+        <button data-section="schedule">◷ المواعيد وأيام الإجازة</button>
         <button data-section="settings">⚙ إعدادات الموقع</button>
         <button data-section="activity">☷ سجل الأنشطة</button>
         <button data-section="users">♟ حسابات العاملين والصلاحيات</button>
@@ -50,7 +55,7 @@
       </header>
 
       <section class="admin-section active" id="dashboard">
-        <div class="metric-grid">
+        <div class="metric-grid cashier-metrics">
           <article class="metric-card"><span>حجوزات اليوم</span><strong id="statTodayBookings">0</strong></article>
           <article class="metric-card"><span>إيراد اليوم</span><strong id="statTodayRevenue">0 ج.م</strong></article>
           <article class="metric-card"><span>إيراد الشهر</span><strong id="statMonthRevenue">0 ج.م</strong></article>
@@ -60,14 +65,15 @@
           <article class="metric-card"><span>غير مدفوع</span><strong id="statUnpaid">0</strong></article>
           <article class="metric-card"><span>آخر مبلغ محصل</span><strong id="statLastCollected">0 ج.م</strong></article>
         </div>
-        <article class="admin-panel"><div class="panel-head"><div><h2>أحدث الحجوزات</h2><p>البيانات تتحدث تلقائيًا كل 20 ثانية.</p></div><button class="small-button" data-go="bookings">كل الحجوزات</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
+        <nav class="cashier-quick-actions" aria-label="إجراءات الكاشير السريعة"><button class="primary" data-go="pos">+ شيك جديد</button><button data-go="bookings">الحجوزات</button><button data-go="customers">بحث عن عميل</button></nav>
+        <article class="admin-panel compact-operations"><div class="panel-head"><div><h2>أحدث العمليات</h2><p>آخر الحجوزات والشيكات، وتتحدث تلقائيًا.</p></div><button class="small-button" data-go="bookings">عرض الكل</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
       </section>
 
       <section class="admin-section" id="pos">
         <div class="pos-layout">
           <article class="admin-panel pos-catalog-panel">
             <div class="panel-head wrap"><div><h2>طلب جديد من داخل المحل</h2><p>اختر القسم أولًا، ثم التصنيف أو ابحث باسم الصنف لتجهيز الشيك بسرعة.</p></div><div class="toolbar pos-filters"><select id="posSectionFilter" aria-label="قسم نقطة البيع"><option value="service">الخدمات</option><option value="package">الباقات</option><option value="product">البضاعة</option><option value="drink">المشروبات</option></select><select id="posCategoryFilter" aria-label="تصنيف الخدمات"><option value="">اختر تصنيف الخدمات</option><option value="all">كل تصنيفات الخدمات</option></select><input class="pos-search" id="posItemSearch" placeholder="ابحث باسم الخدمة أو الصنف"></div></div>
-            <div class="pos-items" id="posItems"></div>
+            <div class="pos-workspace"><aside class="pos-category-rail" id="posCategoryRail" aria-label="تصنيفات الخدمات"></aside><div class="pos-items" id="posItems"></div></div>
           </article>
           <article class="admin-panel pos-ticket-panel">
             <div class="panel-head"><div><h2>الشيك الحالي</h2><p>الأسعار والرصيد يُراجعان من الخادم قبل الحفظ.</p></div></div>
@@ -85,6 +91,7 @@
             </form>
           </article>
         </div>
+        <article class="admin-panel pos-receipts-panel"><div class="panel-head"><div><h2>آخر الشيكات</h2><p>شيكات نقطة البيع فقط؛ الحجوزات لها شاشة مستقلة.</p></div></div><div class="table-scroll"><table><thead><tr><th>رقم الشيك</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الإجمالي</th><th>الدفع</th><th>الإجراءات</th></tr></thead><tbody id="posReceipts"></tbody></table></div></article>
       </section>
 
       <section class="admin-section" id="bookings">
@@ -154,6 +161,7 @@
         </div>
       </section>
     </main>
+    <nav class="cashier-mobile-nav" aria-label="تنقل الكاشير"><button data-section="dashboard">⌂<span>الرئيسية</span></button><button data-section="pos">▣<span>شيك جديد</span></button><button data-section="bookings">▦<span>الحجوزات</span></button><button data-section="customers">♧<span>العملاء</span></button></nav>
   </div>
 
   <dialog class="editor-dialog" id="editorDialog">
@@ -164,6 +172,7 @@
     </form>
   </dialog>
   <dialog class="editor-dialog" id="scannerDialog"><div class="editor-shell scanner-shell"><header><div><span>بحث سريع</span><h2>ماسح QR وBarcode</h2></div><button type="button" class="dialog-close" id="scannerClose">×</button></header><div class="scanner-body"><label>الكاميرا<select id="scannerCamera"><option value="environment">الخلفية</option><option value="user">الأمامية</option></select></label><video id="scannerVideo" playsinline muted></video><p>امسح كود العميل أو الحجز، أو أدخل الكود يدويًا. يتوقف المسح تلقائيًا بعد أول قراءة.</p><div class="toolbar"><input id="scannerCode" placeholder="MZ-... أو mzc_..."><button class="small-button primary" id="findScannedBooking">فتح النتيجة</button></div></div></div></dialog>
+  <dialog class="customer-drawer" id="customerDrawer"><div class="customer-drawer-shell"><header><div><span>ملف العميل</span><h2 id="customerDrawerTitle">بيانات العميل</h2></div><button type="button" class="dialog-close" id="customerDrawerClose">×</button></header><div class="customer-drawer-body" id="customerDrawerBody"></div></div></dialog>
   <dialog class="editor-dialog" id="secureDeleteDialog">
     <form class="editor-shell secure-delete-shell" id="secureDeleteForm">
       <header><div><span>حماية البيانات</span><h2>تأكيد الحذف النهائي</h2></div><button type="button" class="dialog-close" id="secureDeleteClose">×</button></header>
