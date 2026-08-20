@@ -101,3 +101,42 @@ html[data-admin-role="cashier"] .cashier-metrics .metric-card:nth-child(3),html[
 @media(max-width:430px){.activity-card{grid-template-columns:1fr}.activity-card .activity-action{grid-column:auto}}
 @media(max-width:720px){html[data-admin-role="cashier"] .admin-main{padding-bottom:82px}html[data-admin-role="cashier"] .cashier-mobile-nav{position:fixed;z-index:60;inset:auto 8px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel),transparent 4%);box-shadow:var(--shadow);backdrop-filter:blur(12px)}.cashier-mobile-nav button{min-height:52px;display:grid;place-items:center;gap:2px;border:0;border-radius:10px;color:var(--muted);background:transparent;font-size:18px}.cashier-mobile-nav button.active{color:#00151b;background:var(--cyan)}.cashier-mobile-nav span{font-size:10px;font-weight:800}}
 @media(max-width:430px){.customer-drawer-shell{width:100vw}.customer-drawer-hero{grid-template-columns:auto 1fr}.customer-drawer-hero img{grid-column:1/-1;justify-self:center}.customer-drawer-actions{flex-direction:column}}
+
+/* POS compact layout fix v58 */
+.pos-workspace {
+  align-items: start;
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.pos-items {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: 112px;
+}
+
+.pos-item {
+  width: 100%;
+  height: 112px;
+  min-height: 0;
+}
+
+@media (min-width: 1101px) {
+  html[data-admin-role="cashier"] .pos-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 350px);
+  }
+
+  html[data-admin-role="cashier"] .pos-item {
+    height: 102px;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .pos-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-items {
+    grid-auto-rows: 112px;
+  }
+}
