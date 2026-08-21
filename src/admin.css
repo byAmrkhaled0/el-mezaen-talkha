@@ -186,3 +186,11 @@ html[data-theme="light"]{--bg:#edf8fa;--bg2:#e4f2f4;--panel:#fff;--text:#071b28;
 html[data-theme="light"] .admin-main{background:radial-gradient(circle at 88% 2%,rgba(0,127,139,.08),transparent 25rem),var(--bg)}
 html[data-theme="light"] .sidebar{background:linear-gradient(180deg,#f8fdfe,#e7f4f6)}
 html[data-theme="light"] .metric-card,html[data-theme="light"] .admin-panel{background:#fff}
+
+/* Square result thumbnails in admin, with no stretched empty cards. */
+#results [data-list="content-result"]{grid-template-columns:repeat(auto-fill,minmax(240px,300px));align-items:start;align-content:start}
+#results [data-list="content-result"] .entity-card{height:auto!important;min-height:0!important;align-self:start}
+#results [data-list="content-result"] .entity-media{position:relative;width:calc(100% + 26px);height:auto!important;min-height:0!important;aspect-ratio:1/1!important;margin:-13px -13px 12px!important}
+#results [data-list="content-result"] .entity-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover!important;object-position:center;background:#13202a}
+@media(max-width:720px){#results [data-list="content-result"]{grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}}
+@media(max-width:430px){#results [data-list="content-result"]{grid-template-columns:1fr}#results [data-list="content-result"] .entity-card{width:min(100%,390px);justify-self:center}}
