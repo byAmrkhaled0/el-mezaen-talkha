@@ -142,7 +142,7 @@ export async function uploadImage(file, folder = "content") {
   return getDownloadURL(target);
 }
 
-export async function uploadVideo(file, folder = "content") {
+export async function validateVideoFile(file) {
   const allowed = ["video/mp4", "video/webm"];
   if (!file) throw new Error("اختر فيديو من الجهاز");
   if (!allowed.includes(file.type)) throw new Error("الفيديو بصيغة MOV غير مناسب للموقع. حوّله إلى MP4 بترميز H.264 ثم أعد رفعه");
@@ -152,10 +152,54 @@ export async function uploadVideo(file, folder = "content") {
     const isH264 = metadata.includes("avc1") || metadata.includes("avc3");
     if (!isH264) throw new Error("ترميز الفيديو غير متوافق وقد يظهر شاشة سوداء. حوّله إلى MP4 بترميز H.264 (AVC) ثم أعد رفعه");
   }
+  return true;
+}
+
+export async function uploadVideo(file, folder = "content") {
+  await validateVideoFile(file);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
   await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
   return getDownloadURL(target);
+}
+
+export async function createVideoPoster(file) {
+  if (!file?.type?.startsWith("video/")) throw new Error("VIDEO_POSTER_INVALID_FILE");
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "metadata";
+  video.src = url;
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("VIDEO_PREVIEW_TIMEOUT")), 12000);
+      video.addEventListener("loadedmetadata", () => { clearTimeout(timeout); resolve(); }, { once: true });
+      video.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("VIDEO_CODEC_UNSUPPORTED")); }, { once: true });
+    });
+    if (!video.videoWidth || !video.videoHeight) throw new Error("VIDEO_CODEC_UNSUPPORTED");
+    const seekTo = Number.isFinite(video.duration) && video.duration > .2 ? Math.min(.35, video.duration / 3) : 0;
+    if (seekTo) {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("VIDEO_PREVIEW_TIMEOUT")), 8000);
+        video.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
+        video.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("VIDEO_CODEC_UNSUPPORTED")); }, { once: true });
+        video.currentTime = seekTo;
+      });
+    }
+    const maxWidth = 960;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("VIDEO_POSTER_FAILED")), "image/webp", .82));
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}-poster.webp`, { type: "image/webp" });
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(url);
+  }
 }
 
 export async function enablePush() {

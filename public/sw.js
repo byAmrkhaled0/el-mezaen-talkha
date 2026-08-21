@@ -1,4 +1,4 @@
-const VERSION = "v60";
+const VERSION = "v61";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
 const CORE = [

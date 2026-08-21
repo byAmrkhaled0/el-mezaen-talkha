@@ -18,9 +18,13 @@ async function renderHairMedia() {
   document.querySelector("#hairMediaGrid").innerHTML = items.slice(0, 12).map(item => {
     const source = videoSource(item.videoUrl);
     const title = escapeHtml(item.titleAr || "فيديو من خدمات التركيبات");
-    if (source.kind === "direct") return `<article class="hair-media-card"><video src="${escapeHtml(source.url)}" poster="${escapeHtml(item.imageUrl || "")}" controls playsinline preload="metadata"></video><div><h3>${title}</h3><p>${escapeHtml(item.bodyAr || "")}</p></div></article>`;
+    if (source.kind === "direct") return `<article class="hair-media-card"><div class="hair-video-shell"><video src="${escapeHtml(source.url)}" poster="${escapeHtml(item.imageUrl || "")}" controls playsinline webkit-playsinline preload="metadata"></video><span class="hair-video-error" hidden>تعذر تشغيل الفيديو على هذا الجهاز. جرّب فتحه في المتصفح الأساسي.</span></div><div><h3>${title}</h3><p>${escapeHtml(item.bodyAr || "")}</p></div></article>`;
     return `<a class="hair-media-card external" href="${escapeHtml(source.url)}" target="_blank" rel="noopener"><span>▶</span><div><h3>${title}</h3><p>${escapeHtml(item.bodyAr || "شاهد الفيديو")}</p></div></a>`;
   }).join("");
+  document.querySelectorAll("#hairMediaGrid video").forEach(video => video.addEventListener("error", () => {
+    video.closest(".hair-video-shell")?.classList.add("video-failed");
+    const message = video.parentElement?.querySelector(".hair-video-error"); if (message) message.hidden = false;
+  }));
 }
 
 renderHairMedia().catch(() => {});

@@ -1,7 +1,7 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
-import { adjustCustomerWallet, changeBooking, changeUserRole, createPosOrder, createUserAccount, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { adjustCustomerWallet, changeBooking, changeUserRole, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -800,9 +800,9 @@ function renderField([name, label, type, required = false, options = null, full 
   if (type === "boolean") return `<label class="${className}">${label}<select name="${name}"><option value="true" ${value !== false ? "selected" : ""}>نعم</option><option value="false" ${value === false ? "selected" : ""}>لا</option></select></label>`;
   const dateValue = type === "datetime-local" && value ? String(value).slice(0, 16) : value;
   const inputType = ["video-file", "media-file"].includes(type) ? "file" : type;
-  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/mp4,video/webm"' : type === "media-file" ? 'accept="image/*,video/mp4,video/webm"' : "";
+  const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/*"' : type === "media-file" ? 'accept="image/*,video/*"' : "";
   const uploadClass = inputType === "file" ? "media-upload-field full" : className;
-  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "سيتم رفع الفيديو وحفظ رابطه تلقائيًا؛ لا تحتاج لإضافة أي رابط" : type === "media-file" ? "صورة، أو فيديو MP4 (H.264) / WebM أقل من 30MB" : "";
+  const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "اختر الفيديو من الهاتف؛ سيتم إنشاء صورة غلاف وحفظ الرابط تلقائيًا" : type === "media-file" ? "صورة، أو فيديو MP4 (H.264) / WebM أقل من 30MB — للفيديو تُنشأ صورة غلاف تلقائيًا" : "";
   return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
 
@@ -844,7 +844,17 @@ async function saveEditor(event) {
   saveButton.textContent = image?.size || video?.size ? "جاري الرفع…" : "جاري الحفظ…";
   try {
     if (image?.size) payload.imageUrl = await uploadImage(image, collection);
-    if (video?.size) { payload.videoUrl = await uploadVideo(video, collection); payload.mediaType = "video"; }
+    if (video?.size) {
+      await validateVideoFile(video);
+      saveButton.textContent = "جاري تجهيز صورة الفيديو…";
+      let poster;
+      try { poster = await createVideoPoster(video); }
+      catch { throw new Error("الفيديو لا يعمل داخل المتصفح أو ترميزه غير مدعوم. اختر MP4 بترميز H.264 (وليس HEVC/MOV)"); }
+      payload.imageUrl = await uploadImage(poster, `${collection}/posters`);
+      saveButton.textContent = "جاري رفع الفيديو…";
+      payload.videoUrl = await uploadVideo(video, collection);
+      payload.mediaType = "video";
+    }
     await saveEntity(collection, id, payload);
     $("#editorDialog").close();
     await loadCollection(collection, true);
