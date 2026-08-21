@@ -79,7 +79,7 @@ assert.match(functionsSource, /export const createAdminUser/);
 assert.match(functionsSource, /concurrency:\s*80/);
 assert.match(functionsSource, /review_v2/);
 assert.match(worker, /addEventListener\("push"/);
-assert.match(worker, /const VERSION = "v57"/);
+assert.match(worker, /const VERSION = "v58"/);
 assert.match(worker, /sensitiveNavigation/);
 assert.match(index, /id="networkStatus"/);
 assert.match(admin, /id="userAccountForm"/);

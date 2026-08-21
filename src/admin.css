@@ -163,3 +163,26 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 @media(max-width:1250px){.pos-filters{grid-template-columns:1fr 1fr}.pos-filters .pos-search-box{grid-column:1/-1}}
 @media(max-width:720px){.pos-filters{grid-template-columns:1fr 1fr}.pos-filters .pos-search-box{grid-column:1/-1;min-width:0}.pos-receipt-tools .pos-search-box{min-width:0;width:100%}.pos-receipt-tools{display:grid;grid-template-columns:1fr}.pos-receipt-tools>*{width:100%}}
 @media(max-width:720px){#bookings .table-scroll,#pos .pos-receipts-panel .table-scroll{overflow:visible;margin:0;padding:0}#bookings table,#pos .pos-receipts-panel table{display:block}#bookings thead,#pos .pos-receipts-panel thead{display:none}#bookings tbody,#pos .pos-receipts-panel tbody{display:grid;gap:10px}#bookings tr,#pos .pos-receipts-panel tr{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;border:1px solid var(--line);border-radius:13px;background:var(--bg2)}#bookings td,#pos .pos-receipts-panel td{display:block;min-width:0;padding:0;border:0}#bookings td::before,#pos .pos-receipts-panel td::before{display:block;margin-bottom:2px;color:var(--muted);font-size:11px;font-weight:700}#bookings td:nth-child(1)::before{content:"الكود"}#bookings td:nth-child(2)::before{content:"الفرع"}#bookings td:nth-child(3)::before{content:"العميل"}#bookings td:nth-child(4)::before{content:"الخدمات والإجمالي"}#bookings td:nth-child(5)::before{content:"العامل"}#bookings td:nth-child(6)::before{content:"الموعد"}#bookings td:nth-child(7)::before{content:"الحالة"}#bookings td:nth-child(8)::before{content:"الدفع"}#bookings td:nth-child(9),#pos .pos-receipts-panel td:nth-child(7){grid-column:1/-1}#pos .pos-receipts-panel td:nth-child(1)::before{content:"رقم الشيك"}#pos .pos-receipts-panel td:nth-child(2)::before{content:"العميل"}#pos .pos-receipts-panel td:nth-child(3)::before{content:"الخدمات"}#pos .pos-receipts-panel td:nth-child(4)::before{content:"العامل"}#pos .pos-receipts-panel td:nth-child(5)::before{content:"الإجمالي"}#pos .pos-receipts-panel td:nth-child(6)::before{content:"الدفع"}.cashier-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.pos-checkout-bar{bottom:0;margin-inline:-10px;padding-inline:10px}}
+
+/* Clear visual refresh for the operating dashboard. */
+:root{--cyan:#43ddd3;--warning:#f4bd55;--panel:#0b2134;--bg2:#071827;--line:rgba(109,225,222,.19)}
+.admin-main{background:radial-gradient(circle at 88% 2%,rgba(67,221,211,.09),transparent 25rem),radial-gradient(circle at 8% 95%,rgba(244,189,85,.07),transparent 26rem),var(--bg)}
+.admin-header{border-bottom-color:rgba(67,221,211,.2);background:color-mix(in srgb,var(--bg),transparent 5%)}
+.sidebar{background:linear-gradient(180deg,#081c2e,#061522 70%,#0a1b28)}
+.sidebar button.active{color:#02181b;background:linear-gradient(135deg,#66e8df,#35c8d7);box-shadow:0 8px 24px rgba(67,221,211,.18)}
+.metric-card{position:relative;overflow:hidden;border-radius:15px;background:linear-gradient(145deg,#0d2940,#0a1d30);box-shadow:0 12px 32px rgba(0,0,0,.2)}
+.metric-card::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:var(--cyan)}
+.cashier-metrics .metric-card:nth-child(2)::before{background:#72a8ff}.cashier-metrics .metric-card:nth-child(3)::before{background:#51dc90}.cashier-metrics .metric-card:nth-child(4)::before{background:#f4bd55}.cashier-metrics .metric-card:nth-child(5)::before{background:#c48cff}
+.cashier-metrics .metric-card:nth-child(2) strong{color:#8bb8ff}.cashier-metrics .metric-card:nth-child(3) strong{color:#62e39c}.cashier-metrics .metric-card:nth-child(4) strong{color:#f4bd55}.cashier-metrics .metric-card:nth-child(5) strong{color:#d5aaff}
+.admin-panel{border-color:rgba(109,225,222,.18);background:linear-gradient(155deg,rgba(12,35,54,.98),rgba(8,26,42,.98));box-shadow:0 18px 42px rgba(0,0,0,.2)}
+.small-button.primary,.pos-submit{background:linear-gradient(135deg,#65e9df,#34c9d9)!important;box-shadow:0 8px 20px rgba(67,221,211,.16)}
+#results [data-list="content-result"]{grid-template-columns:repeat(auto-fill,minmax(250px,320px));justify-content:center;align-items:start}
+#results [data-list="content-result"] .entity-card{width:100%;min-height:0}
+#results [data-list="content-result"] .entity-media{height:auto;aspect-ratio:1;margin-bottom:12px}
+#results [data-list="content-result"] .entity-media img{object-fit:contain;background:#182126}
+@media(max-width:720px){#results [data-list="content-result"]{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-header{background:rgba(2,8,17,.94)}}
+@media(max-width:430px){#results [data-list="content-result"]{grid-template-columns:1fr}.cashier-metrics .metric-card{min-height:82px}}
+html[data-theme="light"]{--bg:#edf8fa;--bg2:#e4f2f4;--panel:#fff;--text:#071b28;--muted:#55717d;--cyan:#007f8b;--line:rgba(7,91,117,.17);--warning:#9a6710;--shadow:0 16px 38px rgba(17,83,100,.12)}
+html[data-theme="light"] .admin-main{background:radial-gradient(circle at 88% 2%,rgba(0,127,139,.08),transparent 25rem),var(--bg)}
+html[data-theme="light"] .sidebar{background:linear-gradient(180deg,#f8fdfe,#e7f4f6)}
+html[data-theme="light"] .metric-card,html[data-theme="light"] .admin-panel{background:#fff}
