@@ -16,7 +16,7 @@ const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
 const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, loadedAt: { dashboard: 0, business: 0 }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", editingUserId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
-const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
+const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
 const fields = {
@@ -80,15 +80,16 @@ function setupPanels() {
     const listKey = inventoryView ? `${collection}-${inventoryView}` : collection;
     const addLabel = collection === "staff" ? "+ إضافة عضو فريق باسمه وصورته" : collection === "drinks" ? "+ إضافة مشروب" : inventoryView === "products" ? "+ إضافة صنف بضاعة" : collection === "inventoryItems" ? "+ إضافة صنف" : collection === "reviews" ? "+ إضافة تقييم يدوي" : "+ إضافة جديد";
     const reviewFilter = collection === "reviews" ? '<select id="reviewStatusFilter"><option value="all">كل التقييمات</option><option value="pending">بانتظار المراجعة</option><option value="published">المنشورة</option><option value="rejected">المرفوضة</option><option value="featured">المميزة</option></select>' : "";
+    const customerFilter = collection === "customers" ? '<select id="customerSegmentFilter" aria-label="شريحة العملاء"><option value="all">كل العملاء</option><option value="recent">زاروا مؤخرًا</option><option value="inactive">لم يزوروا منذ 60 يومًا</option><option value="vip">الأعلى إنفاقًا</option><option value="rewards">لديهم رصيد مكافآت</option></select>' : "";
     const presetCategory = panel.dataset.presetCategory ? ` data-preset-category="${escapeAttr(panel.dataset.presetCategory)}"` : "";
     const viewAttribute = inventoryView ? ` data-entity-view="${escapeAttr(inventoryView)}"` : "";
     const hint = collection === "drinks" ? "قسم مستقل عن البضاعة والمخزون؛ المشروب يظهر تلقائيًا في حجز الفرع ونقطة البيع." : inventoryView === "products" ? "البضاعة ومستلزمات التشغيل لها مخزون وتكلفة شراء مستقلة." : collection === "reviews" ? "راجع التقييمات وانشرها أو ارفضها وثبّت الأفضل ورد على العميل." : readonly ? "عرض البيانات المسجلة." : "إضافة وتعديل وإخفاء وحذف العناصر.";
-    panel.innerHTML = `<article class="admin-panel"><div class="panel-head wrap"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><div class="toolbar"><input data-entity-search="${collection}"${viewAttribute} placeholder="بحث في ${escapeAttr(panel.dataset.title)}">${reviewFilter}${readonly ? "" : `<button class="small-button primary" data-new="${collection}"${presetCategory}>${addLabel}</button>`}</div></div><div class="entity-grid" data-list="${listKey}"${viewAttribute}></div></article>`;
+    panel.innerHTML = `<article class="admin-panel"><div class="panel-head wrap"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><div class="toolbar"><input data-entity-search="${collection}"${viewAttribute} placeholder="بحث في ${escapeAttr(panel.dataset.title)}">${reviewFilter}${customerFilter}${readonly ? "" : `<button class="small-button primary" data-new="${collection}"${presetCategory}>${addLabel}</button>`}</div></div>${collection === "customers" ? '<div class="customer-segment-summary" id="customerSegmentSummary"></div>' : ""}<div class="entity-grid" data-list="${listKey}"${viewAttribute}></div></article>`;
   });
   $$('content-panel').forEach(panel => {
     const type = panel.dataset.type;
-    const hint = type === "news" ? "أضف صورة أو فيديو، وحدد الفرع الذي يظهر فيه المنشور." : "حدد الفرع وارفع صورة واضحة ومحسنة للهاتف.";
-    panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
+    const hint = type === "hair-system" ? "ارفع فيديو MP4 بترميز H.264 لعرضه سريعًا داخل صفحة التركيبات." : type === "result" ? "ارفع تصميم قبل وبعد جاهزًا، وحدد الفرع ثم انشره." : type === "news" ? "أضف صورة أو فيديو، وحدد الفرع الذي يظهر فيه المنشور." : "حدد الفرع وارفع صورة واضحة ومحسنة للهاتف.";
+    panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}" data-preset-media="${type === "hair-system" ? "video" : "image"}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
   });
   const rewardsForm=$("#rewardsSettings");if(rewardsForm&&!rewardsForm.elements.whatsappReceiptsEnabled){rewardsForm.querySelector('button[type="submit"]')?.insertAdjacentHTML("beforebegin",'<label>إرسال شيكات واتساب<select name="whatsappReceiptsEnabled"><option value="false">متوقف</option><option value="true">مفعل</option></select></label><label>قالب الشيك في Meta<input name="whatsappReceiptTemplate" pattern="[a-z0-9_]*"></label><label>حملات واتساب<select name="whatsappCampaignsEnabled"><option value="false">متوقفة</option><option value="true">مفعلة</option></select></label><label class="full">Customer IDs للاختبار بفواصل<input name="whatsappTestCustomerIds"></label>')}
   const discountLabel=$("#posDiscount")?.closest("label");if(discountLabel&&!$("#posRedeemPoints"))discountLabel.insertAdjacentHTML("afterend",'<div class="pos-customer-fields"><label>استبدال نقاط<input id="posRedeemPoints" type="number" min="0" step="1" value="0"></label><label>استبدال كاش باك<input id="posRedeemCashback" type="number" min="0" step="0.01" value="0"></label></div>');
@@ -229,6 +230,11 @@ function renderDashboard() {
   $("#statTotalRevenue").textContent = money(s.totalRevenue);
   $("#statUnpaid").textContent = s.unpaidCount || 0;
   $("#statLastCollected").textContent = money(s.lastCollected);
+  const todayItems = state.dashboard.bookings.filter(item => item.dateKey === cairoDateKey() || item.bookingDate === cairoDateKey());
+  const paidToday = todayItems.filter(item => item.paymentStatus === "paid");
+  $("#statAverageTicket").textContent = money(paidToday.length ? paidToday.reduce((sum, item) => sum + Number(item.total || 0), 0) / paidToday.length : 0);
+  $("#statCollectionRate").textContent = `${todayItems.length ? Math.round((paidToday.length / todayItems.length) * 100) : 0}%`;
+  $("#statNeedsAction").textContent = state.dashboard.bookings.filter(item => ["pending", "unpaid"].includes(item.status) || item.paymentStatus === "unpaid").length;
   $("#revenueToday").textContent = money(s.todayRevenue);
   $("#revenueMonth").textContent = money(s.monthRevenue);
   $("#revenueTotal").textContent = money(s.totalRevenue);
@@ -669,11 +675,22 @@ function renderCollection(collection) {
     const filter = $("#reviewStatusFilter")?.value || "all";
     if (filter !== "all") items = items.filter(item => filter === "featured" ? item.featured === true : (item.status || (item.active ? "published" : "pending")) === filter);
   }
+  if (collection === "customers") {
+    const allCustomers = state.collections.get("customers") || [];
+    const segment = $("#customerSegmentFilter")?.value || "all";
+    const cutoff = Date.now() - 60 * 86400000;
+    if (segment === "recent") items = items.filter(item => new Date(item.lastBookingAt || 0).getTime() >= cutoff);
+    if (segment === "inactive") items = items.filter(item => !item.lastBookingAt || new Date(item.lastBookingAt).getTime() < cutoff);
+    if (segment === "vip") items = items.filter(item => Number(item.totalSpent || 0) > 0).sort((a, b) => Number(b.totalSpent || 0) - Number(a.totalSpent || 0)).slice(0, 50);
+    if (segment === "rewards") items = items.filter(item => Number(item.pointsBalance || 0) > 0 || Number(item.cashbackBalance || 0) > 0);
+    const summary = $("#customerSegmentSummary");
+    if (summary) summary.innerHTML = `<span><b>${items.length}</b> نتيجة ظاهرة</span><span><b>${allCustomers.length}</b> عميل في الصفحة الحالية</span><span>البحث والتصفية فوريان بدون طلبات إضافية</span>`;
+  }
   if (collection === "settings") { fillSettings(items[0] || {}); return; }
   const targets = $$(`[data-list="${collection}"]`);
   targets.forEach(target => { target.innerHTML = items.map(item => entityCard(collection, item, ["customers", "activityLogs", "users"].includes(collection))).join("") || `<div class="entity-card filter-empty"><p>${collection === "services" && !query && !$("#serviceCategoryFilter")?.value ? "اختر تصنيفًا من القائمة أو ابحث باسم الخدمة." : "لا توجد بيانات."}</p></div>`; });
   if (collection === "content") {
-    ["gallery", "celebrity", "news"].forEach(type => {
+    ["gallery", "result", "hair-system", "celebrity", "news"].forEach(type => {
       const target = $(`[data-list="content-${type}"]`);
       if (target) target.innerHTML = items.filter(item => item.type === type).map(item => entityCard("content", item)).join("") || '<div class="entity-card"><p>لا توجد بيانات.</p></div>';
     });
@@ -951,11 +968,24 @@ async function withButtonBusy(button, task) {
   finally { button.disabled = false; button.removeAttribute("aria-busy"); button.innerHTML = label; }
 }
 
+function renderAdminSearch() {
+  const input = $("#adminGlobalSearch");
+  const results = $("#adminSearchResults");
+  const query = input.value.trim().toLowerCase();
+  if (!query) { results.hidden = true; results.innerHTML = ""; return; }
+  const sections = Object.entries(sectionTitles).filter(([id, label]) => $("#" + id) && (state.role === "admin" || state.permissions.has(id)) && label.toLowerCase().includes(query)).slice(0, 5);
+  const customers = (state.collections.get("customers") || []).filter(item => [item.firstName, item.lastName, item.phone, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query))).slice(0, 5);
+  results.innerHTML = sections.map(([id, label]) => `<button type="button" data-admin-search-section="${escapeAttr(id)}"><span>قسم</span><b>${escapeHtml(label)}</b></button>`).join("") + customers.map(item => `<button type="button" data-admin-search-customer="${escapeAttr(item.id)}"><span>عميل</span><b>${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)}</b><small>${escapeHtml(item.phone || "")}</small></button>`).join("") || '<p>لا توجد نتيجة. جرّب اسم قسم أو رقم عميل.</p>';
+  results.hidden = false;
+}
+
 document.addEventListener("click", async event => {
+  const searchSection = event.target.closest("[data-admin-search-section]"); if (searchSection) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; await showSection(searchSection.dataset.adminSearchSection); }
+  const searchCustomer = event.target.closest("[data-admin-search-customer]"); if (searchCustomer) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; await showSection("customers"); openCustomerDrawer(searchCustomer.dataset.adminSearchCustomer); }
   const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
   const go = event.target.closest("[data-go]"); if (go) await withButtonBusy(go,()=>showSection(go.dataset.go));
   const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);
-  const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
+  const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType, mediaType: add.dataset.presetMedia || "image" } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const edit = event.target.closest("[data-edit-collection]"); if (edit) openEditor(edit.dataset.editCollection, edit.dataset.editId);
   const remove = event.target.closest("[data-delete-collection]"); if (remove) await withButtonBusy(remove,()=>deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId));
@@ -982,12 +1012,14 @@ document.addEventListener("click", async event => {
   const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟"))await withButtonBusy(consent,async()=>{try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}})}
 });
 document.addEventListener("input", event => {
+  if (event.target.id === "adminGlobalSearch") renderAdminSearch();
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
   if (event.target.id === "posReceiptSearch") renderPosReceipts();
   if (event.target.id === "posItemSearch" || event.target.id === "posDiscount") event.target.id === "posItemSearch" ? renderPos() : renderPosCart();
   if (event.target.matches("[data-pos-qty]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posQty && item.kind === event.target.dataset.posKind); if (line) { const catalogItem = posCatalogItems().find(item => item.id === line.id && item.kind === line.kind); const max = line.kind === "inventory" ? Math.max(1, Number(catalogItem?.stockQty || 1)) : 20; line.qty = Math.max(1, Math.min(max, Math.floor(Number(event.target.value || 1)))); renderPosCart(); } }
 });
 document.addEventListener("change", event => {
+  if (event.target.id === "customerSegmentFilter") renderCollection("customers");
   if(event.target.matches("[data-pos-worker]")){const line=state.posCart.find(item=>item.id===event.target.dataset.posWorker&&item.kind===event.target.dataset.posKind);if(line)line.workerId=event.target.value}
   if (event.target.matches("[data-pos-option]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posOption && item.kind === event.target.dataset.posKind); if (line) { line.option = event.target.value; renderPosCart(); } }
   if (["expenseFrom", "expenseTo", "expenseBranchFilter", "expenseCategoryFilter"].includes(event.target.id)) renderExpenses();

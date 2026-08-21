@@ -36,6 +36,8 @@
         <button data-section="staff">♙ فريق العمل</button>
         <button data-section="reviews">★ تقييمات العملاء</button>
         <button data-section="gallery">▧ الصور والمعرض</button>
+        <button data-section="results">◫ نتائج شغلنا</button>
+        <button data-section="hairMedia">▶ فيديوهات التركيبات</button>
         <button data-section="celebrities">★ صور المشاهير</button>
         <button data-section="posts">▤ من فروعنا / Media</button>
         <span class="nav-group-title">التسويق</span>
@@ -52,6 +54,7 @@
     <main class="admin-main">
       <header class="admin-header">
         <div class="header-title"><button class="square-button mobile-menu" id="adminMenu" type="button">☰</button><div><span id="welcomeText">لوحة إدارة مزين مصر</span><h1 id="pageTitle">الرئيسية والإحصائيات</h1></div></div>
+        <div class="admin-command-search"><span>⌕</span><input id="adminGlobalSearch" type="search" placeholder="اذهب إلى قسم أو ابحث عن عميل" autocomplete="off" aria-label="بحث سريع في لوحة الإدارة"><div id="adminSearchResults" class="admin-search-results" hidden></div></div>
         <div class="header-actions"><a class="small-button" href="/" target="_blank">عرض الموقع</a><button class="small-button" id="installAdmin" type="button" hidden>تثبيت اللوحة</button><button class="square-button" id="pushButton" type="button" title="تفعيل إشعارات الحجز">🔔</button><button class="square-button" id="adminTheme" type="button" title="تغيير المظهر">☀</button><button class="small-button danger" id="logoutButton" type="button">تسجيل الخروج</button></div>
       </header>
 
@@ -67,6 +70,7 @@
           <article class="metric-card"><span>آخر مبلغ محصل</span><strong id="statLastCollected">0 ج.م</strong></article>
         </div>
         <nav class="cashier-quick-actions" aria-label="إجراءات الكاشير السريعة"><button class="primary" data-go="pos">+ شيك جديد</button><button data-go="bookings">الحجوزات</button><button data-go="customers">بحث عن عميل</button></nav>
+        <div class="operations-strip" aria-label="ملخص التشغيل"><article><span>متوسط شيك اليوم</span><strong id="statAverageTicket">0 ج.م</strong></article><article><span>نسبة التحصيل</span><strong id="statCollectionRate">0%</strong></article><article><span>حجوزات تحتاج متابعة</span><strong id="statNeedsAction">0</strong></article><article><span>حالة التشغيل</span><strong class="operations-ready">● يعمل</strong></article></div>
         <article class="admin-panel compact-operations"><div class="panel-head"><div><h2>أحدث العمليات</h2><p>آخر الحجوزات والشيكات، وتتحدث تلقائيًا.</p></div><button class="small-button" data-go="bookings">عرض الكل</button></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الفرع</th><th>العميل</th><th>الخدمات</th><th>العامل</th><th>الموعد</th><th>الحالة</th><th>الدفع</th></tr></thead><tbody id="recentBookings"></tbody></table></div></article>
       </section>
 
@@ -143,6 +147,8 @@
       <section class="admin-section" id="reviews"><entity-panel data-collection="reviews" data-title="تقييمات العملاء"></entity-panel></section>
       <section class="admin-section" id="schedule"><div class="two-panels"><article class="admin-panel"><div class="panel-head"><div><h2>ساعات العمل</h2><p>تُطبق على التحقق من المواعيد في الخادم.</p></div></div><form class="settings-form" id="scheduleSettings"><label>بداية العمل<input name="openingTime" type="time" required></label><label>نهاية العمل<input name="closingTime" type="time" required></label><label>الفاصل بين المواعيد<input name="slotMinutes" type="number" min="5" step="5" required></label><button class="small-button primary">حفظ</button></form></article><article class="admin-panel"><div class="panel-head"><div><h2>أيام الإجازة</h2><p>اليوم المغلق لا يقبل حجوزات.</p></div><button class="small-button primary" data-new="holidays">+ إضافة يوم</button></div><div class="entity-grid" data-list="holidays"></div></article></div></section>
       <section class="admin-section" id="gallery"><content-panel data-type="gallery" data-title="الصور والمعرض"></content-panel></section>
+      <section class="admin-section" id="results"><content-panel data-type="result" data-title="نتائج شغلنا – قبل وبعد"></content-panel></section>
+      <section class="admin-section" id="hairMedia"><content-panel data-type="hair-system" data-title="فيديوهات التركيب والتنظيف والصيانة"></content-panel></section>
       <section class="admin-section" id="celebrities"><content-panel data-type="celebrity" data-title="صور المشاهير"></content-panel></section>
       <section class="admin-section" id="posts"><content-panel data-type="news" data-title="الأخبار والمنشورات"></content-panel></section>
       <section class="admin-section" id="settings"><article class="admin-panel"><div class="panel-head"><div><h2>إعدادات الموقع</h2><p>الاسم والنبذة والعملة. النسخة البديلة تُحفظ تلقائيًا بدون خانات إضافية.</p></div></div><form class="settings-form cols" id="siteSettings"><label>اسم النشاط<input name="businessNameAr"></label><label class="full">نبذة عن مزين<textarea name="aboutAr"></textarea></label><label>العملة<input name="currency" value="EGP"></label><button class="small-button primary">حفظ الإعدادات</button></form></article></section>

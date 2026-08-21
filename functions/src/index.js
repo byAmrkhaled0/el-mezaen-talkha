@@ -24,7 +24,7 @@ const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "s
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 // Keep "worker" only as a legacy cashier role so previously-created accounts still work.
 const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
-const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "celebrities", "posts", "settings", "activity", "users"];
+const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "results", "hairMedia", "celebrities", "posts", "settings", "activity", "users"];
 const ROLE_DEFAULT_PERMISSIONS = {
   manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
   cashier: ["dashboard", "pos", "bookings", "customers"],
@@ -91,7 +91,7 @@ function permissionsFor(request) {
 }
 
 function hasPermission(request, permission) { return permissionsFor(request).has(permission); }
-function contentPermission(type) { return type === "gallery" ? "gallery" : type === "celebrity" ? "celebrities" : "posts"; }
+function contentPermission(type) { return type === "gallery" ? "gallery" : type === "result" ? "results" : type === "hair-system" ? "hairMedia" : type === "celebrity" ? "celebrities" : "posts"; }
 function branchesFor(request) {
   const role = requireRole(request);
   if (role === "admin") return [];
@@ -573,7 +573,7 @@ export const getAdminCollection = onCall(adminOptions, async request => {
   const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "customers", "drinks", "inventoryItems"].includes(collection);
   const operationsReadable = (hasPermission(request, "revenue") || hasPermission(request, "payroll")) && ["services", "staff"].includes(collection);
   const scheduleReadable = hasPermission(request, "schedule") && collection === "settings";
-  const contentReadable = collection === "content" && ["gallery", "celebrities", "posts"].some(value => hasPermission(request, value));
+  const contentReadable = collection === "content" && ["gallery", "results", "hairMedia", "celebrities", "posts"].some(value => hasPermission(request, value));
   if (role !== "admin" && permission && !hasPermission(request, permission) && !posReadable && !operationsReadable && !scheduleReadable && !contentReadable) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   if (collection === "settings") {
     const snapshot = await db.doc("settings/public").get();

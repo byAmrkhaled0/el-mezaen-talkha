@@ -84,8 +84,12 @@ test("Storage denies anonymous and cashier uploads", async () => {
 
 test("Storage permits authorized manager and admin media uploads", async () => {
   const manager = auth("manager-1", { role: "manager", permissions: ["gallery"] }).storage();
+  const resultsManager = auth("manager-results", { role: "manager", permissions: ["results"] }).storage();
+  const hairManager = auth("manager-hair", { role: "manager", permissions: ["hairMedia"] }).storage();
   const admin = auth("admin-1", { role: "admin" }).storage();
   await assertSucceeds(uploadBytes(ref(manager, "public/manager.webp"), image(), { contentType: "image/webp" }));
+  await assertSucceeds(uploadBytes(ref(resultsManager, "public/results/before-after.webp"), image(), { contentType: "image/webp" }));
+  await assertSucceeds(uploadBytes(ref(hairManager, "public/hair/video.mp4"), image(), { contentType: "video/mp4" }));
   await assertSucceeds(uploadBytes(ref(admin, "public/admin.mp4"), image(), { contentType: "video/mp4" }));
 });
 

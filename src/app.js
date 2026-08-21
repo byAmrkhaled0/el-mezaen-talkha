@@ -192,6 +192,9 @@ function renderTeam() {
 }
 
 function renderContent() {
+  const results = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "result" && item.imageUrl);
+  $("#results").hidden = results.length === 0;
+  $("#resultsGrid").innerHTML = results.slice(0, 12).map(item => `<a class="result-card reveal" href="${escapeAttr(item.imageUrl)}" target="_blank" rel="noopener"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" width="1080" height="1080"><span>${escapeHtml(localized(item, "title"))}</span><small>${escapeHtml(contentBranchLabel(item))}</small></a>`).join("");
   const celebrities = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "celebrity");
   $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 32vw" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
   const gallery = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "gallery");
