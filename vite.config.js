@@ -26,6 +26,7 @@ export default defineConfig({
         ,branchMashaya: resolve(import.meta.dirname, "branches/mashaya/index.html")
         ,hairSystems: resolve(import.meta.dirname, "hair-systems/index.html")
         ,account: resolve(import.meta.dirname, "account/index.html")
+        ,results: resolve(import.meta.dirname, "results/index.html")
       }
     }
   },

@@ -13,6 +13,7 @@
     { "source": "/services/:path*", "destination": "/services/index.html" },
     { "source": "/team/:path*", "destination": "/team/index.html" }
     ,{ "source": "/hair-systems/:path*", "destination": "/hair-systems/index.html" }
+    ,{ "source": "/results/:path*", "destination": "/results/index.html" }
   ],
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "public,max-age=0,must-revalidate" }] },

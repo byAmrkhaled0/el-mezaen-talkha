@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "hair-systems/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 

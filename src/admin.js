@@ -117,12 +117,14 @@ async function showSection(id) {
   $$('[data-section]').forEach(button => button.classList.toggle("active", button.dataset.section === id));
   $("#pageTitle").textContent = sectionTitles[id] || id;
   closeAdminMenu();
+  const activeSection = $("#" + id);
+  activeSection?.classList.add("section-loading");
   const tasks = [];
   if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id) && Date.now() - state.loadedAt.dashboard > 45_000) tasks.push(loadDashboard());
   const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
   tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
   if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
-  await Promise.all(tasks);
+  try { await Promise.all(tasks); } finally { activeSection?.classList.remove("section-loading"); }
   if (id === "revenue") renderRevenue();
   if (id === "pos") renderPos();
   if (id === "users") renderUserAccounts();
@@ -224,13 +226,20 @@ function renderDashboard() {
   const s = state.dashboard.stats || {};
   $("#statTodayBookings").textContent = s.todayBookings || 0;
   $("#statTodayRevenue").textContent = money(s.todayRevenue);
+  const todayKey = cairoDateKey();
+  const todayItems = state.dashboard.bookings.filter(item => item.dateKey === todayKey || item.bookingDate === todayKey);
+  const todayReceipts = todayItems.filter(item => item.source === "pos");
+  const todayCustomers = new Set(todayItems.map(item => item.customerId || String(item.phone || "").replace(/\D/g, "")).filter(Boolean));
+  const todayCash = todayReceipts.filter(item => item.paymentStatus === "paid" && (item.paymentMethod || "cash") === "cash").reduce((sum, item) => sum + Number(item.total || 0), 0);
+  $("#statTodayReceipts").textContent = todayReceipts.length;
+  $("#statTodayCash").textContent = money(todayCash);
+  $("#statTodayCustomers").textContent = todayCustomers.size;
   $("#statMonthRevenue").textContent = money(s.monthRevenue);
   $("#statMonthExpenses").textContent = money(s.monthExpenses);
   $("#statMonthNet").textContent = money(s.monthNetProfit);
   $("#statTotalRevenue").textContent = money(s.totalRevenue);
   $("#statUnpaid").textContent = s.unpaidCount || 0;
   $("#statLastCollected").textContent = money(s.lastCollected);
-  const todayItems = state.dashboard.bookings.filter(item => item.dateKey === cairoDateKey() || item.bookingDate === cairoDateKey());
   const paidToday = todayItems.filter(item => item.paymentStatus === "paid");
   $("#statAverageTicket").textContent = money(paidToday.length ? paidToday.reduce((sum, item) => sum + Number(item.total || 0), 0) / paidToday.length : 0);
   $("#statCollectionRate").textContent = `${todayItems.length ? Math.round((paidToday.length / todayItems.length) * 100) : 0}%`;
@@ -532,6 +541,7 @@ function addPosItem(id, kind) {
 async function submitPosOrder(event) {
   event.preventDefault();
   if (!state.posCart.length) return toast("أضف خدمة أو منتجًا للشيك", true);
+  if (!$("#posFirstName").value.trim()) { $(".pos-extra-details").open = true; $("#posFirstName").focus(); return toast("اكتب اسم العميل لإكمال الشيك", true); }
   const button = $("#posSubmit");
   if (button.disabled) return;
   button.disabled = true;
@@ -975,13 +985,15 @@ function renderAdminSearch() {
   if (!query) { results.hidden = true; results.innerHTML = ""; return; }
   const sections = Object.entries(sectionTitles).filter(([id, label]) => $("#" + id) && (state.role === "admin" || state.permissions.has(id)) && label.toLowerCase().includes(query)).slice(0, 5);
   const customers = (state.collections.get("customers") || []).filter(item => [item.firstName, item.lastName, item.phone, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query))).slice(0, 5);
-  results.innerHTML = sections.map(([id, label]) => `<button type="button" data-admin-search-section="${escapeAttr(id)}"><span>قسم</span><b>${escapeHtml(label)}</b></button>`).join("") + customers.map(item => `<button type="button" data-admin-search-customer="${escapeAttr(item.id)}"><span>عميل</span><b>${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)}</b><small>${escapeHtml(item.phone || "")}</small></button>`).join("") || '<p>لا توجد نتيجة. جرّب اسم قسم أو رقم عميل.</p>';
+  const operations = state.dashboard.bookings.filter(item => [item.code, item.customerName, item.phone].some(value => String(value || "").toLowerCase().includes(query))).slice(0, 6);
+  results.innerHTML = sections.map(([id, label]) => `<button type="button" data-admin-search-section="${escapeAttr(id)}"><span>قسم</span><b>${escapeHtml(label)}</b></button>`).join("") + customers.map(item => `<button type="button" data-admin-search-customer="${escapeAttr(item.id)}"><span>عميل</span><b>${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)}</b><small>${escapeHtml(item.phone || "")}</small></button>`).join("") + operations.map(item => `<button type="button" data-admin-search-operation="${escapeAttr(item.id)}" data-operation-kind="${item.source === "pos" ? "pos" : "booking"}"><span>${item.source === "pos" ? "شيك" : "حجز"}</span><b>${escapeHtml(item.code || item.id)}</b><small>${escapeHtml(item.customerName || item.phone || "")}</small></button>`).join("") || '<p>لا توجد نتيجة. جرّب اسم قسم أو رقم عميل أو شيك أو حجز.</p>';
   results.hidden = false;
 }
 
 document.addEventListener("click", async event => {
   const searchSection = event.target.closest("[data-admin-search-section]"); if (searchSection) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; await showSection(searchSection.dataset.adminSearchSection); }
   const searchCustomer = event.target.closest("[data-admin-search-customer]"); if (searchCustomer) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; await showSection("customers"); openCustomerDrawer(searchCustomer.dataset.adminSearchCustomer); }
+  const searchOperation = event.target.closest("[data-admin-search-operation]"); if (searchOperation) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; if (searchOperation.dataset.operationKind === "pos") { await showSection("pos"); setPosView("receipts"); $("#posReceiptSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderPosReceipts(); } else { await showSection("bookings"); $("#bookingSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderBookings(); } }
   const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
   const go = event.target.closest("[data-go]"); if (go) await withButtonBusy(go,()=>showSection(go.dataset.go));
   const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);

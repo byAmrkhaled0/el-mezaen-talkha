@@ -60,12 +60,15 @@
 
       <section class="admin-section active" id="dashboard">
         <div class="metric-grid cashier-metrics">
+          <article class="metric-card"><span>مبيعات اليوم</span><strong id="statTodayRevenue">0 ج.م</strong></article>
+          <article class="metric-card"><span>شيكات اليوم</span><strong id="statTodayReceipts">0</strong></article>
+          <article class="metric-card"><span>النقدي اليوم</span><strong id="statTodayCash">0 ج.م</strong></article>
           <article class="metric-card"><span>حجوزات اليوم</span><strong id="statTodayBookings">0</strong></article>
-          <article class="metric-card"><span>إيراد اليوم</span><strong id="statTodayRevenue">0 ج.م</strong></article>
-          <article class="metric-card"><span>إيراد الشهر</span><strong id="statMonthRevenue">0 ج.م</strong></article>
-          <article class="metric-card"><span>مصروفات الشهر</span><strong id="statMonthExpenses">0 ج.م</strong></article>
-          <article class="metric-card profit-card"><span>صافي ربح الشهر</span><strong id="statMonthNet">0 ج.م</strong></article>
-          <article class="metric-card"><span>إجمالي الإيرادات</span><strong id="statTotalRevenue">0 ج.م</strong></article>
+          <article class="metric-card"><span>عملاء اليوم</span><strong id="statTodayCustomers">0</strong></article>
+          <article class="metric-card admin-extra-metric"><span>إيراد الشهر</span><strong id="statMonthRevenue">0 ج.م</strong></article>
+          <article class="metric-card admin-extra-metric"><span>مصروفات الشهر</span><strong id="statMonthExpenses">0 ج.م</strong></article>
+          <article class="metric-card profit-card admin-extra-metric"><span>صافي ربح الشهر</span><strong id="statMonthNet">0 ج.م</strong></article>
+          <article class="metric-card admin-extra-metric"><span>إجمالي الإيرادات</span><strong id="statTotalRevenue">0 ج.م</strong></article>
           <article class="metric-card"><span>غير مدفوع</span><strong id="statUnpaid">0</strong></article>
           <article class="metric-card"><span>آخر مبلغ محصل</span><strong id="statLastCollected">0 ج.م</strong></article>
         </div>
@@ -79,21 +82,19 @@
         <div class="pos-layout">
           <article class="admin-panel pos-catalog-panel">
             <div class="panel-head wrap"><div><h2>طلب جديد من داخل المحل</h2><p>ابحث بسرعة أو اختر القسم والتصنيف ثم أضف الصنف للشيك.</p></div><div class="toolbar pos-filters"><label class="pos-search-box"><span>⌕</span><input class="pos-search" id="posItemSearch" placeholder="بحث سريع باسم الخدمة أو الصنف" autocomplete="off"></label><select id="posSectionFilter" aria-label="قسم نقطة البيع"><option value="service">الخدمات</option><option value="package">الباقات</option><option value="product">البضاعة</option><option value="drink">المشروبات</option></select><select id="posCategoryFilter" aria-label="تصنيف الخدمات"><option value="">اختر تصنيف الخدمات</option><option value="all">كل تصنيفات الخدمات</option></select></div></div>
-            <div class="pos-workspace"><aside class="pos-category-rail" id="posCategoryRail" aria-label="تصنيفات الخدمات"></aside><div class="pos-items" id="posItems"></div></div>
+            <div class="pos-workspace"><section class="pos-workspace-column"><h3>التصنيفات</h3><aside class="pos-category-rail" id="posCategoryRail" aria-label="تصنيفات الخدمات"></aside></section><section class="pos-workspace-column pos-results-column"><h3>نتائج البحث والخدمات</h3><div class="pos-items" id="posItems"></div></section></div>
           </article>
           <article class="admin-panel pos-ticket-panel">
             <div class="panel-head"><div><h2>الشيك الحالي <small class="pos-cart-count" id="posCartCount">0 أصناف</small></h2><p>الأسعار والرصيد يُراجعان من الخادم قبل الحفظ.</p></div><button class="dialog-close pos-ticket-close" id="posTicketClose" type="button" aria-label="إغلاق الشيك">×</button></div>
             <form id="posForm" class="pos-form">
               <label>الفرع<select id="posBranch" name="branchId" required><option value="talkha">فرع طلخا</option><option value="mashaya">فرع المشاية</option></select></label>
               <label>عميل مسجل<select id="posCustomer"><option value="">عميل جديد</option></select></label>
-              <div class="pos-customer-fields"><label>اسم العميل<input id="posFirstName" name="firstName" required maxlength="50"></label><label>اسم العائلة<input id="posLastName" name="lastName" maxlength="50"></label></div>
               <label>رقم الهاتف<input id="posPhone" name="phone" type="tel" inputmode="tel" required placeholder="01xxxxxxxxx"></label>
-              <label>العامل<select id="posStaff" name="staffId"><option value="none">بدون عامل</option></select></label>
+              <details class="pos-extra-details"><summary>بيانات إضافية للعميل والعامل</summary><div class="pos-customer-fields"><label>اسم العميل<input id="posFirstName" name="firstName" maxlength="50"></label><label>اسم العائلة<input id="posLastName" name="lastName" maxlength="50"></label></div><label>العامل الافتراضي<select id="posStaff" name="staffId"><option value="none">بدون عامل</option></select></label></details>
               <div class="pos-cart" id="posCart"><p>لم تتم إضافة أصناف بعد.</p></div>
               <label>خصم يدوي بالجنيه<input id="posDiscount" name="discountAmount" type="number" min="0" step="1" value="0"></label>
               <div class="pos-payment"><label>طريقة الدفع<select id="posPaymentMethod" name="paymentMethod"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select></label><label class="check-label"><input id="posPaid" name="paid" type="checkbox" checked> تم الدفع</label></div>
-              <div class="pos-total"><span>الإجمالي</span><strong id="posTotal">0 ج.م</strong></div>
-              <button class="small-button primary pos-submit" id="posSubmit" type="submit">حفظ الطلب وتجهيز الشيك</button>
+              <div class="pos-checkout-bar"><div class="pos-total"><span>الإجمالي</span><strong id="posTotal">0 ج.م</strong></div><button class="small-button primary pos-submit" id="posSubmit" type="submit">حفظ الطلب وتجهيز الشيك</button></div>
             </form>
           </article>
         </div>

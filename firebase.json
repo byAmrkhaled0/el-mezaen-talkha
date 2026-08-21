@@ -45,6 +45,7 @@
       { "source": "/branches/talkha/**", "destination": "/branches/talkha/index.html" },
       { "source": "/branches/mashaya/**", "destination": "/branches/mashaya/index.html" },
       { "source": "/hair-systems/**", "destination": "/hair-systems/index.html" },
+      { "source": "/results/**", "destination": "/results/index.html" },
       { "source": "/booking/**", "destination": "/index.html" }
     ]
   },
