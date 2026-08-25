@@ -1,4 +1,4 @@
-const VERSION = "v63";
+const VERSION = "v64";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
 const CORE = [
@@ -49,10 +49,16 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  event.respondWith(caches.match(request).then(cached => cached || fetch(request).then(async response => {
-    await put(RUNTIME_CACHE, request, response);
-    return response;
-  })));
+  event.respondWith(caches.match(request).then(async cached => {
+    if (cached) return cached;
+    try {
+      const response = await fetch(request);
+      await put(RUNTIME_CACHE, request, response);
+      return response;
+    } catch {
+      return new Response("", { status: 503, statusText: "Offline", headers: { "Cache-Control": "no-store" } });
+    }
+  }));
 });
 
 self.addEventListener("push", event => {

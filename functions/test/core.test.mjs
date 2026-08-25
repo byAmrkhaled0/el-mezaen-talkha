@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
@@ -12,6 +12,12 @@ test("requires a recent administrator authentication for destructive actions", (
   assert.equal(isRecentAuthentication(1_000, 1_301), false);
   assert.equal(isRecentAuthentication(undefined, 1_100), false);
   assert.equal(isRecentAuthentication(1_200, 1_100), false);
+});
+
+test("calculates the next month without relying on server timezone", () => {
+  assert.equal(nextMonthKey("2026-08"), "2026-09");
+  assert.equal(nextMonthKey("2026-12"), "2027-01");
+  assert.throws(() => nextMonthKey("2026-13"), /INVALID_MONTH/);
 });
 
 test("validates and normalizes financial expense input", () => {

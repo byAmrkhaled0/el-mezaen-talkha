@@ -18,6 +18,16 @@ export function isValidDateKey(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === dateKey;
 }
 
+export function nextMonthKey(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
+  if (!match) throw new Error("INVALID_MONTH");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || month < 1 || month > 12) throw new Error("INVALID_MONTH");
+  const next = new Date(Date.UTC(year, month, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export function normalizeExpenseInput(data = {}, { defaultDate = "", categories = [] } = {}) {
   const amount = Number(data.amount);
   const category = String(data.category || "").trim().slice(0, 30);

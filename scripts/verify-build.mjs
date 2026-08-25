@@ -80,7 +80,7 @@ assert.match(functionsSource, /export const createAdminUser/);
 assert.match(functionsSource, /concurrency:\s*80/);
 assert.match(functionsSource, /review_v2/);
 assert.match(worker, /addEventListener\("push"/);
-assert.match(worker, /const VERSION = "v63"/);
+assert.match(worker, /const VERSION = "v64"/);
 const messagingWorker = await readFile(join("dist", "firebase-messaging-sw.js"), "utf8");
 assert.match(messagingWorker, /importScripts\("\/sw\.js"\)/, "Firebase Messaging worker must reuse the app service worker");
 assert.match(worker, /sensitiveNavigation/);

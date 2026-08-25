@@ -210,6 +210,76 @@
       "collectionGroup": "cashShifts",
       "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "businessDate", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "bookingDate", "order": "ASCENDING" }, { "fieldPath": "bookingTime", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "bookingDate", "order": "ASCENDING" }, { "fieldPath": "bookingTime", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "paymentMethod", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "paymentMethod", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "revenueBreakdown.drinks", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "revenueBreakdown.drinks", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "category", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "category", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "cashShifts",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "businessDate", "order": "ASCENDING" }, { "fieldPath": "openingCash", "order": "ASCENDING" }, { "fieldPath": "cashSales", "order": "ASCENDING" }, { "fieldPath": "cashIn", "order": "ASCENDING" }, { "fieldPath": "cashOut", "order": "ASCENDING" }, { "fieldPath": "cashRefunds", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "cashShifts",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "businessDate", "order": "ASCENDING" }, { "fieldPath": "openingCash", "order": "ASCENDING" }, { "fieldPath": "cashSales", "order": "ASCENDING" }, { "fieldPath": "cashIn", "order": "ASCENDING" }, { "fieldPath": "cashOut", "order": "ASCENDING" }, { "fieldPath": "cashRefunds", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": []

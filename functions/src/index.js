@@ -8,7 +8,7 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { defineSecret } from "firebase-functions/params";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
@@ -938,9 +938,7 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   const currentMonth = businessDateParts().month;
   const month = sanitizeText(request.data?.month || currentMonth, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
-  const [year, monthNumber] = month.split("-").map(Number);
-  const nextMonthDate = new Date(Date.UTC(year, monthNumber, 1));
-  const nextMonth = `${nextMonthDate.getUTCFullYear()}-${String(nextMonthDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const nextMonth = nextMonthKey(month);
   const [staffSnapshot, ledgerSnapshot, expensesSnapshot, inventorySnapshot, drinksSnapshot, payrollSnapshot, reviewsSnapshot] = await Promise.all([
     db.collection("staff").limit(200).get(),
     db.collection("revenueLedger").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get(),

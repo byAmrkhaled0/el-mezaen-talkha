@@ -33,6 +33,8 @@ test("sensitive pages are network-only and never cached by the service worker", 
   const core = serviceWorker.match(/const CORE\s*=\s*\[([\s\S]*?)\];/)?.[1] || "";
   assert.doesNotMatch(core, /\/admin\//);
   assert.doesNotMatch(core, /\/login/);
+  assert.match(serviceWorker, /status:\s*503/);
+  assert.match(serviceWorker, /statusText:\s*"Offline"/);
 });
 
 test("worker accounts have admin-only secure deletion", async () => {
