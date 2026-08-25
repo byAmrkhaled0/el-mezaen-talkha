@@ -59,6 +59,8 @@ firebase firestore:backups:schedules:list --database '(default)'
 ## Meta WhatsApp Business Cloud API
 
 - اربط WABA ورقم العمل والفوترة، واعتمد قالب شيك عربي وقوالب العروض.
+- الإرسال الحالي يدوي: زر الشيك يشارك نفس صورة PNG المستخدمة في الطباعة، وزر «إرسال للعملاء يدويًا» داخل العرض يجهز نص العرض ويحمل العملاء على دفعات ويفتح محادثة تلو الأخرى للمراجعة والإرسال. لا يحتاج ذلك Cloud API أو وسيلة دفع، ولا يدّعي النظام وصول الرسالة لأنه لا يملك Webhook بدون Meta.
+- التكامل الآلي يظل مغلقًا بالـFeature Flags. عند تفعيله لاحقًا، اعتمد قالب شيك `Utility` وقوالب عروض `Marketing` واختبرهما على أرقام مسموحة فقط.
 - اضبط Meta Webhook على Function `whatsappWebhook`. الكود يتحقق من `X-Hub-Signature-256` ويحدّث حالات `sent/delivered/read/failed`؛ تسجيل Callback URL وVerify Token والاشتراك في أحداث الرسائل يحتاج Meta Business Manager.
 - الـopt-out يحتاج قالب/سياسة تشغيل معتمدة وربط الحدث بحقل `whatsappOptIn=false`؛ لا تعتبره مفعّلًا قبل اختبار مسار الموافقة والإلغاء مع Meta.
 - ابدأ بـ`whatsappCampaignsEnabled=false` و`whatsappReceiptsEnabled=false`، وأضف allowlist في `whatsappTestCustomerIds`، ثم اختبر Test Mode فقط. لا ترسل حملة حقيقية أثناء الاختبار.

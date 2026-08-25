@@ -199,6 +199,18 @@
   </dialog>
   <dialog class="editor-dialog" id="scannerDialog"><div class="editor-shell scanner-shell"><header><div><span>بحث سريع</span><h2>ماسح QR وBarcode</h2></div><button type="button" class="dialog-close" id="scannerClose">×</button></header><div class="scanner-body"><label>الكاميرا<select id="scannerCamera"><option value="environment">الخلفية</option><option value="user">الأمامية</option></select></label><video id="scannerVideo" playsinline muted></video><p>امسح كود العميل أو الحجز، أو أدخل الكود يدويًا. يتوقف المسح تلقائيًا بعد أول قراءة.</p><div class="toolbar"><input id="scannerCode" placeholder="MZ-... أو mzc_..."><button class="small-button primary" id="findScannedBooking">فتح النتيجة</button></div></div></div></dialog>
   <dialog class="customer-drawer" id="customerDrawer"><div class="customer-drawer-shell"><header><div><span>ملف العميل</span><h2 id="customerDrawerTitle">بيانات العميل</h2></div><button type="button" class="dialog-close" id="customerDrawerClose">×</button></header><div class="customer-drawer-body" id="customerDrawerBody"></div></div></dialog>
+  <dialog class="editor-dialog" id="manualOfferDialog">
+    <div class="editor-shell manual-offer-shell">
+      <header><div><span>إرسال يدوي بدون Meta</span><h2 id="manualOfferTitle">رسائل العرض</h2></div><button type="button" class="dialog-close" id="manualOfferClose">×</button></header>
+      <div class="manual-offer-body">
+        <p class="manual-offer-notice">يفتح النظام محادثة كل عميل مع الرسالة مجهزة. لا يعتبر العميل مستلمًا إلا بعد أن يراجع الكاشير الرسالة ويضغط «إرسال» داخل واتساب.</p>
+        <label>نص الرسالة <small>استخدم {{name}} لوضع اسم العميل تلقائيًا</small><textarea id="manualOfferMessage" rows="7" maxlength="1200"></textarea></label>
+        <div class="manual-offer-summary" id="manualOfferSummary"></div>
+        <div class="manual-offer-recipients" id="manualOfferRecipients"></div>
+      </div>
+      <footer><button type="button" class="small-button" id="manualOfferCancel">إغلاق</button><button type="button" class="small-button" id="manualOfferLoadMore" hidden>تحميل دفعة أخرى</button><button type="button" class="small-button primary" id="manualOfferNext">فتح العميل التالي على واتساب</button></footer>
+    </div>
+  </dialog>
   <dialog class="editor-dialog" id="accessDialog">
     <form class="editor-shell access-editor-shell" id="accessForm">
       <header><div><span>إدارة الوصول</span><h2>تعديل صلاحيات الحساب</h2></div><button type="button" class="dialog-close" id="accessClose">×</button></header>

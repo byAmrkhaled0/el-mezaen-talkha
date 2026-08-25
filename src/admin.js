@@ -15,7 +15,7 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, calendar: { bookings: [], staff: [] }, cash: { state: null, shift: null, movements: [] }, loadedAt: { dashboard: 0, cashier: 0, business: 0, calendar: 0, cash: 0 }, posCart: [], posIdempotencyKey: "", posBookingId: "", editingExpenseId: "", editingUserId: "", collections: new Map(), collectionCursors: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingIds: new Set(), editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, calendar: { bookings: [], staff: [] }, cash: { state: null, shift: null, movements: [] }, loadedAt: { dashboard: 0, cashier: 0, business: 0, calendar: 0, cash: 0 }, posCart: [], posIdempotencyKey: "", posBookingId: "", editingExpenseId: "", editingUserId: "", collections: new Map(), collectionCursors: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingIds: new Set(), editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" }, manualOffer: { offer: null, recipients: [], nextCursor: null, opened: new Set(), message: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
@@ -509,42 +509,145 @@ function applyPosReceiptLocally(receipt) {
   return true;
 }
 
+function whatsappPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "").replace(/^00/, "").replace(/^0/, "20");
+  return /^20(?:10|11|12|15)\d{8}$/.test(digits) ? digits : "";
+}
+
+async function createReceiptCanvas(item) {
+  const lines = Array.isArray(item.items) ? item.items : [];
+  const canvas = document.createElement("canvas");
+  canvas.width = 900;
+  canvas.height = 895 + lines.length * 94;
+  const context = canvas.getContext("2d");
+  context.direction = "rtl";
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#071a2c";
+  context.fillRect(0, 0, canvas.width, 165);
+  const logo = new Image();
+  logo.src = "/assets/el-mezaen-logo.jpeg";
+  await new Promise(resolve => { logo.onload = resolve; logo.onerror = resolve; });
+  if (logo.complete && logo.naturalWidth) context.drawImage(logo, 65, 28, 108, 108);
+  const branch = item.branchNameAr || branchLabel(item.branchId);
+  context.textAlign = "right";
+  context.fillStyle = "#fff";
+  context.font = "700 42px Tajawal, Arial";
+  context.fillText("مزين مصر", 835, 70);
+  context.font = "500 24px Tajawal, Arial";
+  context.fillText(`${branch} — ${item.source === "pos" ? "شيك بيع" : "شيك حجز"}`, 835, 116);
+  let y = 220;
+  const meta = [
+    `رقم الشيك: ${item.code || item.id}`,
+    `العميل: ${item.customerName || "عميل نقدي"}`,
+    `الهاتف: ${item.phone || "—"}`,
+    `التاريخ: ${item.bookingDate || String(item.createdAt || "").slice(0, 10) || cairoDateKey()} ${item.bookingTime || ""}`,
+    `العامل: ${item.staffNameAr || "حسب كل خدمة"}`
+  ];
+  context.fillStyle = "#172b38";
+  context.font = "600 24px Tajawal, Arial";
+  for (const text of meta) { context.fillText(text, 835, y); y += 40; }
+  context.strokeStyle = "#d7e3e8";
+  context.beginPath(); context.moveTo(65, y); context.lineTo(835, y); context.stroke(); y += 45;
+  context.font = "700 23px Tajawal, Arial";
+  context.fillText("الخدمة / العامل", 835, y);
+  context.textAlign = "left";
+  context.fillText("السعر", 65, y);
+  y += 28;
+  for (const line of lines) {
+    y += 43;
+    context.textAlign = "right";
+    context.fillStyle = "#172b38";
+    context.font = "600 22px Tajawal, Arial";
+    const worker = line.workerNameAr || item.staffNameAr || "";
+    const label = `${line.nameAr || "بند"} × ${line.qty || 1}`;
+    context.fillText(label.length > 48 ? `${label.slice(0, 45)}…` : label, 835, y);
+    context.textAlign = "left";
+    context.fillText(money(line.lineTotal ?? line.price), 65, y);
+    y += 31;
+    context.textAlign = "right";
+    context.fillStyle = "#607681";
+    context.font = "500 18px Tajawal, Arial";
+    context.fillText([line.option ? `التحضير: ${line.option}` : "", worker ? `العامل: ${worker}` : ""].filter(Boolean).join(" • ") || " ", 835, y);
+    context.strokeStyle = "#edf2f4";
+    context.beginPath(); context.moveTo(65, y + 19); context.lineTo(835, y + 19); context.stroke();
+  }
+  y += 65;
+  context.textAlign = "right";
+  context.fillStyle = "#526b78";
+  context.font = "500 22px Tajawal, Arial";
+  context.fillText(`المجموع الفرعي: ${money(item.subtotal)}`, 835, y);
+  y += 39;
+  context.fillText(`الخصم: ${money(item.discountAmount)}`, 835, y);
+  y += 54;
+  context.fillStyle = "#007f99";
+  context.font = "700 37px Tajawal, Arial";
+  context.fillText(`الإجمالي: ${money(item.total)}`, 835, y);
+  y += 45;
+  context.fillStyle = "#172b38";
+  context.font = "600 22px Tajawal, Arial";
+  context.fillText(`حالة الدفع: ${paymentLabel(item.paymentStatus)} • ${paymentMethod(item.paymentMethod)}`, 835, y);
+  const barcode = document.createElement("canvas");
+  barcode.width = 640;
+  barcode.height = 125;
+  try {
+    JsBarcode(barcode, String(item.code || item.id), { format: "CODE128", displayValue: true, height: 64, fontSize: 18, margin: 6, background: "#ffffff", lineColor: "#071a2c" });
+    context.drawImage(barcode, 130, y + 28, 640, 125);
+  } catch {}
+  context.textAlign = "center";
+  context.fillStyle = "#6a7f89";
+  context.font = "500 18px Tajawal, Arial";
+  context.fillText(globalThis.__SITE_URL__ || "https://el-mezaen-talkha.vercel.app", 450, canvas.height - 38);
+  return canvas;
+}
+
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("تعذر إنشاء صورة الشيك")), "image/png"));
+}
+
 async function openReceiptInWhatsapp(id) {
   const item = state.dashboard.bookings.find(value => value.id === id);
   if (!item) return toast("تعذر العثور على الشيك", true);
-  const phone = String(item.phone || "").replace(/\D/g, "").replace(/^00/, "").replace(/^0/, "20");
-  if (!/^20(?:10|11|12|15)\d{8}$/.test(phone)) return toast("رقم واتساب العميل غير صحيح", true);
-  const branch = item.branchNameAr || branchLabel(item.branchId);
-  const lines = item.items || [];
-  const canvas = document.createElement("canvas"); canvas.width = 900; canvas.height = 610 + lines.length * 72;
-  const context = canvas.getContext("2d"); context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height); context.textAlign = "right"; context.direction = "rtl";
-  context.fillStyle = "#071a2c"; context.fillRect(0, 0, canvas.width, 150);
-  const logo = new Image(); logo.src = "/assets/el-mezaen-logo.jpeg"; await new Promise(resolve => { logo.onload=resolve;logo.onerror=resolve; });
-  if (logo.complete && logo.naturalWidth) context.drawImage(logo, 65, 25, 100, 100);
-  context.fillStyle = "#fff"; context.font = "700 40px Tajawal, Arial"; context.fillText("مزين مصر", 835, 67); context.font = "500 24px Tajawal, Arial"; context.fillText(`${branch} — شيك رقم ${item.code || item.id}`, 835, 112);
-  let y=205;context.fillStyle="#172b38";context.font="600 25px Tajawal, Arial";context.fillText(`العميل: ${item.customerName || "عميل نقدي"}`,835,y);y+=42;context.fillText(`التاريخ: ${item.bookingDate || new Date().toLocaleDateString("ar-EG")} ${item.bookingTime || ""}`,835,y);y+=42;context.strokeStyle="#d7e3e8";context.beginPath();context.moveTo(65,y);context.lineTo(835,y);context.stroke();y+=42;
-  context.font="700 23px Tajawal, Arial";context.fillText("الخدمة / العامل",835,y);context.textAlign="left";context.fillText("السعر",65,y);y+=24;
-  for(const line of lines){y+=48;context.textAlign="right";context.font="600 22px Tajawal, Arial";const worker=line.workerNameAr||item.staffNameAr||"";const label=`${line.nameAr||"بند"}${worker?` — ${worker}`:""} × ${line.qty||1}`;context.fillText(label.length>56?`${label.slice(0,53)}...`:label,835,y);context.textAlign="left";context.fillText(money(line.lineTotal??line.price),65,y);context.strokeStyle="#edf2f4";context.beginPath();context.moveTo(65,y+22);context.lineTo(835,y+22);context.stroke()}
-  y+=65;context.textAlign="right";context.fillStyle="#526b78";context.font="500 22px Tajawal, Arial";context.fillText(`الخصم: ${money(item.discountAmount)}`,835,y);y+=48;context.fillStyle="#007f99";context.font="700 36px Tajawal, Arial";context.fillText(`الإجمالي: ${money(item.total)}`,835,y);y+=48;context.fillStyle="#172b38";context.font="600 22px Tajawal, Arial";context.fillText(`حالة الدفع: ${paymentLabel(item.paymentStatus)}`,835,y);y+=60;context.textAlign="center";context.fillStyle="#6a7f89";context.font="500 19px Tajawal, Arial";context.fillText(globalThis.__SITE_URL__||"https://el-mezaen-talkha.vercel.app",450,y);
-  const blob = await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("تعذر إنشاء صورة الشيك")),"image/png"));
-  const file = new File([blob],`el-mezaen-receipt-${item.code||item.id}.png`,{type:"image/png"});
-  if(navigator.share&&navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`شيك مزين مصر ${item.code||""}`});return}catch(error){if(error?.name==="AbortError")return}}
-  let copied=false;if(globalThis.ClipboardItem&&navigator.clipboard?.write)try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);copied=true}catch{}
-  if(!copied){const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
-  window.open(`https://wa.me/${phone}`,"_blank","noopener,noreferrer");
-  toast(copied?"تم نسخ صورة الشيك؛ الصقها داخل واتساب بـ Ctrl+V ثم أرسل":"تم تنزيل صورة الشيك؛ أرفقها في محادثة واتساب ثم أرسل");
+  const phone = whatsappPhone(item.phone);
+  if (!phone) return toast("رقم واتساب العميل غير صحيح", true);
+  const canvas = await createReceiptCanvas(item);
+  const blob = await canvasBlob(canvas);
+  const file = new File([blob], `el-mezaen-receipt-${item.code || item.id}.png`, { type: "image/png" });
+  const message = `أهلًا ${item.customerName || "عميلنا"}، صورة شيك مزين مصر رقم ${item.code || item.id}.`;
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: `شيك مزين مصر ${item.code || ""}`, text: message }); return; }
+    catch (error) { if (error?.name === "AbortError") return; }
+  }
+  let copied = false;
+  if (globalThis.ClipboardItem && navigator.clipboard?.write) try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); copied = true; } catch {}
+  if (!copied) {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  toast(copied ? "تم نسخ نفس صورة الشيك المطبوعة وفتح محادثة العميل؛ الصقها ثم أرسل" : "تم تنزيل نفس صورة الشيك المطبوعة وفتح محادثة العميل؛ أرفقها ثم أرسل");
 }
 
-function printReceipt(id) {
+async function printReceipt(id) {
   const item = state.dashboard.bookings.find(value => value.id === id);
-  if (!item) return;
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  JsBarcode(svg, item.code, { format: "CODE128", displayValue: true, height: 52, fontSize: 13, margin: 4 });
-  const lines = (item.items || []).map(line => `<tr><td>${escapeHtml(line.nameAr)}${line.option ? `<br><small>التحضير: ${escapeHtml(line.option)}</small>` : ""}${line.workerNameAr ? `<br><small>العامل: ${escapeHtml(line.workerNameAr)}</small>` : ""}</td><td>${line.qty || 1}</td><td>${money(line.lineTotal ?? line.price)}</td></tr>`).join("");
-  const popup = window.open("", "_blank", "width=420,height=700");
+  if (!item) return toast("تعذر العثور على الشيك", true);
+  const popup = window.open("", "_blank", "width=460,height=760");
   if (!popup) return toast("اسمح بالنوافذ المنبثقة لطباعة الشيك", true);
-  popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><title>${escapeHtml(item.code)}</title><style>body{font-family:Arial;padding:24px;color:#111}header{text-align:center;border-bottom:2px dashed #333;padding-bottom:14px}img{width:72px}table{width:100%;border-collapse:collapse;margin:18px 0}td,th{padding:8px;border-bottom:1px dashed #aaa;text-align:right}.total{font-size:22px;font-weight:bold;display:flex;justify-content:space-between}.meta{line-height:1.8}svg{max-width:100%}@media print{button{display:none}}</style></head><body><header><img src="/assets/el-mezaen-logo.jpeg"><h2>مزين مصر – ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</h2><p>${item.source === "pos" ? "شيك بيع من المحل" : "شيك حجز"}</p>${svg.outerHTML}</header><div class="meta"><b>الفرع:</b> ${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}<br><b>العميل:</b> ${escapeHtml(item.customerName)}<br><b>الهاتف:</b> ${escapeHtml(item.phone)}<br><b>عدد الأفراد:</b> ${item.partySize || 1}<br><b>العامل:</b> ${escapeHtml(item.staffNameAr)}<br><b>الموعد:</b> ${escapeHtml(item.bookingDate || "طلب منتجات")} ${escapeHtml(item.bookingTime || "")}</div><table><thead><tr><th>البند</th><th>العدد</th><th>السعر</th></tr></thead><tbody>${lines}</tbody></table><p>المجموع الفرعي: ${money(item.subtotal)}</p><p>الخصم: ${money(item.discountAmount)}</p><div class="total"><span>الإجمالي</span><span>${money(item.total)}</span></div><p>حالة الدفع: ${paymentLabel(item.paymentStatus)}</p><button onclick="print()">طباعة</button></body></html>`);
+  popup.document.write('<!doctype html><html lang="ar" dir="rtl"><head><title>تجهيز الشيك</title></head><body style="font-family:Arial;text-align:center;padding:30px">جارٍ تجهيز صورة الشيك…</body></html>');
   popup.document.close();
+  try {
+    const canvas = await createReceiptCanvas(item);
+    const imageUrl = canvas.toDataURL("image/png");
+    popup.document.open();
+    popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(item.code || item.id)}</title><style>@page{margin:4mm}*{box-sizing:border-box}body{margin:0;background:#eef2f4;font-family:Arial;text-align:center}main{width:min(100%,420px);margin:auto;padding:12px;background:#fff}img{display:block;width:100%;height:auto}button{margin:12px;padding:10px 26px;border:0;border-radius:8px;background:#007f99;color:#fff;font-weight:700}@media print{body,main{width:100%;background:#fff;padding:0}button{display:none}}</style></head><body><main><img src="${imageUrl}" alt="شيك مزين مصر"><button type="button" onclick="print()">طباعة</button></main></body></html>`);
+    popup.document.close();
+  } catch (error) {
+    popup.close();
+    toast(error.message || "تعذر تجهيز صورة الشيك", true);
+  }
 }
 
 let scanStream;let scanControls;let scanLocked=false;let scanLastValue="";let scanLastAt=0;
@@ -763,7 +866,7 @@ async function submitPosOrder(event) {
       resetPosDraft();
       renderDashboard();
       toast(result.idempotent ? "تم حفظ وطباعة الشيك بالفعل" : "تم تحصيل الحجز وتجهيز الشيك مرة واحدة");
-      printReceipt(receiptId);
+      await printReceipt(receiptId);
       return;
     }
     const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
@@ -771,7 +874,7 @@ async function submitPosOrder(event) {
     applyPosReceiptLocally(receipt);
     resetPosDraft();
     toast(`تم حفظ الطلب ${result.bookingCode} وتجهيز الشيك`);
-    printReceipt(receipt.id || result.bookingCode);
+    await printReceipt(receipt.id || result.bookingCode);
   } catch (error) { toast(error.message || "تعذر حفظ طلب المحل", true); }
   finally { button.disabled = false; }
 }
@@ -959,7 +1062,7 @@ function entityCard(collection, item, readonly = false) {
     : collection === "reviews" ? `${"★".repeat(Math.max(1, Math.min(5, Number(item.rating || 5))))} • ${item.comment || "بدون تعليق"}${item.verified ? " • حجز موثّق" : ""}`
     : item.addressAr || item.specialtyAr || item.reasonAr || item.bodyAr || item.phone || item.collection || item.role || item.id;
   const contentPreview = collection === "content" ? `<div class="entity-media">${item.imageUrl ? `<img src="${escapeAttr(item.imageUrl)}" alt="" loading="lazy" decoding="async">` : `<span>${isVideoContent(item) ? "▶" : "▧"}</span>`}${isVideoContent(item) ? '<b>فيديو</b>' : ""}</div><p class="entity-branch">${branchScopeLabel(item.branchIds)}</p>` : "";
-  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : `<footer>${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
+  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${collection === "coupons" ? `<p>استخدام: ${item.usageCount || 0} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${item.bookingCount || 0} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : `<footer>${collection === "offers" ? `<button class="offer-send" data-prepare-offer-messages="${escapeAttr(item.id)}">إرسال للعملاء يدويًا</button>` : ""}${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`}</article>`;
 }
 
 function activityCard(item) {
@@ -981,7 +1084,92 @@ function customerCard(item) {
   const name = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "عميل بدون اسم";
   const initial = name.replace(/^ال/, "").trim().charAt(0) || "ع";
   const phone = String(item.phone || "");
-  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div class="customer-identity"><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>الفرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance||0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div></dl><footer><button class="customer-open" data-open-customer="${escapeAttr(item.id)}">فتح</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">المحفظة</button>`:""}<button data-whatsapp-consent="${escapeAttr(item.id)}" data-current-consent="${item.whatsappOptIn===true}">${item.whatsappOptIn===true?"إلغاء التسويق":"موافقة واتساب"}</button></footer></article>`;
+  return `<article class="entity-card customer-card"><div class="customer-avatar">${escapeHtml(initial)}</div><div class="customer-identity"><h3>${escapeHtml(name)}</h3><p><a href="tel:+2${escapeAttr(phone)}">${escapeHtml(phone || "لا يوجد رقم")}</a></p></div><dl class="customer-details"><div><dt>الفرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance||0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div></dl><footer><button class="customer-open" data-open-customer="${escapeAttr(item.id)}">فتح</button><button data-manual-whatsapp-offer="${escapeAttr(item.id)}">إرسال عرض يدوي</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">المحفظة</button>`:""}<button data-whatsapp-consent="${escapeAttr(item.id)}" data-current-consent="${item.whatsappOptIn===true}">${item.whatsappOptIn===true?"إلغاء التسويق":"موافقة واتساب"}</button></footer></article>`;
+}
+
+function openManualWhatsappOffer(customerId) {
+  const customer = (state.collections.get("customers") || []).find(item => item.id === customerId);
+  if (!customer) return toast("تعذر العثور على العميل", true);
+  const phone = whatsappPhone(customer.phone);
+  if (!phone) return toast("رقم واتساب العميل غير صحيح", true);
+  if (customer.whatsappOptIn !== true && !confirm("لم تُسجل موافقة هذا العميل على العروض. لا ترسل إلا بعد موافقته. هل تريد فتح المحادثة؟")) return;
+  const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "عميلنا";
+  const initial = `أهلًا ${name} 👋\nعندنا عرض جديد من مزين مصر.\nللتفاصيل والحجز: https://el-mezaen-talkha.vercel.app/`;
+  const message = prompt("راجع رسالة العرض قبل فتح واتساب", initial);
+  if (!message?.trim()) return;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message.trim())}`, "_blank", "noopener,noreferrer");
+  toast("تم فتح محادثة العميل؛ راجع الرسالة واضغط إرسال يدويًا");
+}
+
+function manualOfferMessage(offer) {
+  const endDate = offer.endAt ? new Date(offer.endAt) : null;
+  const end = endDate && Number.isFinite(endDate.getTime()) ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeZone: "Africa/Cairo" }).format(endDate) : "";
+  const price = Number(offer.oldPrice || 0) > Number(offer.newPrice || 0) ? `بدل ${money(offer.oldPrice)} — الآن ${money(offer.newPrice)}` : `السعر ${money(offer.newPrice)}`;
+  return [`أهلًا {{name}} 👋`, `عرض جديد من مزين مصر: ${offer.nameAr || "عرض خاص"}`, offer.descriptionAr || "", price, end ? `العرض ساري حتى ${end}` : "", "للتفاصيل والحجز: https://el-mezaen-talkha.vercel.app/"].filter(Boolean).join("\n");
+}
+
+function renderManualOfferDialog() {
+  const { offer, recipients, nextCursor, opened, message } = state.manualOffer;
+  if (!offer) return;
+  const valid = recipients.filter(customer => whatsappPhone(customer.phone));
+  const consented = valid.filter(customer => customer.whatsappOptIn === true).length;
+  const openedCount = valid.filter(customer => opened.has(customer.id)).length;
+  $("#manualOfferTitle").textContent = offer.nameAr || "العرض";
+  $("#manualOfferMessage").value = message;
+  $("#manualOfferSummary").innerHTML = `<b>${valid.length}</b> عميل برقم صالح • <b>${consented}</b> لديهم موافقة تسويق • تم فتح <b>${openedCount}</b> محادثة${nextCursor ? " • توجد دفعة أخرى" : ""}`;
+  $("#manualOfferRecipients").innerHTML = valid.map(customer => {
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "عميلنا";
+    const wasOpened = opened.has(customer.id);
+    return `<article class="manual-offer-recipient ${wasOpened ? "opened" : ""}"><div><b>${escapeHtml(name)}</b><small>${escapeHtml(customer.phone || "")}</small></div><span>${customer.whatsappOptIn === true ? "✓ موافقة مسجلة" : "⚠ بلا موافقة مسجلة"}</span><button type="button" data-open-offer-recipient="${escapeAttr(customer.id)}">${wasOpened ? "فتح مرة أخرى" : "فتح واتساب"}</button></article>`;
+  }).join("") || '<p class="empty-state">لا توجد أرقام واتساب صالحة في هذه الدفعة.</p>';
+  $("#manualOfferLoadMore").hidden = !nextCursor;
+  $("#manualOfferNext").disabled = !valid.some(customer => !opened.has(customer.id));
+}
+
+async function loadManualOfferRecipients(cursor = "") {
+  const result = await getCollection("customers", 100, cursor);
+  const offerBranches = Array.isArray(state.manualOffer.offer?.branchIds) ? state.manualOffer.offer.branchIds : [];
+  const eligible = (result.items || []).filter(customer => !offerBranches.length || !customer.lastBranchId || offerBranches.includes(customer.lastBranchId));
+  const merged = new Map([...state.manualOffer.recipients, ...eligible].map(customer => [customer.id, customer]));
+  state.manualOffer.recipients = [...merged.values()];
+  state.manualOffer.nextCursor = result.nextCursor || null;
+  renderManualOfferDialog();
+}
+
+async function prepareManualOfferMessages(offerId) {
+  const offer = (state.collections.get("offers") || []).find(item => item.id === offerId);
+  if (!offer) return toast("تعذر العثور على العرض", true);
+  if (offer.active === false || ["expired", "stopped"].includes(offer.status)) return toast("فعّل العرض أولًا قبل تجهيز رسائل العملاء", true);
+  if (offer.status === "scheduled" && !confirm("هذا العرض مجدول ولم يصبح نشطًا بعد. هل تريد تجهيز رسائله الآن؟")) return;
+  state.manualOffer = { offer, recipients: [], nextCursor: null, opened: new Set(), message: manualOfferMessage(offer) };
+  $("#manualOfferTitle").textContent = offer.nameAr || "العرض";
+  $("#manualOfferSummary").textContent = "جارٍ تحميل أول دفعة من العملاء…";
+  $("#manualOfferRecipients").innerHTML = '<p class="empty-state">جارٍ التحميل…</p>';
+  $("#manualOfferMessage").value = state.manualOffer.message;
+  if (!$("#manualOfferDialog").open) $("#manualOfferDialog").showModal();
+  try { await loadManualOfferRecipients(); }
+  catch (error) { toast(error.message || "تعذر تحميل العملاء", true); $("#manualOfferSummary").textContent = "تعذر تحميل العملاء."; }
+}
+
+function openManualOfferRecipient(customerId) {
+  const customer = state.manualOffer.recipients.find(item => item.id === customerId);
+  if (!customer) return toast("تعذر العثور على العميل", true);
+  const phone = whatsappPhone(customer.phone);
+  if (!phone) return toast("رقم واتساب العميل غير صحيح", true);
+  if (customer.whatsappOptIn !== true && !confirm("لا توجد موافقة تسويق مسجلة لهذا العميل. لا ترسل إلا إذا وافق. هل تريد فتح المحادثة؟")) return;
+  const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "عميلنا";
+  const message = state.manualOffer.message.replaceAll("{{name}}", name).replaceAll("{name}", name).trim();
+  if (!message) return toast("اكتب رسالة العرض أولًا", true);
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  state.manualOffer.opened.add(customer.id);
+  renderManualOfferDialog();
+  toast("تم فتح المحادثة فقط؛ الكاشير يراجع الرسالة ويضغط إرسال");
+}
+
+function openNextManualOfferRecipient() {
+  const next = state.manualOffer.recipients.find(customer => whatsappPhone(customer.phone) && !state.manualOffer.opened.has(customer.id));
+  if (!next) return toast(state.manualOffer.nextCursor ? "حمّل الدفعة التالية أولًا" : "تم فتح كل محادثات القائمة الحالية");
+  openManualOfferRecipient(next.id);
 }
 
 async function openCustomerDrawer(id) {
@@ -1001,7 +1189,7 @@ async function openCustomerDrawer(id) {
   if (token) try { qr = await QRCode.toDataURL(token, { width: 180, margin: 1 }); } catch {}
   const noShowWarning = Number(overview.noShows || 0) >= 3 ? `<p class="customer-warning">⚠ هذا العميل لديه ${Number(overview.noShows)} حالات عدم حضور سابقة</p>` : "";
   const bookingList = items => items.map(row => `<li><b>${escapeHtml(row.code || row.receiptNumber || row.id)}</b><span>${escapeHtml(row.bookingDate || "")} ${escapeHtml(row.bookingTime || "")} • ${escapeHtml(statusLabel(row.status))} • ${money(row.total)}</span></li>`).join("") || "<li>لا توجد بيانات.</li>";
-  $("#customerDrawerBody").innerHTML = `<section class="customer-drawer-hero"><div class="customer-avatar">${escapeHtml(name.charAt(0))}</div><div><b>${escapeHtml(name)}</b><a href="tel:+2${escapeAttr(customer.phone || "")}">${escapeHtml(customer.phone || "لا يوجد رقم")}</a><small>ID: ${escapeHtml(customer.id)}</small></div>${qr ? `<img src="${qr}" alt="QR العميل" width="110" height="110">` : ""}</section>${noShowWarning}<dl class="customer-drawer-stats"><div><dt>الفرع المفضل</dt><dd>${escapeHtml(overview.preferredBranch ? branchLabel(overview.preferredBranch) : "—")}</dd></div><div><dt>إجمالي الزيارات</dt><dd>${Number(overview.totalVisits || 0)}</dd></div><div><dt>الزيارات المكتملة</dt><dd>${Number(overview.completedVisits || 0)}</dd></div><div><dt>أول زيارة</dt><dd>${escapeHtml(dateTime(customer.firstVisitAt || customer.createdAt))}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(customer.lastVisitAt || customer.lastBookingAt))}</dd></div><div><dt>الإلغاءات</dt><dd>${Number(overview.cancellations || 0)}</dd></div><div><dt>عدم الحضور</dt><dd>${Number(overview.noShows || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(overview.totalSpent)}</dd></div><div><dt>متوسط الشيك</dt><dd>${money(overview.averageTicket)}</dd></div><div><dt>النقاط</dt><dd>${Number(customer.pointsBalance || 0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(customer.cashbackBalance)}</dd></div><div><dt>الحلاق المفضل</dt><dd>${escapeHtml(customer.favoriteStaffNameAr || overview.favoriteWorkerId || "—")}</dd></div><div><dt>موافقة واتساب</dt><dd>${customer.whatsappOptIn === true ? "مسجلة" : "غير مسجلة"}</dd></div></dl><div class="customer-360-lists"><details open><summary>الحجوزات القادمة (${profile.upcoming.length})</summary><ul>${bookingList(profile.upcoming)}</ul></details><details><summary>آخر الحجوزات</summary><ul>${bookingList(profile.bookingHistory)}</ul></details><details><summary>آخر الشيكات</summary><ul>${bookingList(profile.orders)}</ul></details><details><summary>حركات المحفظة</summary><ul>${(profile.wallet || []).map(row => `<li><b>${escapeHtml(row.type || "حركة")}</b><span>${Number(row.points || 0)} نقطة • ${money(row.cashback)} • ${escapeHtml(dateTime(row.createdAt))}</span></li>`).join("") || "<li>لا توجد حركات.</li>"}</ul></details></div><div class="customer-drawer-actions"><button data-customer-pos="${escapeAttr(customer.id)}">فتح في نقطة البيع</button><button data-rotate-customer-qr="${escapeAttr(customer.id)}">تجديد QR</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(customer.id)}">تعديل المحفظة</button>`:""}</div>`;
+  $("#customerDrawerBody").innerHTML = `<section class="customer-drawer-hero"><div class="customer-avatar">${escapeHtml(name.charAt(0))}</div><div><b>${escapeHtml(name)}</b><a href="tel:+2${escapeAttr(customer.phone || "")}">${escapeHtml(customer.phone || "لا يوجد رقم")}</a><small>ID: ${escapeHtml(customer.id)}</small></div>${qr ? `<img src="${qr}" alt="QR العميل" width="110" height="110">` : ""}</section>${noShowWarning}<dl class="customer-drawer-stats"><div><dt>الفرع المفضل</dt><dd>${escapeHtml(overview.preferredBranch ? branchLabel(overview.preferredBranch) : "—")}</dd></div><div><dt>إجمالي الزيارات</dt><dd>${Number(overview.totalVisits || 0)}</dd></div><div><dt>الزيارات المكتملة</dt><dd>${Number(overview.completedVisits || 0)}</dd></div><div><dt>أول زيارة</dt><dd>${escapeHtml(dateTime(customer.firstVisitAt || customer.createdAt))}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(customer.lastVisitAt || customer.lastBookingAt))}</dd></div><div><dt>الإلغاءات</dt><dd>${Number(overview.cancellations || 0)}</dd></div><div><dt>عدم الحضور</dt><dd>${Number(overview.noShows || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(overview.totalSpent)}</dd></div><div><dt>متوسط الشيك</dt><dd>${money(overview.averageTicket)}</dd></div><div><dt>النقاط</dt><dd>${Number(customer.pointsBalance || 0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(customer.cashbackBalance)}</dd></div><div><dt>الحلاق المفضل</dt><dd>${escapeHtml(customer.favoriteStaffNameAr || overview.favoriteWorkerId || "—")}</dd></div><div><dt>موافقة واتساب</dt><dd>${customer.whatsappOptIn === true ? "مسجلة" : "غير مسجلة"}</dd></div></dl><div class="customer-360-lists"><details open><summary>الحجوزات القادمة (${profile.upcoming.length})</summary><ul>${bookingList(profile.upcoming)}</ul></details><details><summary>آخر الحجوزات</summary><ul>${bookingList(profile.bookingHistory)}</ul></details><details><summary>آخر الشيكات</summary><ul>${bookingList(profile.orders)}</ul></details><details><summary>حركات المحفظة</summary><ul>${(profile.wallet || []).map(row => `<li><b>${escapeHtml(row.type || "حركة")}</b><span>${Number(row.points || 0)} نقطة • ${money(row.cashback)} • ${escapeHtml(dateTime(row.createdAt))}</span></li>`).join("") || "<li>لا توجد حركات.</li>"}</ul></details></div><div class="customer-drawer-actions"><button data-customer-pos="${escapeAttr(customer.id)}">فتح في نقطة البيع</button><button data-manual-whatsapp-offer="${escapeAttr(customer.id)}">إرسال عرض يدوي</button><button data-rotate-customer-qr="${escapeAttr(customer.id)}">تجديد QR</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(customer.id)}">تعديل المحفظة</button>`:""}</div>`;
 }
 
 function branchScopeLabel(ids) {
@@ -1335,8 +1523,13 @@ document.addEventListener("click", async event => {
   const booking = event.target.closest("[data-booking-action]"); if (booking) await withButtonBusy(booking,()=>updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction));
   const reschedule = event.target.closest("[data-reschedule-booking]"); if (reschedule) await withButtonBusy(reschedule,()=>promptRescheduleBooking(reschedule.dataset.rescheduleBooking));
   const bookingPos = event.target.closest("[data-booking-pos]"); if (bookingPos) await withButtonBusy(bookingPos,()=>openBookingInPos(bookingPos.dataset.bookingPos));
-  const printButton = event.target.closest("[data-print-booking]"); if (printButton) printReceipt(printButton.dataset.printBooking);
+  const printButton = event.target.closest("[data-print-booking]"); if (printButton) await withButtonBusy(printButton, () => printReceipt(printButton.dataset.printBooking));
   const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)await withButtonBusy(receipt,()=>openReceiptInWhatsapp(receipt.dataset.whatsappReceipt));
+  const manualOffer=event.target.closest("[data-manual-whatsapp-offer]");if(manualOffer)openManualWhatsappOffer(manualOffer.dataset.manualWhatsappOffer);
+  const prepareOffer=event.target.closest("[data-prepare-offer-messages]");if(prepareOffer)await withButtonBusy(prepareOffer,()=>prepareManualOfferMessages(prepareOffer.dataset.prepareOfferMessages));
+  const offerRecipient=event.target.closest("[data-open-offer-recipient]");if(offerRecipient)openManualOfferRecipient(offerRecipient.dataset.openOfferRecipient);
+  if(event.target.closest("#manualOfferNext"))openNextManualOfferRecipient();
+  const loadOfferRecipients=event.target.closest("#manualOfferLoadMore");if(loadOfferRecipients)await withButtonBusy(loadOfferRecipients,()=>loadManualOfferRecipients(state.manualOffer.nextCursor));
   const openCustomer=event.target.closest("[data-open-customer]");if(openCustomer)openCustomerDrawer(openCustomer.dataset.openCustomer);
   const customerPos=event.target.closest("[data-customer-pos]");if(customerPos){$("#customerDrawer").close();await showSection("pos");$("#posCustomer").value=customerPos.dataset.customerPos;$("#posCustomer").dispatchEvent(new Event("change"))}
   const posCategory=event.target.closest("[data-pos-category]");if(posCategory){$("#posCategoryFilter").value=posCategory.dataset.posCategory;renderPos()}
@@ -1357,6 +1550,7 @@ document.addEventListener("click", async event => {
   const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟"))await withButtonBusy(consent,async()=>{try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}})}
 });
 document.addEventListener("input", event => {
+  if (event.target.id === "manualOfferMessage") state.manualOffer.message = event.target.value;
   if (event.target.id === "adminGlobalSearch") renderAdminSearch();
   if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
   if (event.target.id === "posReceiptSearch") renderPosReceipts();
@@ -1403,6 +1597,8 @@ $("#accessCancel").addEventListener("click", () => $("#accessDialog").close());
 $("#accessRole").addEventListener("change", event => renderAccessPermissionPicker(event.target.value));
 $("#accessForm").addEventListener("submit", submitAccessEdit);
 $("#customerDrawerClose").addEventListener("click", () => $("#customerDrawer").close());
+$("#manualOfferClose").addEventListener("click", () => $("#manualOfferDialog").close());
+$("#manualOfferCancel").addEventListener("click", () => $("#manualOfferDialog").close());
 $("#entityForm").addEventListener("submit", saveEditor);
 [$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
 $("#campaignForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;const button=form.querySelector("button");button.disabled=true;try{const data=Object.fromEntries(new FormData(form));const preview=await previewWhatsappCampaign(data);if(!preview.killSwitchEnabled)throw new Error("إرسال الحملات متوقف من إعدادات النظام");if(!confirm(`معاينة الحملة\nالقالب: ${preview.templateName}\nالفرع: ${branchLabel(preview.branchId)}\nالمؤهلون: ${preview.eligibleCount}\nالوضع: ${data.testMode==="true"?"اختبار آمن":"إنتاج"}\n\nتأكيد وضعها في الطابور؟`))return;await createWhatsappCampaign({...data,testMode:data.testMode==="true",recipientCap:Number(data.recipientCap||100),eligibleCount:preview.eligibleCount,idempotencyKey:form.dataset.key||=crypto.randomUUID()});form.dataset.key="";await loadCollection("campaigns",true);renderCampaigns();toast("تم وضع الحملة في قائمة الإرسال الآمنة")}catch(error){toast(error.message||"تعذر إنشاء الحملة",true)}finally{button.disabled=false}});
