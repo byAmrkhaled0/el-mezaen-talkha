@@ -19,6 +19,9 @@ const trackEvent = (...args) => {
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const cairoParts = (date = new Date()) => Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+const cairoDateKey = () => { const part = cairoParts(); return `${part.year}-${part.month}-${part.day}`; };
+const addDays = (dateKey, days) => { const date = new Date(`${dateKey}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 const readJson = (key, fallback) => { try { const value = JSON.parse(localStorage.getItem(key) || "null"); return value ?? fallback; } catch { return fallback; } };
 const readArray = key => { const value = readJson(key, []); return Array.isArray(value) ? value : []; };
 const state = {
@@ -428,6 +431,15 @@ async function refreshCatalog(silent = true) {
       saveCart();
       showToast("تم تجهيز آخر حجز؛ اختر التاريخ والموعد بعد مراجعة الأسعار الحالية");
     }
+    let favorite = null;
+    try { favorite = JSON.parse(sessionStorage.getItem("mz-favorite-booking") || "null"); } catch {}
+    if (favorite) {
+      state.branchId = state.catalog.branches.some(item => item.id === favorite.branchId && item.active !== false) ? favorite.branchId : "";
+      state.staffId = state.catalog.staff.some(item => item.id === favorite.staffId && item.active !== false && availableAtBranch(item)) ? favorite.staffId : "any";
+      if (state.branchId) localStorage.setItem("mz-branch", state.branchId);
+      sessionStorage.removeItem("mz-favorite-booking");
+      showToast("تم اختيار الحلاق المفضل؛ اختر الخدمة ثم التاريخ والموعد المتاح");
+    }
     renderAll();
     return true;
   } catch (error) {
@@ -538,12 +550,9 @@ async function nextStep() {
 }
 
 function setDateBounds() {
-  const now = new Date();
-  const max = new Date(now);
-  max.setDate(max.getDate() + 60);
-  const iso = date => date.toISOString().slice(0, 10);
-  $("#bookingDate").min = iso(now);
-  $("#bookingDate").max = iso(max);
+  const today = cairoDateKey();
+  $("#bookingDate").min = today;
+  $("#bookingDate").max = addDays(today, 60);
 }
 
 function renderTimes() {
@@ -554,15 +563,17 @@ function renderTimes() {
   const step = Math.max(5, Number(schedule.slotMinutes || 15));
   const duration = Math.max(0, cartItems().filter(item => !["product", "inventory", "drink"].includes(item.kind)).reduce((sum, item) => sum + Number(item.duration || 0), 0));
   const selectedDate = $("#bookingDate").value;
-  const now = new Date();
+  const now = cairoParts();
+  const nowDate = `${now.year}-${now.month}-${now.day}`;
+  const nowMinutes = Number(now.hour) * 60 + Number(now.minute);
   const options = [];
   for (let mins = openH * 60 + openM; mins + duration <= closeH * 60 + closeM; mins += step) {
     const h = String(Math.floor(mins / 60)).padStart(2, "0");
     const m = String(mins % 60).padStart(2, "0");
     const value = `${h}:${m}`;
-    const candidate = new Date(`${selectedDate}T${value}:00`);
-    if (!selectedDate || candidate.getTime() <= now.getTime()) continue;
-    options.push(`<option value="${value}">${new Intl.DateTimeFormat(state.lang === "ar" ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" }).format(candidate)}</option>`);
+    if (!selectedDate || selectedDate < nowDate || (selectedDate === nowDate && mins <= nowMinutes)) continue;
+    const candidate = new Date(`2000-01-01T${value}:00Z`);
+    options.push(`<option value="${value}">${new Intl.DateTimeFormat(state.lang === "ar" ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(candidate)}</option>`);
   }
   select.innerHTML = `<option value="">—</option>${options.join("")}`;
   state.time = "";
@@ -619,6 +630,7 @@ async function submitBooking() {
       locale: state.lang,
       clientRequestId: sessionStorage.getItem("mz-booking-request-id") || (() => { const id = crypto.randomUUID(); sessionStorage.setItem("mz-booking-request-id", id); return id; })()
     });
+    if (result.existing) showToast(state.lang === "ar" ? "أنت حجزت بالفعل — تم فتح نفس الحجز" : "You already booked — the existing booking is shown");
     $("#successCode").textContent = result.bookingCode;
     try {
       const { default: JsBarcode } = await import("jsbarcode");
@@ -630,7 +642,7 @@ async function submitBooking() {
     $("#previewNotice").classList.toggle("show", state.completedPreview);
     const branch = currentBranch();
     $("#successBranch").textContent = branchName(branch);
-    $("#successAppointment").textContent = state.date && state.time ? `${state.date} • ${state.time}` : (state.lang === "ar" ? "طلب منتجات" : "Product order");
+    $("#successAppointment").textContent = (result.date || state.date) && (result.time || state.time) ? `${result.date || state.date} • ${result.time || state.time}` : (state.lang === "ar" ? "طلب منتجات" : "Product order");
     const phone = whatsappNumber(branch?.whatsapp || branch?.phone);
     const message = state.lang === "ar" ? `مرحبًا، أنشأت حجزًا لدى مزين مصر – ${branchName(branch)}. كود الحجز: ${result.bookingCode}` : `Hello, I created a booking at El Mezaen Egypt – ${branchName(branch)}. Booking code: ${result.bookingCode}`;
     $("#successWhatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;

@@ -146,11 +146,13 @@ export function calculateCoupon(coupon, pricedItems, { now = new Date(), usageCo
 export function validateAppointment({ date, time, duration, openingTime, closingTime, now = new Date() }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("INVALID_DATE");
   minutes(time);
-  const startDate = new Date(`${date}T${time}:00`);
-  if (!Number.isFinite(startDate.getTime()) || startDate.getTime() <= now.getTime()) throw new Error("PAST_APPOINTMENT");
+  const cairoParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  const today = `${cairoParts.year}-${cairoParts.month}-${cairoParts.day}`;
+  const nowMinutes = Number(cairoParts.hour) * 60 + Number(cairoParts.minute);
+  if (date < today || (date === today && minutes(time) <= nowMinutes)) throw new Error("PAST_APPOINTMENT");
   const start = minutes(time);
   if (start < minutes(openingTime) || start + Number(duration || 0) > minutes(closingTime)) throw new Error("OUTSIDE_WORKING_HOURS");
-  return startDate;
+  return { date, time, timeZone: "Africa/Cairo" };
 }
 
 export function paymentTransition(booking, action, method = "cash") {
@@ -171,7 +173,7 @@ export function paymentTransition(booking, action, method = "cash") {
 
 export function calculateRewards(total, settings = {}) {
   const amount = Math.max(0, Number(total || 0));
-  if (settings.loyaltyEnabled === false || amount < Math.max(0, Number(settings.rewardsMinimumSpend || 0))) return { points: 0, cashback: 0 };
+  if (settings.loyaltyEnabled !== true || amount < Math.max(0, Number(settings.rewardsMinimumSpend || 0))) return { points: 0, cashback: 0 };
   const points = Math.max(0, Math.floor(amount * Math.max(0, Number(settings.pointsRate || 0))));
   const cashback = Math.max(0, Math.round(amount * Math.max(0, Number(settings.cashbackPercent || 0)))) / 100;
   return { points, cashback };
@@ -179,4 +181,8 @@ export function calculateRewards(total, settings = {}) {
 
 export function normalizeLineWorkers(items = [], legacyStaffId = "none") {
   return items.map(item => ({ ...item, workerId: String(item.workerId || (item.staffRequired ? legacyStaffId : "none") || "none") }));
+}
+
+export function calculateExpectedCash({ openingCash = 0, cashSales = 0, cashIn = 0, cashOut = 0, cashRefunds = 0 } = {}) {
+  return Math.round((Number(openingCash || 0) + Number(cashSales || 0) + Number(cashIn || 0) - Number(cashOut || 0) - Number(cashRefunds || 0)) * 100) / 100;
 }

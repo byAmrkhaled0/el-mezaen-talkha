@@ -10,6 +10,15 @@ let app;
 let analyticsPromise;
 const CATALOG_CACHE_KEY = "mz-public-catalog-v2";
 const CATALOG_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const FRONTEND_VERSION = "2.0.0";
+
+function assertBackendCompatibility(data) {
+  const minimum = String(data?._meta?.minimumFrontendVersion || "0.0.0");
+  const current = FRONTEND_VERSION.split(".").map(Number);
+  const required = minimum.split(".").map(Number);
+  const outdated = [0, 1, 2].some(index => (current[index] || 0) !== (required[index] || 0) && (current[index] || 0) < (required[index] || 0) && current.slice(0, index).every((value, prefix) => value === (required[prefix] || 0)));
+  if (outdated) { const error = new Error("نسخة الموقع قديمة؛ حدّث الصفحة للحصول على النسخة الآمنة الجديدة"); error.code = "BACKEND_VERSION_MISMATCH"; throw error; }
+}
 
 if (firebaseConfigured) {
   app = initializeApp(config);
@@ -48,8 +57,9 @@ function saveCatalogCache(data) {
 }
 
 async function callFunction(name, payload = {}, timeout = 30000) {
-  try { return (await httpsCallable(functions, name, { timeout })(payload)).data; }
+  try { const data = (await httpsCallable(functions, name, { timeout })(payload)).data; assertBackendCompatibility(data); return data; }
   catch (error) {
+    if (error?.code === "BACKEND_VERSION_MISMATCH") throw error;
     const code = String(error?.code || "").replace(/^functions\//, "");
     const original = String(error?.message || "");
     if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw new Error(original, { cause: error });
@@ -83,6 +93,7 @@ export async function getCatalog() {
     saveCatalogCache(catalog);
     return catalog;
   } catch (error) {
+    if (error?.code === "BACKEND_VERSION_MISMATCH") throw error;
     if (cached) {
       console.debug("Using the last saved catalog until the connection returns.", error?.code || error?.message || error);
       return { ...cached, offline: true, cached: true };

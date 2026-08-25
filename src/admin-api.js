@@ -11,6 +11,16 @@ let app;
 let auth;
 let functions;
 let storage;
+const FRONTEND_VERSION = "2.0.0";
+
+function assertBackendCompatibility(data) {
+  const current = FRONTEND_VERSION.split(".").map(Number);
+  const required = String(data?._meta?.minimumFrontendVersion || "0.0.0").split(".").map(Number);
+  for (let index = 0; index < 3; index++) {
+    if ((current[index] || 0) > (required[index] || 0)) return;
+    if ((current[index] || 0) < (required[index] || 0)) throw new Error("نسخة لوحة الإدارة قديمة؛ حدّث الصفحة قبل تنفيذ أي عملية");
+  }
+}
 
 if (configured) {
   app = initializeApp(config);
@@ -52,6 +62,7 @@ async function call(name, data = {}) {
   if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت");
   try {
     const result = await httpsCallable(functions, name, { timeout: 30000 })(data);
+    assertBackendCompatibility(result.data);
     return result.data;
   } catch (error) {
     const code = String(error?.code || "").replace(/^functions\//, "");
@@ -87,17 +98,28 @@ async function readCall(name, data = {}) {
 }
 
 export const getDashboard = () => readCall("getAdminDashboard");
+export const getCashierSnapshot = () => readCall("getCashierSnapshot");
 export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
-export const getCollection = (collection, limit = 300) => readCall("getAdminCollection", { collection, limit });
+export const getCollection = (collection, limit = 100, cursor = "") => readCall("getAdminCollection", { collection, limit, cursor });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
-export const secureDeleteRecord = (kind, id) => call("adminSecureDelete", { kind, id });
-export const changeBooking = (id, action, paymentMethod) => call("updateBooking", { id, action, paymentMethod });
+export const secureDeleteRecord = (kind, id, reason = "") => call("adminSecureDelete", { kind, id, reason });
+export const changeBooking = (id, action, paymentMethod, reason = "", idempotencyKey = "") => call("updateBooking", { id, action, paymentMethod, reason, idempotencyKey });
+export const rescheduleBooking = payload => call("rescheduleBooking", payload);
 export const createPosOrder = payload => call("createPosOrder", payload);
+export const getBookingCalendar = (from, to) => readCall("getBookingCalendar", { from, to });
+export const getCustomer360 = customerId => readCall("getCustomer360", { customerId });
+export const rotateCustomerQr = payload => call("rotateCustomerQr", payload);
+export const getCashOperations = branchId => readCall("getCashOperations", { branchId });
+export const openCashShift = payload => call("openCashShift", payload);
+export const addCashMovement = payload => call("addCashMovement", payload);
+export const closeCashShift = payload => call("closeCashShift", payload);
+export const closeBusinessDay = payload => call("closeBusinessDay", payload);
 export const scanCustomerCode = code => call("scanCustomerCode", { code });
 export const findCustomerByPhone = phone => call("findCustomerByPhone", { phone });
 export const adjustCustomerWallet = payload => call("adjustCustomerWallet", payload);
 export const createWhatsappCampaign = payload => call("createWhatsappCampaign", payload);
+export const previewWhatsappCampaign = payload => readCall("previewWhatsappCampaign", payload);
 export const updateWhatsappCampaignState = (campaignId, action) => call("updateWhatsappCampaignState", { campaignId, action });
 export const sendWhatsappReceipt = bookingId => call("sendWhatsappReceipt", { bookingId });
 export const updateWhatsappConsent = (customerId, optedIn) => call("updateWhatsappConsent", { customerId, optedIn, source: "admin" });

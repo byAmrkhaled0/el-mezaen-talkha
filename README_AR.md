@@ -25,7 +25,7 @@ npm run dev
 3. أنشئ Firestore وStorage.
 4. أنشئ Web App وانسخ بياناته إلى `public/firebase-config.js`.
 5. انسخ `.firebaserc.example` إلى `.firebaserc` وضع Project ID الحقيقي.
-6. إن أردت إشعارات FCM، أنشئ Web Push certificate وضع الـVAPID Key في `window.__VAPID_KEY__` داخل `public/firebase-config.js`.
+6. راجع Web Push certificate وVAPID Key الحاليين في `public/firebase-config.js` وتأكد أن المفتاح تابع لنفس المشروع قبل النشر.
 7. اترك `window.__USE_EMULATORS__ = false` في الإنتاج.
 
 إعداد Firebase Web ليس كلمة مرور؛ قواعد الأمان والصلاحيات والدوال هي التي تمنع الوصول. لا تضع Service Account أو أي مفتاح سري داخل `public/`.
@@ -84,12 +84,12 @@ firebase deploy --only functions,firestore:rules,firestore:indexes,storage
 5. اختبر تعارض نفس العامل والموعد.
 6. اختبر كوبونًا منتهيًا وحد الاستخدام لكل هاتف.
 7. راجع Console وNetwork وFirebase Logs.
-8. فعّل App Check للدوال العامة بعد تسجيل النطاقات والتأكد من عدم كسر iPhone/Android.
+8. تأكد من وصول App Check tokens؛ النسخة تفرض App Check افتراضيًا في Production ولا تسمح بالتجاوز إلا داخل Emulator.
 
 ## ملاحظات تشغيلية
 
 - إرسال حالة الحجز عبر واتساب متاح من زر داخل كل حجز برسالة جاهزة. الإرسال الآلي الكامل يحتاج WhatsApp Business Cloud API وبياناته من المالك.
-- إشعارات المتصفح تعمل بصريًا وصوتيًا من اللوحة، وFCM يحتاج VAPID Key وإذن المستخدم.
+- إشعارات المتصفح تحتاج إذن المستخدم، ويجب التحقق من VAPID/App Check على نطاق الإنتاج.
 - الصور المرفوعة مقصورة على JPEG/PNG/WebP/AVIF وأقل من 5MB.
 - جميع أسعار الحجز النهائية والخصومات وتعارض المواعيد تُراجع داخل Cloud Functions، ولا تُقبل أسعار من المتصفح.
 - لوحة الإدارة محظورة في `robots.txt` و`X-Robots-Tag` وMeta Robots.
