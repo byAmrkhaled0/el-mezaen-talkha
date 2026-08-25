@@ -669,6 +669,16 @@ async function aggregateScoped(collection, allowedBranches, configure = query =>
   }, includeCount ? { count: 0 } : {});
 }
 
+async function sumCashShifts(allowedBranches, businessDate) {
+  const snapshots = await Promise.all(scopedQueries("cashShifts", allowedBranches, query => query.where("businessDate", "==", businessDate)).map(query => query.get()));
+  const shifts = new Map();
+  snapshots.forEach(snapshot => snapshot.docs.forEach(document => shifts.set(document.id, document.data())));
+  return [...shifts.values()].reduce((totals, shift) => {
+    for (const field of ["openingCash", "cashSales", "cashIn", "cashOut", "cashRefunds"]) totals[field] += Number(shift[field] || 0);
+    return totals;
+  }, { openingCash: 0, cashSales: 0, cashIn: 0, cashOut: 0, cashRefunds: 0 });
+}
+
 async function countNewCustomers(allowedBranches, dateKey) {
   const snapshots = await Promise.all((allowedBranches.length ? allowedBranches : [null]).map(branchId => {
     let query = db.collection("customers").where("firstVisitDateKey", "==", dateKey);
@@ -719,7 +729,7 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday] = await Promise.all([
     canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
     hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("status", "==", "OPEN")) : zero,
-    hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("businessDate", "==", today), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }, false) : zero,
+    hasPermission(request, "pos") ? sumCashShifts(allowedBranches, today) : zero,
     hasPermission(request, "inventory") ? Promise.all(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500)).map(query => query.get())) : [],
     canBookings ? countNewCustomers(allowedBranches, today) : 0
   ]);
@@ -768,13 +778,16 @@ export const getCashierSnapshot = onCall(adminOptions, async request => {
   const allowedBranches = branchesFor(request);
   const activeQueries = scopedQueries("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).orderBy("createdAt", "desc").limit(120));
   const todayQueries = scopedQueries("bookings", allowedBranches, query => query.where("bookingDate", "==", today).orderBy("bookingTime", "desc").limit(160));
-  const snapshots = await Promise.all([...activeQueries, ...todayQueries].map(query => query.get()));
+  const recentQueries = scopedQueries("bookings", allowedBranches, query => query.orderBy("createdAt", "desc").limit(180));
+  const snapshots = await Promise.all([...activeQueries, ...todayQueries, ...recentQueries].map(query => query.get()));
   const unique = new Map();
   snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
   const rows = [...unique.values()].filter(item => itemInAllowedBranch(item, allowedBranches));
   const active = rows.filter(item => item.source !== "pos" && ["pending", "confirmed", "arrived"].includes(item.status)).sort((a, b) => String(a.bookingDate || "").localeCompare(String(b.bookingDate || "")) || String(a.bookingTime || "").localeCompare(String(b.bookingTime || ""))).slice(0, 120);
-  const todayReceipts = rows.filter(item => item.source === "pos" && item.bookingDate === today).sort((a, b) => String(b.bookingTime || "").localeCompare(String(a.bookingTime || ""))).slice(0, 40);
-  const bookings = [...todayReceipts, ...active];
+  const recent = [...rows].sort((a, b) => String(b.createdAt || `${b.bookingDate || ""}T${b.bookingTime || ""}`).localeCompare(String(a.createdAt || `${a.bookingDate || ""}T${a.bookingTime || ""}`)));
+  const recentReceipts = recent.filter(item => item.source === "pos").slice(0, 60);
+  const recentBookings = recent.filter(item => item.source !== "pos").slice(0, 100);
+  const bookings = [...new Map([...recentReceipts, ...active, ...recentBookings].map(item => [item.id, item])).values()];
   const todayItems = rows.filter(item => item.bookingDate === today);
   const paidToday = todayItems.filter(item => item.paymentStatus === "paid");
   return {
@@ -1181,7 +1194,7 @@ export const closeBusinessDay = onCall(adminOptions, async request => {
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"), { amount: AggregateField.sum("amount") }),
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }),
     aggregateScoped("expenses", scoped, query => query.where("dateKey", "==", businessDate), { amount: AggregateField.sum("amount") }),
-    aggregateScoped("cashShifts", scoped, query => query.where("businessDate", "==", businessDate), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }, false),
+    sumCashShifts(scoped, businessDate),
     aggregateScoped("bookings", scoped, query => query.where("bookingDate", "==", businessDate).where("source", "==", "pos")),
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"))
   ]);

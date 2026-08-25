@@ -68,11 +68,18 @@ test("cash shifts, daily closing and expense links use atomic server operations"
   assert.match(html, /id="dailyClosing"/);
 });
 
-test("cash totals stay within Firestore's five-aggregation limit", () => {
+test("cash totals avoid fragile multi-field Firestore aggregate indexes", () => {
   assert.match(backend, /includeCount = true/);
-  const cashSumCalls = backend.split("\n").filter(line => line.includes('aggregateScoped("cashShifts"') && line.includes('cashRefunds: AggregateField.sum("cashRefunds")'));
-  assert.equal(cashSumCalls.length, 2);
-  cashSumCalls.forEach(line => assert.match(line, /}, false\)/));
+  assert.match(backend, /async function sumCashShifts/);
+  assert.match(backend, /sumCashShifts\(allowedBranches, today\)/);
+  assert.match(backend, /sumCashShifts\(scoped, businessDate\)/);
+  assert.doesNotMatch(backend, /aggregateScoped\("cashShifts"[^\n]+cashRefunds: AggregateField\.sum/);
+});
+
+test("cashier snapshot includes bounded recent booking and receipt history", () => {
+  assert.match(backend, /const recentQueries = scopedQueries\("bookings"/);
+  assert.match(backend, /recentReceipts = recent\.filter\(item => item\.source === "pos"\)\.slice\(0, 60\)/);
+  assert.match(backend, /recentBookings = recent\.filter\(item => item\.source !== "pos"\)\.slice\(0, 100\)/);
 });
 
 test("multi-worker receipts post per-line revenue and scalable monthly totals", () => {
