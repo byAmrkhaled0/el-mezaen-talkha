@@ -68,6 +68,13 @@ test("cash shifts, daily closing and expense links use atomic server operations"
   assert.match(html, /id="dailyClosing"/);
 });
 
+test("cash totals stay within Firestore's five-aggregation limit", () => {
+  assert.match(backend, /includeCount = true/);
+  const cashSumCalls = backend.split("\n").filter(line => line.includes('aggregateScoped("cashShifts"') && line.includes('cashRefunds: AggregateField.sum("cashRefunds")'));
+  assert.equal(cashSumCalls.length, 2);
+  cashSumCalls.forEach(line => assert.match(line, /}, false\)/));
+});
+
 test("multi-worker receipts post per-line revenue and scalable monthly totals", () => {
   assert.match(backend, /workerBreakdown/);
   assert.match(backend, /postWorkerMonthlyRevenue/);

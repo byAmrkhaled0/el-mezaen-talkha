@@ -658,14 +658,15 @@ function scopedQueries(collection, allowedBranches, configure = query => query) 
   });
 }
 
-async function aggregateScoped(collection, allowedBranches, configure = query => query, fields = {}) {
-  const results = await Promise.all(scopedQueries(collection, allowedBranches, configure).map(query => query.aggregate({ count: AggregateField.count(), ...fields }).get()));
+async function aggregateScoped(collection, allowedBranches, configure = query => query, fields = {}, includeCount = true) {
+  const aggregations = includeCount ? { count: AggregateField.count(), ...fields } : fields;
+  const results = await Promise.all(scopedQueries(collection, allowedBranches, configure).map(query => query.aggregate(aggregations).get()));
   return results.reduce((total, snapshot) => {
     const data = snapshot.data();
-    total.count += Number(data.count || 0);
+    if (includeCount) total.count += Number(data.count || 0);
     Object.keys(fields).forEach(key => { total[key] = Number(total[key] || 0) + Number(data[key] || 0); });
     return total;
-  }, { count: 0 });
+  }, includeCount ? { count: 0 } : {});
 }
 
 async function countNewCustomers(allowedBranches, dateKey) {
@@ -718,7 +719,7 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday] = await Promise.all([
     canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
     hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("status", "==", "OPEN")) : zero,
-    hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("businessDate", "==", today), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }) : zero,
+    hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("businessDate", "==", today), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }, false) : zero,
     hasPermission(request, "inventory") ? Promise.all(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500)).map(query => query.get())) : [],
     canBookings ? countNewCustomers(allowedBranches, today) : 0
   ]);
@@ -1180,7 +1181,7 @@ export const closeBusinessDay = onCall(adminOptions, async request => {
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"), { amount: AggregateField.sum("amount") }),
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }),
     aggregateScoped("expenses", scoped, query => query.where("dateKey", "==", businessDate), { amount: AggregateField.sum("amount") }),
-    aggregateScoped("cashShifts", scoped, query => query.where("businessDate", "==", businessDate), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }),
+    aggregateScoped("cashShifts", scoped, query => query.where("businessDate", "==", businessDate), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }, false),
     aggregateScoped("bookings", scoped, query => query.where("bookingDate", "==", businessDate).where("source", "==", "pos")),
     aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"))
   ]);
