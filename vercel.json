@@ -10,6 +10,7 @@
     { "source": "/admin/:path*", "destination": "/admin/index.html" },
     { "source": "/login/:path*", "destination": "/login/index.html" },
     { "source": "/account/:path*", "destination": "/account/index.html" },
+    { "source": "/booking/:path*", "destination": "/index.html" },
     { "source": "/services/:path*", "destination": "/services/index.html" },
     { "source": "/team/:path*", "destination": "/team/index.html" }
     ,{ "source": "/hair-systems/:path*", "destination": "/hair-systems/index.html" }
@@ -28,6 +29,7 @@
     { "source": "/firebase-config.js", "headers": [{ "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
     { "source": "/admin/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
     { "source": "/login/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
+    { "source": "/account/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },
       { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },

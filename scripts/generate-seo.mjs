@@ -14,7 +14,7 @@ const urls = [
   ["/branches/mashaya/", "مزين مصر فرع المشاية"]
 ];
 
-await writeFile("public/robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /login/\n\nSitemap: ${siteUrl}/sitemap.xml\n`, "utf8");
+await writeFile("public/robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /login/\nDisallow: /account/\n\nSitemap: ${siteUrl}/sitemap.xml\n`, "utf8");
 await writeFile("public/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.map(([path, title]) => `  <url>

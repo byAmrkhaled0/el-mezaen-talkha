@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /login/
+Disallow: /account/
 
 Sitemap: https://el-mezaen-talkha.vercel.app/sitemap.xml

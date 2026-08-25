@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "favicon.ico", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -31,6 +31,7 @@ assert.match(admin, /noindex,nofollow/);
 assert.match(admin, /admin-manifest\.webmanifest/);
 assert.match(login, /noindex,nofollow/);
 assert.match(robots, /Disallow: \/admin\//);
+assert.match(robots, /Disallow: \/account\//);
 assert.match(sitemap, /<urlset/);
 assert.match(sitemap, /branches\/talkha/);
 assert.match(sitemap, /branches\/mashaya/);
@@ -79,7 +80,7 @@ assert.match(functionsSource, /export const createAdminUser/);
 assert.match(functionsSource, /concurrency:\s*80/);
 assert.match(functionsSource, /review_v2/);
 assert.match(worker, /addEventListener\("push"/);
-assert.match(worker, /const VERSION = "v62"/);
+assert.match(worker, /const VERSION = "v63"/);
 const messagingWorker = await readFile(join("dist", "firebase-messaging-sw.js"), "utf8");
 assert.match(messagingWorker, /importScripts\("\/sw\.js"\)/, "Firebase Messaging worker must reuse the app service worker");
 assert.match(worker, /sensitiveNavigation/);

@@ -1,27 +1,34 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { AggregateField, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 import { getFunctions as getAdminFunctions } from "firebase-admin/functions";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { defineSecret } from "firebase-functions/params";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
-// Meta is deferred. These stay empty unless explicitly supplied as runtime env values.
-// Restore Secret Manager bindings when the official WhatsApp integration is enabled.
-const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
-const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
-const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK === "true";
+const API_VERSION = "2026-08-25";
+const MIN_FRONTEND_VERSION = "2.0.0";
+const whatsappAccessToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
+const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+const whatsappWebhookVerifyToken = defineSecret("WHATSAPP_WEBHOOK_VERIFY_TOKEN");
+const whatsappAppSecret = defineSecret("WHATSAPP_APP_SECRET");
+const runningInEmulator = process.env.FUNCTIONS_EMULATOR === "true" || Boolean(process.env.FIREBASE_EMULATOR_HUB);
+// Production is secure by default. Local/emulator bypass is explicit and never inferred from missing config.
+const enforcePublicAppCheck = process.env.ENFORCE_APP_CHECK == null ? !runningInEmulator : process.env.ENFORCE_APP_CHECK === "true";
 const publicOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 80, maxInstances: 100, timeoutSeconds: 30 };
 const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALOG_WARM === "true" ? 1 : 0 };
 const adminOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 40, maxInstances: 50, timeoutSeconds: 30 };
+const whatsappOptions = { ...adminOptions, secrets: [whatsappAccessToken, whatsappPhoneNumberId] };
+const whatsappWebhookOptions = { region, cors: false, memory: "256MiB", maxInstances: 20, timeoutSeconds: 15, secrets: [whatsappWebhookVerifyToken, whatsappAppSecret] };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
-const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
+const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "workerLeaves", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 // Keep "worker" only as a legacy cashier role so previously-created accounts still work.
 const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
 const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "results", "hairMedia", "celebrities", "posts", "settings", "activity", "users"];
@@ -30,10 +37,11 @@ const ROLE_DEFAULT_PERMISSIONS = {
   cashier: ["dashboard", "pos", "bookings", "customers"],
   worker: ["dashboard", "pos", "bookings", "customers"]
 };
-const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll" };
+const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", workerLeaves: "schedule", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll", cashShifts: "pos", cashMovements: "pos", dailyClosings: "revenue" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
+const PUBLIC_SETTING_KEYS = ["businessNameAr", "businessNameEn", "openingTime", "closingTime", "slotMinutes", "facebook", "instagram", "tiktok", "aboutAr", "aboutEn", "currency"];
 const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.CATALOG_CACHE_MS || 60_000)));
 let catalogCache = null;
 let catalogCacheExpiresAt = 0;
@@ -41,18 +49,38 @@ let catalogLoadPromise = null;
 let catalogCacheRevision = "";
 
 export const health = onRequest({ region, cors: false, memory: "256MiB", maxInstances: 10, timeoutSeconds: 10 }, async (_request, response) => {
-  try { await db.doc("settings/public").get(); response.set("Cache-Control", "no-store").status(200).json({ ready: true, version: process.env.K_REVISION || "local", environment: process.env.GCLOUD_PROJECT ? "production" : "local", firestore: "ready" }); }
-  catch { response.set("Cache-Control", "no-store").status(503).json({ ready: false, version: process.env.K_REVISION || "local", firestore: "unavailable" }); }
+  try { await db.doc("settings/public").get(); response.set("Cache-Control", "no-store").status(200).json({ ready: true, apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION, version: process.env.K_REVISION || "local", environment: process.env.GCLOUD_PROJECT ? "production" : "local", appCheckEnforced: enforcePublicAppCheck, firestore: "ready", requiredConfigReady: true }); }
+  catch { response.set("Cache-Control", "no-store").status(503).json({ ready: false, apiVersion: API_VERSION, version: process.env.K_REVISION || "local", firestore: "unavailable", requiredConfigReady: false }); }
 });
 
-const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt) });
+const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), firstVisitAt: toIso(snapshot.data().firstVisitAt), lastVisitAt: toIso(snapshot.data().lastVisitAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt), finalizedAt: toIso(snapshot.data().finalizedAt), voidedAt: toIso(snapshot.data().voidedAt), openedAt: toIso(snapshot.data().openedAt), closedAt: toIso(snapshot.data().closedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
 const hash = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
-const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${businessDateParts().dateKey.replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+const structuredLog = (event, fields = {}) => console.info(JSON.stringify({ severity: "INFO", event, ...fields }));
 
 function businessDateParts(date = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
   return { dateKey: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, month: `${parts.year}-${parts.month}` };
+}
+
+function businessDateExpiry(dateKey, daysAfter = 7) {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + daysAfter);
+  return Timestamp.fromDate(date);
+}
+
+function postWorkerMonthlyRevenue(transaction, { workerId, branchId, dateKey, amount, now }) {
+  if (!workerId || workerId === "none" || !Number.isFinite(Number(amount)) || Number(amount) === 0) return;
+  const month = String(dateKey || "").slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  transaction.set(db.doc(`workerMonthlyTotals/${month}_${workerId}`), {
+    month,
+    staffId: workerId,
+    branchIds: FieldValue.arrayUnion(branchId),
+    revenue: FieldValue.increment(Number(amount)),
+    updatedAt: now
+  }, { merge: true });
 }
 
 function normalizeDrinkOptions(value) {
@@ -68,13 +96,25 @@ function requestFingerprint(request, extra = "") {
 
 async function enforceRateLimit(request, action, limit, windowMs, extra = "") {
   const bucket = Math.floor(Date.now() / windowMs);
-  const ref = db.doc(`rateLimits/${hash(`${action}|${requestFingerprint(request, extra)}|${bucket}`)}`);
+  return consumeRateLimit(`${action}|${requestFingerprint(request, extra)}|${bucket}`, action, limit, windowMs, bucket);
+}
+
+async function consumeRateLimit(fingerprint, action, limit, windowMs, bucket = Math.floor(Date.now() / windowMs)) {
+  const ref = db.doc(`rateLimits/${hash(fingerprint)}`);
   await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const count = Number(snapshot.data()?.count || 0);
     if (count >= limit) throw new HttpsError("resource-exhausted", "محاولات كثيرة، حاول مرة أخرى لاحقًا");
     transaction.set(ref, { action, count: count + 1, expiresAt: Timestamp.fromMillis((bucket + 2) * windowMs), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
+}
+
+async function enforceBookingRateLimits(request, phone) {
+  const windowMs = 15 * 60 * 1000;
+  const bucket = Math.floor(Date.now() / windowMs);
+  await consumeRateLimit(`booking_ip|${requestFingerprint(request)}|${bucket}`, "booking_ip", 20, windowMs, bucket);
+  await consumeRateLimit(`booking_phone|${hash(phone)}|${bucket}`, "booking_phone", 8, windowMs, bucket);
+  await consumeRateLimit(`booking_ip_phone|${requestFingerprint(request, phone)}|${bucket}`, "booking_ip_phone", 5, windowMs, bucket);
 }
 
 function requireRole(request, roles = ADMIN_ROLES) {
@@ -95,7 +135,9 @@ function contentPermission(type) { return type === "gallery" ? "gallery" : type 
 function branchesFor(request) {
   const role = requireRole(request);
   if (role === "admin") return [];
-  return [...new Set((Array.isArray(request.auth?.token?.branchIds) ? request.auth.token.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))];
+  const branches = [...new Set((Array.isArray(request.auth?.token?.branchIds) ? request.auth.token.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))];
+  if (!branches.length) throw new HttpsError("permission-denied", "هذا الحساب غير مرتبط بفرع؛ اطلب من الأدمن تحديث صلاحياته ثم سجّل الدخول من جديد");
+  return branches;
 }
 function canAccessBranch(request, branchId) {
   if (request.auth?.token?.role === "admin") return true;
@@ -197,7 +239,7 @@ async function deleteManagedMedia(record, except = new Set()) {
 
 async function readSettings() {
   const snapshot = await db.doc("settings/public").get();
-  return snapshot.exists ? snapshot.data() : { openingTime: "11:00", closingTime: "23:00", slotMinutes: 15 };
+  return { openingTime: "11:00", closingTime: "23:00", slotMinutes: 15, loyaltyEnabled: false, walletRedemptionEnabled: false, whatsappCampaignsEnabled: false, whatsappReceiptsEnabled: false, cashDrawerEnabled: false, ...(snapshot.exists ? snapshot.data() : {}) };
 }
 
 async function readBranch(value) {
@@ -224,7 +266,8 @@ async function loadCatalog() {
     const drinkBranch = sanitizeText(item.branchId, 40).toLowerCase();
     return [{ id: snapshot.id, nameAr, nameEn: sanitizeText(item.nameEn || item.nameAr, 100), type: DRINK_TYPES.includes(item.type) ? item.type : "other", price, drinkOptions: normalizeDrinkOptions(item.drinkOptions), branchId: drinkBranch, branchIds: drinkBranch === "all" ? [] : [drinkBranch], maxQty: 20, active: true, sortOrder: Number(item.sortOrder || 0) }];
   }).sort((a, b) => a.sortOrder - b.sortOrder);
-  payload.settings = publicSettings;
+  payload.settings = Object.fromEntries(PUBLIC_SETTING_KEYS.filter(key => publicSettings[key] != null).map(key => [key, publicSettings[key]]));
+  payload._meta = { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION };
   return payload;
 }
 
@@ -301,7 +344,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
     phone: normalizePhone(data.customer?.phone),
     note: sanitizeText(data.customer?.note, 500)
   };
-  await enforceRateLimit(request, "booking", 5, 15 * 60 * 1000, customer.phone);
+  await enforceBookingRateLimits(request, customer.phone);
   if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
@@ -337,7 +380,9 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
       if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)].filter(member => !Array.isArray(member.branchIds) || !member.branchIds.length || member.branchIds.includes(branchId));
     }
-    const day = new Date(`${data.bookingDate}T12:00:00`).getDay();
+    const leaveSnapshot = await db.collection("workerLeaves").where("dateKey", "==", data.bookingDate).where("active", "==", true).limit(100).get();
+    const leaves = leaveSnapshot.docs.map(cleanDoc).filter(item => !item.branchId || item.branchId === "all" || item.branchId === branchId);
+    const day = new Date(`${data.bookingDate}T12:00:00Z`).getUTCDay();
     const appointmentStart = minutes(data.bookingTime);
     const appointmentEnd = appointmentStart + duration;
     const requestedServiceIds = appointmentItems.map(item => item.id);
@@ -345,6 +390,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       if (Array.isArray(member.workDays) && !member.workDays.map(Number).includes(day)) return false;
       if (Array.isArray(member.serviceIds) && member.serviceIds.length && !requestedServiceIds.every(id => member.serviceIds.includes(id))) return false;
       if (appointmentStart < minutes(member.shiftStart || settings.openingTime) || appointmentEnd > minutes(member.shiftEnd || settings.closingTime)) return false;
+      if (leaves.some(leave => leave.staffId === member.id && appointmentStart < minutes(leave.endTime || "23:59") && appointmentEnd > minutes(leave.startTime || "00:00"))) return false;
       return !(member.breaks || []).some(value => {
         const [from, to] = String(value).split("-");
         if (!from || !to) return false;
@@ -355,7 +401,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   }
   const code = bookingCode(branch.code);
   const bookingRef = db.doc(`bookings/${code}`);
-  const requestGuardRef = db.doc(`requestGuards/${hash(clientRequestId)}`);
+  const requestGuardRef = db.doc(`requestGuards/${hash(`${customer.phone}|${clientRequestId}`)}`);
   const duplicateRef = db.doc(`bookingGuards/${hash(`${branchId}|${customer.phone}|${data.bookingDate || "product"}|${data.bookingTime || clientRequestId}`)}`);
   const customerRef = db.doc(`customers/${hash(customer.phone)}`);
   const couponCode = sanitizeText(data.couponCode, 30).toUpperCase();
@@ -367,8 +413,24 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   try {
     return await db.runTransaction(async transaction => {
       const baseReads = await Promise.all([transaction.get(requestGuardRef), transaction.get(duplicateRef), couponRef ? transaction.get(couponRef) : null, couponUsageRef ? transaction.get(couponUsageRef) : null, transaction.get(customerRef)]);
-      if (baseReads[0].exists) throw new Error("DUPLICATE_REQUEST");
-      if (baseReads[1].exists) throw new Error("DUPLICATE_BOOKING");
+      if (baseReads[0].exists) {
+        const existingId = sanitizeText(baseReads[0].data()?.bookingId, 100);
+        const existing = existingId ? await transaction.get(db.doc(`bookings/${existingId}`)) : null;
+        if (existing?.exists) {
+          const value = existing.data();
+          return { ok: true, idempotent: true, bookingId: existing.id, bookingCode: value.code || existing.id, branchId: value.branchId, branchNameAr: value.branchNameAr, total: Number(value.total || 0), date: value.bookingDate || null, time: value.bookingTime || null, workerId: value.staffId || null, workerNameAr: value.staffNameAr || null, status: value.status };
+        }
+        throw new Error("DUPLICATE_REQUEST");
+      }
+      if (baseReads[1].exists) {
+        const existingId = sanitizeText(baseReads[1].data()?.bookingId, 100);
+        const existing = existingId ? await transaction.get(db.doc(`bookings/${existingId}`)) : null;
+        if (existing?.exists) {
+          const value = existing.data();
+          return { ok: true, existing: true, errorCode: "BOOKING_ALREADY_EXISTS", bookingId: existing.id, bookingCode: value.code || existing.id, branchId: value.branchId, branchNameAr: value.branchNameAr, total: Number(value.total || 0), date: value.bookingDate || null, time: value.bookingTime || null, workerId: value.staffId || null, workerNameAr: value.staffNameAr || null, status: value.status };
+        }
+        throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: existingId || null });
+      }
       let assigned = null;
       let assignedLockRefs = [];
       if (!productOnly) {
@@ -444,10 +506,10 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       };
       transaction.create(bookingRef, record);
       transaction.create(requestGuardRef, { bookingId: code, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
-      transaction.create(duplicateRef, { bookingId: code, createdAt: now });
-      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1) }, { merge: true });
+      transaction.create(duplicateRef, { bookingId: code, createdAt: now, expiresAt: productOnly ? Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) : businessDateExpiry(data.bookingDate, 2) });
+      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(baseReads[4].exists ? {} : { firstVisitAt: now, firstVisitDateKey: businessDateParts().dateKey, createdAt: now }) }, { merge: true });
       if (assigned?.id) transaction.update(db.doc(`staff/${assigned.id}`), { bookingCount: FieldValue.increment(1), updatedAt: now });
-      assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now }));
+      assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now, expiresAt: businessDateExpiry(data.bookingDate, 7) }));
       inventoryItems.forEach(item => {
         transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
         transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId, bookingId: code, quantity: -item.qty, type: "booking-sale", dateKey: businessDateParts().dateKey, createdAt: now, source: "website" });
@@ -456,13 +518,75 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now });
         transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now }, { merge: true });
       }
-      return { ok: true, bookingCode: code, branchId, branchNameAr: branch.nameAr, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, staffId: assigned?.id || null, staffNameAr: assigned?.nameAr || null };
+      return { ok: true, bookingId: code, bookingCode: code, branchId, branchNameAr: branch.nameAr, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, date: record.bookingDate, time: record.bookingTime, staffId: assigned?.id || null, workerId: assigned?.id || null, staffNameAr: assigned?.nameAr || null, workerNameAr: assigned?.nameAr || null, status: record.status };
     });
   } catch (error) {
+    if (error instanceof HttpsError) throw error;
     const messages = { DUPLICATE_REQUEST: "تم إرسال هذا الطلب من قبل", DUPLICATE_BOOKING: "يوجد حجز مطابق لهذا الرقم والموعد", SLOT_UNAVAILABLE: "الموعد غير متاح، اختر وقتًا آخر", DRINK_UNAVAILABLE: "أحد المشروبات غير متاح في هذا الفرع", DRINK_STOCK: "الكمية المطلوبة من أحد المشروبات غير متاحة", DRINK_PRICE: "سعر أحد المشروبات غير صحيح", DRINK_OPTION: "اختيار تحضير المشروب غير صحيح" };
     const code = ["DUPLICATE_REQUEST", "DUPLICATE_BOOKING"].includes(error.message) ? "already-exists" : "failed-precondition";
     throw new HttpsError(code, messages[error.message] || "تعذر إنشاء الحجز");
   }
+});
+
+export const rescheduleBooking = onCall(adminOptions, async request => {
+  requirePermission(request, "bookings");
+  const id = sanitizeText(request.data?.id, 100);
+  const date = sanitizeText(request.data?.date, 10);
+  const time = sanitizeText(request.data?.time, 5);
+  const staffId = sanitizeText(request.data?.staffId, 100);
+  const requestId = sanitizeText(request.data?.requestId, 100);
+  if (!id || !staffId || !/^[A-Za-z0-9_-]{16,100}$/.test(requestId)) throw new HttpsError("invalid-argument", "بيانات إعادة الجدولة غير مكتملة");
+  const bookingRef = db.doc(`bookings/${id}`);
+  const bookingSnapshot = await bookingRef.get();
+  if (!bookingSnapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
+  const current = bookingSnapshot.data();
+  requireBranchAccess(request, current.branchId);
+  if (!['pending', 'confirmed'].includes(current.status) || current.productOnly) throw new HttpsError("failed-precondition", "هذا الحجز لا يقبل إعادة الجدولة");
+  const [branch, staffSnapshot, settings, leaveSnapshot, branchHoliday, globalHoliday] = await Promise.all([
+    readBranch(current.branchId),
+    db.doc(`staff/${staffId}`).get(),
+    readSettings(),
+    db.collection("workerLeaves").where("dateKey", "==", date).where("active", "==", true).limit(100).get(),
+    db.doc(`holidays/${current.branchId}_${date}`).get(),
+    db.doc(`holidays/${date}`).get()
+  ]);
+  if (!staffSnapshot.exists || staffSnapshot.data().active === false || staffSnapshot.data().available === false) throw new HttpsError("failed-precondition", "العامل غير متاح");
+  const staff = cleanDoc(staffSnapshot);
+  if (Array.isArray(staff.branchIds) && staff.branchIds.length && !staff.branchIds.includes(current.branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع");
+  if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) throw new HttpsError("failed-precondition", "الفرع مغلق في اليوم المختار");
+  const duration = Math.max(5, Number(current.duration || (current.items || []).reduce((sum, item) => sum + Number(item.duration || 0), 0)));
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const start = minutes(time);
+  const end = start + duration;
+  const combinedSettings = { ...settings, ...branch };
+  try { validateAppointment({ date, time, duration, openingTime: combinedSettings.openingTime, closingTime: combinedSettings.closingTime }); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  if (Array.isArray(staff.workDays) && !staff.workDays.map(Number).includes(day)) throw new HttpsError("failed-precondition", "العامل خارج أيام عمله");
+  if (start < minutes(staff.shiftStart || combinedSettings.openingTime) || end > minutes(staff.shiftEnd || combinedSettings.closingTime)) throw new HttpsError("failed-precondition", "الموعد خارج شيفت العامل");
+  const onLeave = leaveSnapshot.docs.map(cleanDoc).some(leave => leave.staffId === staffId && (!leave.branchId || leave.branchId === "all" || leave.branchId === current.branchId) && start < minutes(leave.endTime || "23:59") && end > minutes(leave.startTime || "00:00"));
+  if (onLeave) throw new HttpsError("failed-precondition", "العامل في إجازة أو غير متاح في هذا الوقت");
+  const newKeys = createSlotKeys(staffId, date, time, duration, 5, current.branchId);
+  const oldKeys = current.lockIds || [];
+  const guardRef = db.doc(`rescheduleGuards/${hash(`${request.auth.uid}|${id}|${requestId}`)}`);
+  const duplicateRef = db.doc(`bookingGuards/${hash(`${current.branchId}|${current.phone}|${date}|${time}`)}`);
+  return db.runTransaction(async transaction => {
+    const [guard, latest, duplicate] = await transaction.getAll(guardRef, bookingRef, duplicateRef);
+    if (guard.exists) return { ok: true, idempotent: true, bookingId: id, bookingCode: latest.data()?.code || id, date: latest.data()?.bookingDate, time: latest.data()?.bookingTime, workerId: latest.data()?.staffId, workerNameAr: latest.data()?.staffNameAr };
+    if (!latest.exists || !['pending', 'confirmed'].includes(latest.data().status)) throw new HttpsError("failed-precondition", "تغيرت حالة الحجز؛ حدّث الصفحة");
+    if (duplicate.exists && duplicate.data()?.bookingId !== id) throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: duplicate.data()?.bookingId });
+    const lockRefs = newKeys.map(key => db.doc(`appointmentLocks/${key}`));
+    const locks = lockRefs.length ? await transaction.getAll(...lockRefs) : [];
+    if (locks.some(lock => lock.exists && lock.data()?.bookingId !== id)) throw new HttpsError("failed-precondition", "الموعد غير متاح", { code: "SLOT_UNAVAILABLE" });
+    const now = FieldValue.serverTimestamp();
+    lockRefs.forEach((lockRef, index) => { if (!locks[index].exists) transaction.create(lockRef, { bookingId: id, branchId: current.branchId, staffId, date, time, createdAt: now, expiresAt: businessDateExpiry(date, 7) }); });
+    oldKeys.filter(key => !newKeys.includes(key)).forEach(key => transaction.delete(db.doc(`appointmentLocks/${key}`)));
+    if (current.duplicateGuardId && current.duplicateGuardId !== duplicateRef.id) transaction.delete(db.doc(`bookingGuards/${current.duplicateGuardId}`));
+    transaction.set(duplicateRef, { bookingId: id, createdAt: now, expiresAt: businessDateExpiry(date, 2) });
+    transaction.update(bookingRef, { bookingDate: date, bookingTime: time, staffId, staffNameAr: staff.nameAr || staffId, staffNameEn: staff.nameEn || staff.nameAr || staffId, lockIds: newKeys, duplicateGuardId: duplicateRef.id, rescheduledAt: now, rescheduledBy: request.auth.uid, updatedAt: now });
+    transaction.create(guardRef, { bookingId: id, date, time, staffId, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
+    transaction.set(db.collection("activityLogs").doc(), { action: "reschedule-booking", targetType: "booking", targetId: id, branchId: current.branchId, before: { date: current.bookingDate, time: current.bookingTime, staffId: current.staffId }, after: { date, time, staffId }, actorUid: request.auth.uid, requestId, createdAt: now });
+    return { ok: true, bookingId: id, bookingCode: current.code || id, date, time, workerId: staffId, workerNameAr: staff.nameAr || staffId };
+  });
 });
 
 export const submitReview = onCall(publicOptions, async request => {
@@ -508,6 +632,7 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
     const booking = snapshot.data();
+    if (booking.status === "cancelled" && booking.cancellationSource === "customer") return;
     if (!["pending", "confirmed"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إلغاء هذا الحجز من الموقع");
     const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
     const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
@@ -519,9 +644,45 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
       transaction.delete(db.doc(`stockMovements/${code}_${soldInventory[index].id}`));
     });
     transaction.update(ref, { status: "cancelled", cancellationSource: "customer", inventoryReleased: soldInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: FieldValue.serverTimestamp() });
+    if (booking.phoneHash) transaction.set(db.doc(`customers/${booking.phoneHash}`), { cancellationCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    transaction.set(db.collection("activityLogs").doc(), { action: "customer-cancel-booking", targetType: "booking", targetId: code, branchId: booking.branchId, actorUid: request.auth?.uid || null, requestId: sanitizeText(request.data?.requestId, 100) || null, createdAt: FieldValue.serverTimestamp() });
   });
   return { ok: true };
 });
+
+function scopedQueries(collection, allowedBranches, configure = query => query) {
+  return (allowedBranches.length ? allowedBranches : [null]).map(branchId => {
+    let query = db.collection(collection);
+    if (branchId) query = query.where("branchId", "==", branchId);
+    return configure(query);
+  });
+}
+
+async function aggregateScoped(collection, allowedBranches, configure = query => query, fields = {}) {
+  const results = await Promise.all(scopedQueries(collection, allowedBranches, configure).map(query => query.aggregate({ count: AggregateField.count(), ...fields }).get()));
+  return results.reduce((total, snapshot) => {
+    const data = snapshot.data();
+    total.count += Number(data.count || 0);
+    Object.keys(fields).forEach(key => { total[key] = Number(total[key] || 0) + Number(data[key] || 0); });
+    return total;
+  }, { count: 0 });
+}
+
+async function countNewCustomers(allowedBranches, dateKey) {
+  const snapshots = await Promise.all((allowedBranches.length ? allowedBranches : [null]).map(branchId => {
+    let query = db.collection("customers").where("firstVisitDateKey", "==", dateKey);
+    if (branchId) query = query.where("lastBranchId", "==", branchId);
+    return query.count().get();
+  }));
+  return snapshots.reduce((sum, snapshot) => sum + Number(snapshot.data().count || 0), 0);
+}
+
+async function recentScoped(collection, allowedBranches, pageSize) {
+  const snapshots = await Promise.all(scopedQueries(collection, allowedBranches, query => query.orderBy("createdAt", "desc").limit(pageSize)).map(query => query.get()));
+  const unique = new Map();
+  snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
+  return [...unique.values()].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, pageSize);
+}
 
 export const getAdminDashboard = onCall(adminOptions, async request => {
   const access = permissionsFor(request);
@@ -529,37 +690,102 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
   const canRevenue = access.has("dashboard") || access.has("revenue");
   const canExpenses = access.has("dashboard") || access.has("expenses");
-  const [bookingsSnap, ledgerSnap, expensesSnap] = await Promise.all([
-    canBookings ? db.collection("bookings").orderBy("createdAt", "desc").limit(500).get() : { docs: [] },
-    canRevenue ? db.collection("revenueLedger").orderBy("createdAt", "desc").limit(1000).get() : { docs: [] },
-    canExpenses ? db.collection("expenses").orderBy("createdAt", "desc").limit(1000).get() : { docs: [] }
-  ]);
   const allowedBranches = branchesFor(request);
-  const bookings = bookingsSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
-  const ledger = ledgerSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
-  const expenses = expensesSnap.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
   const today = businessDateParts().dateKey;
   const month = today.slice(0, 7);
-  const revenue = period => ledger.filter(item => !period || String(item.dateKey || "").startsWith(period)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const expenseTotal = period => expenses.filter(item => !period || String(item.dateKey || "").startsWith(period)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const nextMonth = nextMonthKey(month);
+  const zero = Promise.resolve({ count: 0, amount: 0 });
+  const [bookings, ledger, expenses, allBookings, todayAll, todayPos, unpaid, paid, completed, cancelled, noShow, upcoming, revenueToday, revenueMonth, revenueTotal, expenseToday, expenseMonth, expenseTotal] = await Promise.all([
+    canBookings ? recentScoped("bookings", allowedBranches, 140) : [],
+    canRevenue ? recentScoped("revenueLedger", allowedBranches, 80) : [],
+    canExpenses ? recentScoped("expenses", allowedBranches, 80) : [],
+    canBookings ? aggregateScoped("bookings", allowedBranches) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today)) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("source", "==", "pos")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("paymentStatus", "==", "unpaid")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("paymentStatus", "==", "paid")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "completed")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "cancelled")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "no_show")) : zero,
+    canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).where("bookingDate", ">=", today)) : zero,
+    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
+    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
+    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero,
+    canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
+    canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
+    canExpenses ? aggregateScoped("expenses", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero
+  ]);
+  const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday] = await Promise.all([
+    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
+    hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("status", "==", "OPEN")) : zero,
+    hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("businessDate", "==", today), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }) : zero,
+    hasPermission(request, "inventory") ? Promise.all(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500)).map(query => query.get())) : [],
+    canBookings ? countNewCustomers(allowedBranches, today) : 0
+  ]);
+  const inventoryItems = inventorySnapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc));
+  const lowStockCount = inventoryItems.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length;
   return {
+    _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION },
     bookings,
     ledger,
     expenses,
     stats: {
-      bookingCount: bookings.length,
-      todayBookings: bookings.filter(item => item.bookingDate === today).length,
-      unpaidCount: bookings.filter(item => item.paymentStatus === "unpaid").length,
-      paidCount: bookings.filter(item => item.paymentStatus === "paid").length,
-      todayRevenue: revenue(today),
-      monthRevenue: revenue(month),
-      totalRevenue: revenue(),
-      todayExpenses: expenseTotal(today),
-      monthExpenses: expenseTotal(month),
-      totalExpenses: expenseTotal(),
-      monthNetProfit: revenue(month) - expenseTotal(month),
-      totalNetProfit: revenue() - expenseTotal(),
+      bookingCount: allBookings.count,
+      todayBookings: Math.max(0, todayAll.count - todayPos.count),
+      ordersToday: todayPos.count,
+      walkInsToday: todayPos.count,
+      completedToday: completed.count,
+      cancelledToday: cancelled.count,
+      noShowToday: noShow.count,
+      upcomingBookings: upcoming.count,
+      openOrders: unpaid.count,
+      openShifts: openShifts.count,
+      lowStockCount,
+      newCustomersToday,
+      unpaidCount: unpaid.count,
+      paidCount: paid.count,
+      todayRevenue: revenueToday.amount,
+      cashSalesToday: cashToday.amount,
+      otherPaymentsToday: revenueToday.amount - cashToday.amount,
+      expectedCash: calculateExpectedCash(cashTotals),
+      monthRevenue: revenueMonth.amount,
+      totalRevenue: revenueTotal.amount,
+      todayExpenses: expenseToday.amount,
+      monthExpenses: expenseMonth.amount,
+      totalExpenses: expenseTotal.amount,
+      monthNetProfit: revenueMonth.amount - expenseMonth.amount,
+      totalNetProfit: revenueTotal.amount - expenseTotal.amount,
       lastCollected: ledger.find(item => item.type === "payment")?.amount || 0
+    }
+  };
+});
+
+export const getCashierSnapshot = onCall(adminOptions, async request => {
+  const access = permissionsFor(request);
+  if (!["dashboard", "bookings", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية شاشة الكاشير");
+  const today = businessDateParts().dateKey;
+  const allowedBranches = branchesFor(request);
+  const activeQueries = scopedQueries("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).orderBy("createdAt", "desc").limit(120));
+  const todayQueries = scopedQueries("bookings", allowedBranches, query => query.where("bookingDate", "==", today).orderBy("bookingTime", "desc").limit(160));
+  const snapshots = await Promise.all([...activeQueries, ...todayQueries].map(query => query.get()));
+  const unique = new Map();
+  snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
+  const rows = [...unique.values()].filter(item => itemInAllowedBranch(item, allowedBranches));
+  const active = rows.filter(item => item.source !== "pos" && ["pending", "confirmed", "arrived"].includes(item.status)).sort((a, b) => String(a.bookingDate || "").localeCompare(String(b.bookingDate || "")) || String(a.bookingTime || "").localeCompare(String(b.bookingTime || ""))).slice(0, 120);
+  const todayReceipts = rows.filter(item => item.source === "pos" && item.bookingDate === today).sort((a, b) => String(b.bookingTime || "").localeCompare(String(a.bookingTime || ""))).slice(0, 40);
+  const bookings = [...todayReceipts, ...active];
+  const todayItems = rows.filter(item => item.bookingDate === today);
+  const paidToday = todayItems.filter(item => item.paymentStatus === "paid");
+  return {
+    _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION },
+    bookings,
+    stats: {
+      bookingCount: bookings.length,
+      todayBookings: todayItems.filter(item => item.source !== "pos").length,
+      unpaidCount: bookings.filter(item => item.paymentStatus === "unpaid").length,
+      paidCount: paidToday.length,
+      todayRevenue: paidToday.reduce((sum, item) => sum + Number(item.total || 0), 0),
+      lastCollected: paidToday.sort((a, b) => String(b.paidAt || b.createdAt || "").localeCompare(String(a.paidAt || a.createdAt || "")))[0]?.total || 0
     }
   };
 });
@@ -602,7 +828,7 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.createdAt;
   delete payload.updatedAt;
   ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
-  ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
+  ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "cashDrawerEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
   ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
   ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
@@ -635,6 +861,17 @@ function normalizeAdminPayload(collection, raw) {
       payload.active = payload.status === "published";
     } else if ("active" in payload) payload.status = payload.active ? "published" : "pending";
   }
+  if (collection === "workerLeaves") {
+    payload.staffId = sanitizeText(payload.staffId, 100);
+    payload.branchId = sanitizeText(payload.branchId || "all", 40).toLowerCase();
+    payload.dateKey = sanitizeText(payload.dateKey, 10);
+    payload.startTime = sanitizeText(payload.startTime || "00:00", 5);
+    payload.endTime = sanitizeText(payload.endTime || "23:59", 5);
+    payload.reason = sanitizeText(payload.reason, 200);
+    try {
+      if (!payload.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(payload.dateKey) || minutes(payload.startTime) >= minutes(payload.endTime)) throw new Error("INVALID_WORKER_LEAVE");
+    } catch { throw new HttpsError("invalid-argument", "بيانات إجازة العامل أو الوقت غير صحيحة"); }
+  }
   return payload;
 }
 
@@ -662,6 +899,7 @@ export const adminUpsert = onCall(adminOptions, async request => {
     if (!/^[a-z0-9-]{2,40}$/.test(holidayBranch) || !/^\d{4}-\d{2}-\d{2}$/.test(holidayDate)) throw new HttpsError("invalid-argument", "بيانات إجازة الفرع غير صحيحة");
     id = `${holidayBranch}_${holidayDate}`;
   }
+  if (collection === "workerLeaves" && !id) id = `${sanitizeText(raw.staffId, 100)}_${sanitizeText(raw.dateKey, 10)}_${sanitizeText(raw.startTime || "00:00", 5).replace(":", "")}`;
   if (!id) id = db.collection(collection).doc().id;
   const ref = db.collection(collection).doc(id);
   const before = await ref.get();
@@ -713,6 +951,12 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
     db.collection("reviews").limit(500).get()
   ]);
   const allowedBranches = branchesFor(request);
+  const [monthRevenueAggregate, monthExpenseAggregate, productPurchaseAggregate, drinkRevenueAggregate] = await Promise.all([
+    aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("expenses", allowedBranches, query => query.where("category", "==", "inventory").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("revenueBreakdown.drinks") })
+  ]);
   const rawLedger = ledgerSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
   const legacyBookingIds = [...new Set(rawLedger.filter(item => !item.revenueBreakdown).map(item => item.bookingId || item.bookingCode).filter(Boolean))].slice(0, 300);
   const legacyBookingSnapshots = legacyBookingIds.length ? await db.getAll(...legacyBookingIds.map(id => db.doc(`bookings/${id}`))) : [];
@@ -728,14 +972,14 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   const expenses = expensesSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
   const payrollPayments = new Map(payrollSnapshot.docs.map(snapshot => [snapshot.data().staffId, cleanDoc(snapshot)]));
   const payroll = staffSnapshot.docs.map(snapshot => cleanDoc(snapshot)).filter(item => itemInAllowedBranch(item, allowedBranches)).map(staff => {
-    const revenue = ledger.filter(item => item.staffId === staff.id).reduce((sum, item) => sum + Number(item.revenueBreakdown?.services || 0), 0);
+    const revenue = ledger.reduce((sum, item) => sum + Number(item.workerBreakdown?.[staff.id] ?? (item.staffId === staff.id ? item.revenueBreakdown?.services || item.amount || 0 : 0)), 0);
     return { ...staff, ...calculatePayroll({ ...staff, revenue }), payment: payrollPayments.get(staff.id) || null };
   }).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
-  const grossRevenue = ledger.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const grossRevenue = monthRevenueAggregate.amount;
+  const totalExpenses = monthExpenseAggregate.amount;
   const reviews = reviewsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  const productPurchaseCost = expenses.filter(item => item.category === "inventory" && item.inventoryCategory !== "drink").reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const drinkRevenue = ledger.reduce((sum, item) => sum + Number(item.revenueBreakdown?.drinks || 0), 0);
+  const productPurchaseCost = productPurchaseAggregate.amount;
+  const drinkRevenue = drinkRevenueAggregate.amount;
   const posOnly = access.has("pos") && !access.has("inventory");
   return {
     month,
@@ -760,6 +1004,205 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   };
 });
 
+function cashAmount(value, label = "المبلغ") {
+  const amount = Math.round(Number(value || 0) * 100) / 100;
+  if (!Number.isFinite(amount) || amount < 0 || amount > 10_000_000) throw new HttpsError("invalid-argument", `${label} غير صحيح`);
+  return amount;
+}
+
+function requireCashPermission(request, type = "read") {
+  requireRole(request);
+  if (!hasPermission(request, "pos") && !hasPermission(request, "revenue") && !(type === "out" && hasPermission(request, "expenses"))) throw new HttpsError("permission-denied", "لا تملك صلاحية درج الكاش");
+}
+
+export const openCashShift = onCall(adminOptions, async request => {
+  requireCashPermission(request);
+  const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
+  const openingCash = cashAmount(request.data?.openingCash, "رصيد البداية");
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين فتح الوردية");
+  const { dateKey } = businessDateParts();
+  const shiftRef = db.doc(`cashShifts/shift_${hash(`${branch.id}|${request.auth.uid}|${idempotencyKey}`)}`);
+  const stateRef = db.doc(`cashShiftState/${branch.id}`);
+  return db.runTransaction(async transaction => {
+    const [state, existing, closing] = await transaction.getAll(stateRef, shiftRef, db.doc(`dailyClosings/${branch.id}_${dateKey}`));
+    if (existing.exists) return { ok: true, idempotent: true, shift: cleanDoc(existing) };
+    if (state.data()?.openShiftId) throw new HttpsError("already-exists", "توجد وردية مفتوحة بالفعل لهذا الفرع");
+    if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع");
+    const now = FieldValue.serverTimestamp();
+    const record = { branchId: branch.id, businessDate: dateKey, cashierUid: request.auth.uid, cashierName: request.auth.token.name || request.auth.token.email || request.auth.uid, openingCash, cashSales: 0, cashIn: 0, cashOut: 0, cashRefunds: 0, expectedCash: openingCash, status: "OPEN", openedAt: now, openedBy: request.auth.uid, createdAt: now, updatedAt: now };
+    transaction.create(shiftRef, record);
+    transaction.set(stateRef, { branchId: branch.id, openShiftId: shiftRef.id, businessDate: dateKey, status: "OPEN", updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "open-cash-shift", targetType: "cashShift", targetId: shiftRef.id, branchId: branch.id, amount: openingCash, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    return { ok: true, shiftId: shiftRef.id, shift: { id: shiftRef.id, ...record, openedAt: new Date().toISOString(), createdAt: new Date().toISOString() } };
+  });
+});
+
+export const addCashMovement = onCall(adminOptions, async request => {
+  const type = sanitizeText(request.data?.type, 20).toUpperCase();
+  if (!['CASH_IN', 'CASH_OUT'].includes(type)) throw new HttpsError("invalid-argument", "نوع حركة الدرج غير صحيح");
+  requireCashPermission(request, type === "CASH_OUT" ? "out" : "in");
+  const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
+  const amount = cashAmount(request.data?.amount);
+  const reason = sanitizeText(request.data?.reason, 200);
+  const category = sanitizeText(request.data?.category, 60);
+  const note = sanitizeText(request.data?.note, 300);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!amount || !reason || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "المبلغ والسبب مطلوبان");
+  const stateRef = db.doc(`cashShiftState/${branch.id}`);
+  const movementRef = db.doc(`cashMovements/movement_${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
+  const { dateKey } = businessDateParts();
+  return db.runTransaction(async transaction => {
+    const [state, existing, closing] = await transaction.getAll(stateRef, movementRef, db.doc(`dailyClosings/${branch.id}_${dateKey}`));
+    if (existing.exists) return { ok: true, idempotent: true, movementId: movementRef.id };
+    const shiftId = sanitizeText(state.data()?.openShiftId, 100);
+    if (!shiftId || state.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "لا توجد وردية كاش مفتوحة");
+    if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع");
+    const shiftRef = db.doc(`cashShifts/${shiftId}`);
+    const shift = await transaction.get(shiftRef);
+    if (!shift.exists || shift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
+    const now = FieldValue.serverTimestamp();
+    const incrementField = type === "CASH_IN" ? "cashIn" : "cashOut";
+    const next = { ...shift.data(), [incrementField]: Number(shift.data()[incrementField] || 0) + amount };
+    transaction.create(movementRef, { type, amount, reason, category: type === "CASH_OUT" ? category || "other" : null, note, branchId: branch.id, shiftId, businessDate: dateKey, actorUid: request.auth.uid, actorName: request.auth.token.name || request.auth.token.email || request.auth.uid, createdAt: now });
+    transaction.update(shiftRef, { [incrementField]: FieldValue.increment(amount), expectedCash: calculateExpectedCash(next), updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: type === "CASH_IN" ? "cash-in" : "cash-out", targetType: "cashMovement", targetId: movementRef.id, branchId: branch.id, amount, reason, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    return { ok: true, movementId: movementRef.id, expectedCash: calculateExpectedCash(next) };
+  });
+});
+
+export const closeCashShift = onCall(adminOptions, async request => {
+  requireCashPermission(request);
+  const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
+  const actualCash = cashAmount(request.data?.actualCash, "الرصيد الفعلي");
+  const reason = sanitizeText(request.data?.reason, 300);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين إغلاق الوردية");
+  const stateRef = db.doc(`cashShiftState/${branch.id}`);
+  return db.runTransaction(async transaction => {
+    const state = await transaction.get(stateRef);
+    const shiftId = sanitizeText(state.data()?.openShiftId, 100);
+    if (!shiftId) {
+      if (state.data()?.lastCloseRequestId === idempotencyKey) return { ok: true, idempotent: true, shiftId: state.data()?.lastClosedShiftId };
+      throw new HttpsError("failed-precondition", "لا توجد وردية مفتوحة");
+    }
+    const shiftRef = db.doc(`cashShifts/${shiftId}`);
+    const shift = await transaction.get(shiftRef);
+    if (!shift.exists || shift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "الوردية مغلقة بالفعل");
+    const expectedCash = calculateExpectedCash(shift.data());
+    const variance = Math.round((actualCash - expectedCash) * 100) / 100;
+    if (variance !== 0 && !reason) throw new HttpsError("invalid-argument", "سبب العجز أو الزيادة مطلوب");
+    const now = FieldValue.serverTimestamp();
+    transaction.update(shiftRef, { status: "CLOSED", expectedCash, actualCash, variance, closeReason: reason || null, closedAt: now, closedBy: request.auth.uid, updatedAt: now });
+    transaction.set(stateRef, { branchId: branch.id, openShiftId: null, status: "CLOSED", lastClosedShiftId: shiftId, lastCloseRequestId: idempotencyKey, updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "close-cash-shift", targetType: "cashShift", targetId: shiftId, branchId: branch.id, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    return { ok: true, shiftId, expectedCash, actualCash, variance };
+  });
+});
+
+export const getCashOperations = onCall(adminOptions, async request => {
+  requireCashPermission(request);
+  const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
+  const state = await db.doc(`cashShiftState/${branch.id}`).get();
+  const shiftId = sanitizeText(state.data()?.openShiftId || state.data()?.lastClosedShiftId, 100);
+  const [shift, movements] = await Promise.all([
+    shiftId ? db.doc(`cashShifts/${shiftId}`).get() : null,
+    db.collection("cashMovements").where("branchId", "==", branch.id).orderBy("createdAt", "desc").limit(50).get()
+  ]);
+  return { state: state.exists ? cleanDoc(state) : null, shift: shift?.exists ? cleanDoc(shift) : null, movements: movements.docs.map(cleanDoc) };
+});
+
+export const getBookingCalendar = onCall(adminOptions, async request => {
+  if (!hasPermission(request, "bookings") && !hasPermission(request, "schedule")) throw new HttpsError("permission-denied", "لا تملك صلاحية تقويم الحجوزات");
+  const from = sanitizeText(request.data?.from || businessDateParts().dateKey, 10);
+  const to = sanitizeText(request.data?.to || from, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new HttpsError("invalid-argument", "نطاق التقويم غير صحيح");
+  const span = (new Date(`${to}T12:00:00Z`) - new Date(`${from}T12:00:00Z`)) / 86400000;
+  if (span < 0 || span > 7) throw new HttpsError("invalid-argument", "حمّل يومًا أو أسبوعًا واحدًا فقط");
+  const allowedBranches = branchesFor(request);
+  const snapshots = await Promise.all(scopedQueries("bookings", allowedBranches, query => query.where("bookingDate", ">=", from).where("bookingDate", "<=", to).orderBy("bookingDate", "asc").orderBy("bookingTime", "asc").limit(500)).map(query => query.get()));
+  const unique = new Map();
+  snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
+  const bookings = [...unique.values()].filter(item => item.source !== "pos");
+  const staffIds = [...new Set(bookings.map(item => item.staffId).filter(id => id && id !== "none"))];
+  const staffSnapshots = staffIds.length ? await db.getAll(...staffIds.map(id => db.doc(`staff/${id}`))) : [];
+  return { from, to, bookings, staff: staffSnapshots.filter(item => item.exists).map(cleanDoc) };
+});
+
+export const getCustomer360 = onCall(adminOptions, async request => {
+  if (!hasPermission(request, "customers") && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية ملف العميل");
+  const customerId = sanitizeText(request.data?.customerId, 100);
+  const customerSnapshot = await db.doc(`customers/${customerId}`).get();
+  if (!customerSnapshot.exists) throw new HttpsError("not-found", "العميل غير موجود");
+  const customer = cleanDoc(customerSnapshot);
+  if (!itemInAllowedBranch(customer, branchesFor(request))) throw new HttpsError("permission-denied", "العميل تابع لفرع غير مسموح");
+  const [bookingsSnapshot, walletSnapshot] = await Promise.all([
+    db.collection("bookings").where("phoneHash", "==", customerId).orderBy("createdAt", "desc").limit(30).get(),
+    hasPermission(request, "rewards") ? db.collection("walletTransactions").where("customerId", "==", customerId).orderBy("createdAt", "desc").limit(12).get() : { docs: [] }
+  ]);
+  const bookings = bookingsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, branchesFor(request)));
+  const completed = bookings.filter(item => item.status === "completed");
+  return {
+    customer,
+    overview: {
+      totalVisits: Number(customer.bookingCount || bookings.length),
+      completedVisits: Number(customer.completedVisits || completed.length),
+      cancellations: Number(customer.cancellationCount || bookings.filter(item => item.status === "cancelled").length),
+      noShows: Number(customer.noShowCount || bookings.filter(item => item.status === "no_show").length),
+      totalSpent: Number(customer.totalSpent || 0),
+      averageTicket: Number(customer.completedVisits || completed.length) ? Number(customer.totalSpent || 0) / Number(customer.completedVisits || completed.length) : 0,
+      favoriteWorkerId: customer.favoriteStaffId || customer.favoriteWorkerId || null,
+      preferredBranch: customer.lastBranchId || null
+    },
+    upcoming: bookings.filter(item => ["pending", "confirmed", "arrived"].includes(item.status)).slice(0, 10),
+    bookingHistory: bookings.filter(item => item.source !== "pos").slice(0, 12),
+    orders: bookings.filter(item => item.source === "pos").slice(0, 12),
+    wallet: walletSnapshot.docs.map(cleanDoc)
+  };
+});
+
+export const closeBusinessDay = onCall(adminOptions, async request => {
+  const access = permissionsFor(request);
+  if (request.auth.token.role !== "admin" && !(access.has("revenue") && access.has("expenses"))) throw new HttpsError("permission-denied", "إغلاق اليوم يحتاج صلاحية الإيرادات والمصروفات");
+  const branch = await readBranch(request.data?.branchId);
+  requireBranchAccess(request, branch.id);
+  const businessDate = sanitizeText(request.data?.businessDate || businessDateParts().dateKey, 10);
+  const actualCash = cashAmount(request.data?.actualCash, "الرصيد الفعلي");
+  const reason = sanitizeText(request.data?.reason, 300);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate) || businessDate > businessDateParts().dateKey || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "بيانات إغلاق اليوم غير صحيحة");
+  const scoped = [branch.id];
+  const [gross, net, refunds, cashNet, expenses, shifts, orderCount, refundCount] = await Promise.all([
+    aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "payment"), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("expenses", scoped, query => query.where("dateKey", "==", businessDate), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("cashShifts", scoped, query => query.where("businessDate", "==", businessDate), { openingCash: AggregateField.sum("openingCash"), cashSales: AggregateField.sum("cashSales"), cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut"), cashRefunds: AggregateField.sum("cashRefunds") }),
+    aggregateScoped("bookings", scoped, query => query.where("bookingDate", "==", businessDate).where("source", "==", "pos")),
+    aggregateScoped("revenueLedger", scoped, query => query.where("dateKey", "==", businessDate).where("type", "==", "refund"))
+  ]);
+  const expectedCash = calculateExpectedCash(shifts);
+  const variance = Math.round((actualCash - expectedCash) * 100) / 100;
+  if (variance !== 0 && !reason) throw new HttpsError("invalid-argument", "سبب فرق الدرج مطلوب");
+  const closingRef = db.doc(`dailyClosings/${branch.id}_${businessDate}`);
+  const stateRef = db.doc(`cashShiftState/${branch.id}`);
+  return db.runTransaction(async transaction => {
+    const [existing, state] = await transaction.getAll(closingRef, stateRef);
+    if (existing.exists) return { ok: true, idempotent: true, closing: cleanDoc(existing) };
+    if (state.data()?.openShiftId) throw new HttpsError("failed-precondition", "أغلق وردية الكاش أولًا");
+    const now = FieldValue.serverTimestamp();
+    const record = { branchId: branch.id, businessDate, grossSales: gross.amount, netSales: net.amount, cashSales: cashNet.amount, otherPayments: net.amount - cashNet.amount, expenses: expenses.amount, refunds: Math.abs(refunds.amount), cashIn: shifts.cashIn || 0, cashOut: shifts.cashOut || 0, expectedCash, actualCash, variance, ordersCount: orderCount.count, refundCount: refundCount.count, reason: reason || null, status: "CLOSED", closedBy: request.auth.uid, closedByName: request.auth.token.name || request.auth.token.email || request.auth.uid, closedAt: now, createdAt: now };
+    transaction.create(closingRef, record);
+    transaction.set(db.collection("activityLogs").doc(), { action: "close-business-day", targetType: "dailyClosing", targetId: closingRef.id, branchId: branch.id, businessDate, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    return { ok: true, closingId: closingRef.id, closing: { id: closingRef.id, ...record, closedAt: new Date().toISOString() } };
+  });
+});
+
 export const recordExpense = onCall(adminOptions, async request => {
   requirePermission(request, "expenses");
   let input;
@@ -773,6 +1216,7 @@ export const recordExpense = onCall(adminOptions, async request => {
   const expenseRef = input.idempotencyKey ? db.doc(`expenses/expense_${hash(`${request.auth.uid}|${input.idempotencyKey}`)}`) : db.collection("expenses").doc();
   const inventoryRef = input.inventoryItemId ? db.doc(`inventoryItems/${input.inventoryItemId}`) : null;
   const activityRef = db.collection("activityLogs").doc();
+  const settings = await readSettings();
   return db.runTransaction(async transaction => {
     const existingExpense = await transaction.get(expenseRef);
     if (existingExpense.exists) {
@@ -782,14 +1226,31 @@ export const recordExpense = onCall(adminOptions, async request => {
     const inventorySnapshot = inventoryRef ? await transaction.get(inventoryRef) : null;
     if (inventoryRef && !inventorySnapshot.exists) throw new HttpsError("not-found", "صنف المخزون غير موجود");
     if (inventorySnapshot?.exists && inventorySnapshot.data().branchId !== input.branchId) throw new HttpsError("failed-precondition", "صنف المخزون تابع لفرع آخر");
+    const closing = await transaction.get(db.doc(`dailyClosings/${input.branchId}_${input.dateKey}`));
+    if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن تسجيل مصروف عليه");
+    let cashShiftRef = null;
+    let cashShift = null;
+    if (input.paymentMethod === "cash" && settings.cashDrawerEnabled === true) {
+      const cashState = await transaction.get(db.doc(`cashShiftState/${input.branchId}`));
+      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
+      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تسجيل مصروف نقدي");
+      cashShiftRef = db.doc(`cashShifts/${shiftId}`);
+      cashShift = await transaction.get(cashShiftRef);
+      if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
+    }
     const now = FieldValue.serverTimestamp();
-    transaction.create(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: inventoryRef ? input.inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? input.stockQuantity : 0, createdAt: now, createdBy: request.auth.uid, createdByEmail: request.auth.token.email || "", createdByName: request.auth.token.name || request.auth.token.email || request.auth.uid });
+    transaction.create(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: inventoryRef ? input.inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? input.stockQuantity : 0, cashMovementId: cashShiftRef ? `expense_${expenseRef.id}` : null, createdAt: now, createdBy: request.auth.uid, createdByEmail: request.auth.token.email || "", createdByName: request.auth.token.name || request.auth.token.email || request.auth.uid });
     if (inventorySnapshot?.exists && input.stockQuantity > 0) {
       const oldQuantity = Math.max(0, Number(inventorySnapshot.data().stockQty || 0));
       const oldCost = Math.max(0, Number(inventorySnapshot.data().costPrice || 0));
       const weightedCost = (oldQuantity * oldCost + input.amount) / (oldQuantity + input.stockQuantity);
       transaction.update(inventoryRef, { stockQty: FieldValue.increment(input.stockQuantity), costPrice: Math.round(weightedCost * 100) / 100, updatedAt: now });
       transaction.create(db.doc(`stockMovements/purchase_${expenseRef.id}`), { inventoryItemId: input.inventoryItemId, branchId: input.branchId, expenseId: expenseRef.id, quantity: input.stockQuantity, amount: input.amount, type: "purchase", dateKey: input.dateKey, createdAt: now, createdBy: request.auth.uid });
+    }
+    if (cashShiftRef && cashShift) {
+      const nextShift = { ...cashShift.data(), cashOut: Number(cashShift.data().cashOut || 0) + input.amount };
+      transaction.update(cashShiftRef, { cashOut: FieldValue.increment(input.amount), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
+      transaction.create(db.doc(`cashMovements/expense_${expenseRef.id}`), { type: "CASH_OUT", amount: input.amount, reason: input.description, category: input.category, expenseId: expenseRef.id, branchId: input.branchId, shiftId: cashShiftRef.id, businessDate: input.dateKey, actorUid: request.auth.uid, createdAt: now });
     }
     transaction.set(activityRef, { action: input.kind === "purchase" ? "record-purchase" : "record-expense", collection: "expenses", entityId: expenseRef.id, branchId: input.branchId, amount: input.amount, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     return { ok: true, id: expenseRef.id };
@@ -813,6 +1274,10 @@ export const updateExpense = onCall(adminOptions, async request => {
     const before = snapshot.data();
     requireBranchAccess(request, before.branchId);
     if (before.payrollPaymentId) throw new HttpsError("failed-precondition", "مصروف الراتب يُعدّل من عملية صرف الراتب المرتبطة به");
+    if (before.cashMovementId) throw new HttpsError("failed-precondition", "المصروف مرتبط بدرج الكاش؛ سجّل حركة عكسية ثم مصروفًا جديدًا بدل التعديل");
+    const closingRefs = [...new Set([`${before.branchId}_${before.dateKey}`, `${input.branchId}_${input.dateKey}`])].map(key => db.doc(`dailyClosings/${key}`));
+    const closingSnapshots = await transaction.getAll(...closingRefs);
+    if (closingSnapshots.some(item => item.exists)) throw new HttpsError("failed-precondition", "لا يمكن تعديل مصروف في يوم مالي مغلق");
     const oldRef = before.inventoryItemId ? db.doc(`inventoryItems/${before.inventoryItemId}`) : null;
     const newRef = input.inventoryItemId ? db.doc(`inventoryItems/${input.inventoryItemId}`) : null;
     const refs = [...new Map([oldRef, newRef].filter(Boolean).map(ref => [ref.path, ref])).values()];
@@ -843,6 +1308,8 @@ export const updateExpense = onCall(adminOptions, async request => {
 
 export const createPosOrder = onCall(adminOptions, async request => {
   requirePermission(request, "pos");
+  const operationStarted = Date.now();
+  await enforceRateLimit(request, "pos_finalize", 120, 15 * 60 * 1000, request.auth.uid);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين الطلب؛ حدّث الصفحة وحاول مرة أخرى");
   const branch = await readBranch(request.data?.branchId);
@@ -887,9 +1354,14 @@ export const createPosOrder = onCall(adminOptions, async request => {
   const activityRef = db.collection("activityLogs").doc();
   const idempotencyRef = db.doc(`posOrderGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
   const { dateKey, time } = businessDateParts();
+  const settings = await readSettings();
   return db.runTransaction(async transaction => {
     const existingGuard = await transaction.get(idempotencyRef);
-    if (existingGuard.exists) return { ok: true, bookingCode: existingGuard.data().bookingCode, total: existingGuard.data().total, paymentStatus: existingGuard.data().paymentStatus, idempotent: true };
+    if (existingGuard.exists) {
+      const existingCode = sanitizeText(existingGuard.data().bookingCode, 100);
+      const existingReceipt = existingCode ? await transaction.get(db.doc(`bookings/${existingCode}`)) : null;
+      return { ok: true, bookingCode: existingCode, total: existingGuard.data().total, paymentStatus: existingGuard.data().paymentStatus, idempotent: true, receipt: existingReceipt?.exists ? cleanDoc(existingReceipt) : null };
+    }
     const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
     const inventoryItems = inventorySnapshots.map((snapshot, index) => {
       if (!snapshot.exists || snapshot.data().active === false || snapshot.data().category === "supply") throw new HttpsError("failed-precondition", "أحد أصناف البضاعة غير متاح للبيع");
@@ -921,27 +1393,51 @@ export const createPosOrder = onCall(adminOptions, async request => {
     const primaryWorkerId = publicItems.find(item => item.workerId && item.workerId !== "none")?.workerId || "none";
     const primaryWorker = workers.get(primaryWorkerId);
     const customerSnapshot = await transaction.get(customerRef);
-    const settings = await readSettings();
+    const closingSnapshot = await transaction.get(db.doc(`dailyClosings/${branch.id}_${dateKey}`));
+    if (closingSnapshot.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن إضافة شيك مالي لهذا التاريخ");
+    let cashShiftRef = null;
+    let cashShift = null;
+    if (paid && method === "cash" && settings.cashDrawerEnabled === true) {
+      const cashState = await transaction.get(db.doc(`cashShiftState/${branch.id}`));
+      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
+      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تحصيل شيك نقدي");
+      cashShiftRef = db.doc(`cashShifts/${shiftId}`);
+      cashShift = await transaction.get(cashShiftRef);
+      if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
+    }
     const requestedPoints=Math.max(0,Math.floor(Number(request.data?.redeemPoints||0)));const requestedCashback=Math.max(0,Math.round(Number(request.data?.redeemCashback||0)*100)/100);const pointValue=Math.max(0,Number(settings.pointValue||0.1));const redemptionValue=requestedPoints*pointValue+requestedCashback;const maxRedemption=beforeWalletTotal*Math.max(0,Math.min(100,Number(settings.maximumRedemptionPercent||0)))/100;
     if((requestedPoints||requestedCashback)&&(!paid||settings.walletRedemptionEnabled!==true))throw new HttpsError("failed-precondition","استبدال المحفظة يحتاج شيكًا مدفوعًا وتفعيل الميزة");
     if(requestedPoints>Number(customerSnapshot.data()?.pointsBalance||0)||requestedCashback>Number(customerSnapshot.data()?.cashbackBalance||0)||redemptionValue>maxRedemption||redemptionValue<Math.max(0,Number(settings.minimumRedemption||0)))throw new HttpsError("failed-precondition","قيمة استبدال المحفظة غير مسموحة");
     const total=Math.max(0,beforeWalletTotal-redemptionValue);const revenueBreakdown=calculateRevenueBreakdown(publicItems,total);
     const redemption=(requestedPoints||requestedCashback)?{points:requestedPoints,cashback:requestedCashback,value:redemptionValue}:null;
-    const bookingRecord = { code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, status: "completed", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", createdAt: now, updatedAt: now, paidAt: paid ? now : null };
+    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), finalizedAt: now, finalizedBy: request.auth.uid, createdAt: now, updatedAt: now, paidAt: paid ? now : null };
     if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
     transaction.create(bookingRef, bookingRecord);
-    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
+    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
     const workerRevenue = new Map();
     const workerItems=publicItems.filter(item=>item.workerId&&item.workerId!=="none");const workerSubtotal=workerItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);workerItems.forEach(item=>workerRevenue.set(item.workerId,(workerRevenue.get(item.workerId)||0)+(paid&&workerSubtotal?Number(item.lineTotal||0)/workerSubtotal*Number(revenueBreakdown.services||0):0)));
     workerRevenue.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(amount) } : {}), updatedAt: now }));
+    if (paid) workerRevenue.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: branch.id, dateKey, amount, now }));
     if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, workerBreakdown: Object.fromEntries(workerRevenue), type: "payment", paymentMethod: method, staffId: primaryWorkerId, itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
+    if (cashShiftRef && cashShift) {
+      const nextShift = { ...cashShift.data(), cashSales: Number(cashShift.data().cashSales || 0) + total };
+      transaction.update(cashShiftRef, { cashSales: FieldValue.increment(total), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
+      transaction.create(db.doc(`cashMovements/sale_${code}`), { type: "CASH_SALE", amount: total, bookingId: code, receiptNumber: code, branchId: branch.id, shiftId: cashShiftRef.id, businessDate: dateKey, actorUid: request.auth.uid, createdAt: now });
+    }
     inventoryItems.forEach(item => {
       transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
     });
     transaction.create(idempotencyRef, { bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", branchId: branch.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
     transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
-    return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid" };
+    const clientTimestamp = new Date().toISOString();
+    return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", receipt: { id: code, ...bookingRecord, createdAt: clientTimestamp, updatedAt: clientTimestamp, paidAt: paid ? clientTimestamp : null } };
+  }).then(result => {
+    structuredLog("pos_finalize", { ok: true, durationMs: Date.now() - operationStarted, branchId: branch.id, idempotent: Boolean(result.idempotent) });
+    return result;
+  }).catch(error => {
+    console.error(JSON.stringify({ severity: "ERROR", event: "pos_finalize", ok: false, durationMs: Date.now() - operationStarted, branchId: branch.id, code: error.code || "internal" }));
+    throw error;
   });
 });
 
@@ -952,11 +1448,11 @@ export const recordPayrollPayment = onCall(adminOptions, async request => {
   const adjustment = Number(request.data?.adjustment || 0);
   if (!/^\d{4}-\d{2}$/.test(month) || !staffId || !Number.isFinite(adjustment) || Math.abs(adjustment) > 1000000) throw new HttpsError("invalid-argument", "بيانات صرف الراتب غير صحيحة");
   const nextMonth = nextMonthKey(month);
-  const [staffSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("revenueLedger").where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get()]);
+  const [staffSnapshot, monthlyTotalSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.doc(`workerMonthlyTotals/${month}_${staffId}`).get(), db.collection("revenueLedger").where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get()]);
   if (!staffSnapshot.exists) throw new HttpsError("not-found", "العامل غير موجود");
   const staff = staffSnapshot.data();
   if (!itemInAllowedBranch(staff, branchesFor(request))) throw new HttpsError("permission-denied", "العامل تابع لفرع آخر");
-  const revenue = ledgerSnapshot.docs.reduce((sum, snapshot) => sum + Number(snapshot.data().workerBreakdown?.[staffId] ?? snapshot.data().amount ?? 0), 0);
+  const revenue = monthlyTotalSnapshot.exists ? Number(monthlyTotalSnapshot.data()?.revenue || 0) : ledgerSnapshot.docs.reduce((sum, snapshot) => sum + Number(snapshot.data().workerBreakdown?.[staffId] ?? snapshot.data().amount ?? 0), 0);
   const calculated = calculatePayroll({ ...staff, revenue, adjustment });
   if (calculated.netSalary <= 0) throw new HttpsError("failed-precondition", "حدد الراتب الأساسي للعامل من قسم فريق العمل أولًا");
   const payrollRef = db.doc(`payrollPayments/${month}_${staffId}`);
@@ -973,7 +1469,7 @@ export const recordPayrollPayment = onCall(adminOptions, async request => {
   return { ok: true, payroll: calculated };
 });
 
-async function deleteBookingPermanently(id, request) {
+async function deleteBookingPermanently(id, request, reason) {
   const bookingRef = db.doc(`bookings/${id}`);
   const paymentRef = db.doc(`revenueLedger/payment_${id}`);
   const refundRef = db.doc(`revenueLedger/refund_${id}`);
@@ -1046,7 +1542,7 @@ async function deleteBookingPermanently(id, request) {
         updatedAt: FieldValue.serverTimestamp()
       });
     }
-    transaction.set(activityRef, { action: "secure-delete-booking", collection: "bookings", entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { action: "secure-delete-booking", collection: "bookings", entityId: id, reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
@@ -1091,18 +1587,21 @@ async function deleteRevenuePermanently(id, request) {
   });
 }
 
-async function deleteExpensePermanently(id, request) {
+async function deleteExpensePermanently(id, request, reason) {
   const expenseRef = db.doc(`expenses/${id}`);
   const activityRef = db.collection("activityLogs").doc();
   return db.runTransaction(async transaction => {
     const expenseSnapshot = await transaction.get(expenseRef);
     if (!expenseSnapshot.exists) throw new HttpsError("not-found", "المصروف غير موجود");
     const expense = expenseSnapshot.data();
+    if (expense.cashMovementId) throw new HttpsError("failed-precondition", "المصروف مرتبط بدرج الكاش؛ استخدم حركة تصحيح موثقة بدل الحذف");
     const inventoryRef = expense.inventoryItemId ? db.doc(`inventoryItems/${expense.inventoryItemId}`) : null;
     const payrollRef = expense.payrollPaymentId ? db.doc(`payrollPayments/${expense.payrollPaymentId}`) : null;
-    const relatedRefs = [inventoryRef, payrollRef].filter(Boolean);
+    const closingRef = expense.branchId && expense.dateKey ? db.doc(`dailyClosings/${expense.branchId}_${expense.dateKey}`) : null;
+    const relatedRefs = [inventoryRef, payrollRef, closingRef].filter(Boolean);
     const relatedSnapshots = relatedRefs.length ? await transaction.getAll(...relatedRefs) : [];
     const related = new Map(relatedSnapshots.map(snapshot => [snapshot.ref.path, snapshot]));
+    if (closingRef && related.get(closingRef.path)?.exists) throw new HttpsError("failed-precondition", "تم إغلاق هذا اليوم؛ استخدم تسوية أو حركة عكسية موثقة");
     if (inventoryRef && related.get(inventoryRef.path)?.exists && Number(expense.stockQuantity || 0) > 0) {
       const item = related.get(inventoryRef.path).data();
       const currentQty = Math.max(0, Number(item.stockQty || 0));
@@ -1115,7 +1614,7 @@ async function deleteExpensePermanently(id, request) {
     }
     if (payrollRef && related.get(payrollRef.path)?.exists) transaction.delete(payrollRef);
     transaction.delete(expenseRef);
-    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, branchId: expense.branchId || "", amount: expense.amount || 0, category: expense.category || "other", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, branchId: expense.branchId || "", amount: expense.amount || 0, category: expense.category || "other", reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
@@ -1143,42 +1642,137 @@ export const adminSecureDelete = onCall(adminOptions, async request => {
   requireRecentAdmin(request);
   const kind = sanitizeText(request.data?.kind, 30);
   const id = sanitizeText(request.data?.id, 100);
+  const reason = sanitizeText(request.data?.reason, 300);
   if (!id || !["booking", "revenue", "expense", "user"].includes(kind)) throw new HttpsError("invalid-argument", "طلب الحذف غير صالح");
-  if (kind === "booking") return deleteBookingPermanently(id, request);
-  if (kind === "revenue") return deleteRevenuePermanently(id, request);
+  if (["booking", "expense"].includes(kind) && !reason) throw new HttpsError("invalid-argument", "سبب الحذف مطلوب لتسجيل العملية");
+  if (kind === "booking") {
+    const booking = await db.doc(`bookings/${id}`).get();
+    if (booking.exists && (booking.data().source === "pos" || booking.data().paymentStatus === "paid" || booking.data().status === "completed")) throw new HttpsError("failed-precondition", "الشيك المالي لا يُحذف؛ استخدم الاسترداد أو الإلغاء مع سبب مسجل");
+    return deleteBookingPermanently(id, request, reason);
+  }
+  if (kind === "revenue") throw new HttpsError("failed-precondition", "لا يمكن حذف حركة مالية؛ استخدم استردادًا أو حركة عكسية");
   if (kind === "user") return deleteUserAccountPermanently(id, request);
-  return deleteExpensePermanently(id, request);
+  return deleteExpensePermanently(id, request, reason);
 });
 
 export const updateBooking = onCall(adminOptions, async request => {
-  const role = requireRole(request);
+  requireRole(request);
   const id = sanitizeText(request.data?.id, 100);
   const action = sanitizeText(request.data?.action, 30);
+  await enforceRateLimit(request, `booking_mutation_${action || "unknown"}`, 120, 15 * 60 * 1000, request.auth.uid);
+  const reason = sanitizeText(request.data?.reason, 300);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (["refund", "void"].includes(action) && (!reason || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey))) throw new HttpsError("invalid-argument", "اكتب سبب العملية ثم أعد المحاولة");
   const ref = db.doc(`bookings/${id}`);
+  const settings = await readSettings();
   return db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
     const booking = snapshot.data();
     requireBranchAccess(request, booking.branchId);
     const now = FieldValue.serverTimestamp();
-    if (["pending", "confirmed", "rejected", "cancelled", "completed"].includes(action)) {
+    if (action === "checkout") {
       requirePermission(request, "bookings");
+      if (!hasPermission(request, "pos") && !hasPermission(request, "revenue")) throw new HttpsError("permission-denied", "لا تملك صلاحية تحصيل الحجز");
+      if (["rejected", "cancelled"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن تحصيل حجز ملغي أو مرفوض");
+      const alreadyPaid = booking.paymentStatus === "paid";
+      let transition = null;
+      if (!alreadyPaid) {
+        try { transition = paymentTransition(booking, "markPaid", request.data?.paymentMethod || "cash"); }
+        catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      }
+      const ledgerRef = transition ? db.doc(`revenueLedger/payment_${id}`) : null;
+      const ledgerSnapshot = ledgerRef ? await transaction.get(ledgerRef) : null;
+      const createsPayment = Boolean(transition?.changed && !ledgerSnapshot?.exists);
+      const revenueBreakdown = createsPayment ? calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount) : null;
+      const dateKey = businessDateParts().dateKey;
+      let cashShiftRef = null;
+      let cashShift = null;
+      if (createsPayment) {
+        const closing = await transaction.get(db.doc(`dailyClosings/${booking.branchId || "talkha"}_${dateKey}`));
+        if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن تحصيل شيك جديد");
+        if (transition.method === "cash" && settings.cashDrawerEnabled === true) {
+          const cashState = await transaction.get(db.doc(`cashShiftState/${booking.branchId || "talkha"}`));
+          const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
+          if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل التحصيل النقدي");
+          cashShiftRef = db.doc(`cashShifts/${shiftId}`);
+          cashShift = await transaction.get(cashShiftRef);
+          if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
+        }
+      }
+      if (booking.phoneHash) await applyRewards(transaction, { booking: { ...booking, status: "completed", paymentStatus: "paid", code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now });
+      if (createsPayment) {
+        const workerBreakdown = new Map();
+        const attributedItems = normalizeLineWorkers(booking.items || [], booking.staffId).filter(item => item.workerId && item.workerId !== "none");
+        const attributedSubtotal = attributedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+        attributedItems.forEach(item => workerBreakdown.set(item.workerId, (workerBreakdown.get(item.workerId) || 0) + (attributedSubtotal ? Number(item.lineTotal || 0) / attributedSubtotal * Number(revenueBreakdown.services || 0) : 0)));
+        transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: "payment", paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
+        workerBreakdown.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { revenueTotal: FieldValue.increment(amount), updatedAt: now }));
+        workerBreakdown.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: booking.branchId || "talkha", dateKey, amount, now }));
+        if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
+        if (cashShiftRef && cashShift) {
+          const nextShift = { ...cashShift.data(), cashSales: Number(cashShift.data().cashSales || 0) + transition.ledgerAmount };
+          transaction.update(cashShiftRef, { cashSales: FieldValue.increment(transition.ledgerAmount), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
+          transaction.create(db.doc(`cashMovements/sale_${id}`), { type: "CASH_SALE", amount: transition.ledgerAmount, bookingId: id, receiptNumber: booking.receiptNumber || booking.code || id, branchId: booking.branchId || "talkha", shiftId: cashShiftRef.id, businessDate: dateKey, actorUid: request.auth.uid, createdAt: now });
+        }
+      }
+      (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
+      if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
+      transaction.update(ref, { status: "completed", orderState: "PAID", paymentStatus: "paid", paymentMethod: transition?.method || booking.paymentMethod || "cash", financialPosted: true, rewardPosted: true, cashPosted: Boolean(cashShiftRef) || Boolean(booking.cashPosted), finalizedAt: booking.finalizedAt || now, finalizedBy: booking.finalizedBy || request.auth.uid, paidAt: booking.paidAt || now, updatedAt: now });
+      if (booking.phoneHash && booking.status !== "completed") transaction.update(db.doc(`customers/${booking.phoneHash}`), { completedVisits: FieldValue.increment(1), lastVisitAt: now, updatedAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { action: "checkout-booking", collection: "bookings", entityId: id, branchId: booking.branchId || "talkha", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+      return { ok: true, status: "completed", paymentStatus: "paid", idempotent: alreadyPaid || ledgerSnapshot?.exists || false };
+    }
+    if (action === "void") {
+      requirePermission(request, "revenue");
+      if (booking.paymentStatus === "paid" || booking.paymentStatus === "refunded") throw new HttpsError("failed-precondition", "الشيك المدفوع يُسترد ولا يُلغى");
+      if (booking.orderState === "VOIDED") return { ok: true, idempotent: true, status: "cancelled", orderState: "VOIDED" };
+      const guardRef = db.doc(`voidGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
+      const guard = await transaction.get(guardRef);
+      if (guard.exists) return { ok: true, idempotent: true, status: "cancelled", orderState: "VOIDED" };
+      const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
+      const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
+      const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
+      inventorySnapshots.forEach((inventory, index) => {
+        if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: now });
+        transaction.create(db.doc(`stockMovements/${id}_${soldInventory[index].id}_void`), { inventoryItemId: soldInventory[index].id, branchId: booking.branchId, bookingId: id, quantity: Math.max(1, Number(soldInventory[index].qty || 1)), type: "void-reversal", dateKey: businessDateParts().dateKey, reason, createdAt: now, createdBy: request.auth.uid });
+      });
+      (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
+      if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
+      transaction.update(ref, { status: "cancelled", orderState: "VOIDED", voidReason: reason, voidedAt: now, voidedBy: request.auth.uid, inventoryReleased: soldInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
+      transaction.create(guardRef, { bookingId: id, reason, actorUid: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+      transaction.set(db.collection("activityLogs").doc(), { action: "void-order", collection: "bookings", entityId: id, branchId: booking.branchId, reason, userId: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+      return { ok: true, status: "cancelled", orderState: "VOIDED" };
+    }
+    if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed"].includes(action)) {
+      requirePermission(request, "bookings");
+      if (booking.status === action) return { ok: true, idempotent: true, status: action };
+      if (["rejected", "cancelled", "completed", "no_show"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إعادة فتح حجز منتهٍ؛ أنشئ حجزًا جديدًا أو استخدم إجراء التصحيح المالي المناسب");
       const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
       if (!["rejected", "cancelled"].includes(action) && booking.inventoryReleased && (booking.items || []).some(item => item.kind === "inventory")) throw new HttpsError("failed-precondition", "لا يمكن إعادة فتح الحجز بعد رجوع المشروبات للمخزون؛ أنشئ طلبًا جديدًا");
-      if (["rejected", "cancelled"].includes(action)) {
+      if (["rejected", "cancelled", "no_show"].includes(action)) {
         const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
         const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
         inventorySnapshots.forEach((inventory, index) => {
           if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: now });
           transaction.delete(db.doc(`stockMovements/${id}_${soldInventory[index].id}`));
         });
+      }
+      if (["rejected", "cancelled", "completed", "no_show"].includes(action)) {
         (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
         if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
       }
       if (action === "completed" && booking.paymentStatus === "paid" && booking.phoneHash) {
-        await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings: await readSettings(), now });
+        await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now });
       }
-      transaction.update(ref, { status: action, ...(["rejected", "cancelled"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), updatedAt: now });
+      transaction.update(ref, { status: action, ...(["rejected", "cancelled", "no_show"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), updatedAt: now });
+      if (booking.phoneHash) transaction.set(db.doc(`customers/${booking.phoneHash}`), {
+        ...(action === "completed" ? { completedVisits: FieldValue.increment(1), lastVisitAt: now } : {}),
+        ...(action === "cancelled" ? { cancellationCount: FieldValue.increment(1) } : {}),
+        ...(action === "no_show" ? { noShowCount: FieldValue.increment(1) } : {}),
+        updatedAt: now
+      }, { merge: true });
+      transaction.set(db.collection("activityLogs").doc(), { action: `booking-${action}`, collection: "bookings", entityId: id, branchId: booking.branchId, userId: request.auth.uid, createdAt: now });
       return { ok: true, status: action };
     }
     let transition;
@@ -1190,17 +1784,47 @@ export const updateBooking = onCall(adminOptions, async request => {
     const ledgerRef = db.doc(`revenueLedger/${ledgerId}`);
     const ledger = await transaction.get(ledgerRef);
     if (ledger.exists) return { ok: true, idempotent: true, paymentStatus: transition.status };
-    const dateKey = new Date().toISOString().slice(0, 10);
-    const revenueBreakdown = calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount);
-    if (booking.phoneHash && ((action === "markPaid" && booking.status === "completed") || action === "refund")) {
-      await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings: await readSettings(), now, reverse: action === "refund" });
+    const dateKey = businessDateParts().dateKey;
+    const operationGuardRef = action === "refund" ? db.doc(`refundGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`) : null;
+    const operationGuard = operationGuardRef ? await transaction.get(operationGuardRef) : null;
+    if (operationGuard?.exists) return { ok: true, idempotent: true, paymentStatus: "refunded" };
+    const closing = await transaction.get(db.doc(`dailyClosings/${booking.branchId || "talkha"}_${dateKey}`));
+    if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ يلزم إجراء تسوية بصلاحية مدير");
+    let refundShiftRef = null;
+    let refundShift = null;
+    if (action === "refund" && transition.method === "cash" && settings.cashDrawerEnabled === true) {
+      const cashState = await transaction.get(db.doc(`cashShiftState/${booking.branchId || "talkha"}`));
+      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
+      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تنفيذ استرداد نقدي");
+      refundShiftRef = db.doc(`cashShifts/${shiftId}`);
+      refundShift = await transaction.get(refundShiftRef);
+      if (!refundShift.exists || refundShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
     }
-    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
-    transaction.update(ref, { paymentStatus: transition.status, paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, updatedAt: now });
+    const refundableInventory = action === "refund" && !booking.inventoryReleased ? (booking.items || []).filter(item => item.kind === "inventory" && item.id) : [];
+    const refundableSnapshots = refundableInventory.length ? await transaction.getAll(...refundableInventory.map(item => db.doc(`inventoryItems/${item.id}`))) : [];
+    const revenueBreakdown = calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount);
     const workerBreakdown = new Map();
     const attributedItems=normalizeLineWorkers(booking.items||[],booking.staffId).filter(item=>item.workerId&&item.workerId!=="none");const attributedSubtotal=attributedItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);attributedItems.forEach(item=>workerBreakdown.set(item.workerId,(workerBreakdown.get(item.workerId)||0)+(attributedSubtotal?Number(item.lineTotal||0)/attributedSubtotal*Number(revenueBreakdown.services||0):0)));
+    if (booking.phoneHash && ((action === "markPaid" && booking.status === "completed") || action === "refund")) {
+      await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now, reverse: action === "refund" });
+    }
+    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, reason: action === "refund" ? reason : null, requestId: action === "refund" ? idempotencyKey : null, createdAt: now, createdBy: request.auth.uid });
+    transaction.update(ref, { paymentStatus: transition.status, orderState: action === "refund" ? "REFUNDED" : "PAID", financialPosted: action !== "refund", paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, refundReason: action === "refund" ? reason : null, refundedBy: action === "refund" ? request.auth.uid : null, inventoryReleased: refundableInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
+    refundableSnapshots.forEach((inventory, index) => {
+      if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(refundableInventory[index].qty || 1))), updatedAt: now });
+      transaction.create(db.doc(`stockMovements/${id}_${refundableInventory[index].id}_refund`), { inventoryItemId: refundableInventory[index].id, branchId: booking.branchId, bookingId: id, quantity: Math.max(1, Number(refundableInventory[index].qty || 1)), type: "refund-reversal", dateKey, reason, createdAt: now, createdBy: request.auth.uid });
+    });
+    if (operationGuardRef) transaction.create(operationGuardRef, { bookingId: id, reason, actorUid: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+    if (refundShiftRef && refundShift) {
+      const refundAmount = Math.abs(transition.ledgerAmount);
+      const nextShift = { ...refundShift.data(), cashRefunds: Number(refundShift.data().cashRefunds || 0) + refundAmount };
+      transaction.update(refundShiftRef, { cashRefunds: FieldValue.increment(refundAmount), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
+      transaction.create(db.doc(`cashMovements/refund_${id}`), { type: "CASH_REFUND", amount: refundAmount, bookingId: id, receiptNumber: booking.receiptNumber || booking.code || id, branchId: booking.branchId || "talkha", shiftId: refundShiftRef.id, businessDate: dateKey, reason, actorUid: request.auth.uid, createdAt: now });
+    }
     workerBreakdown.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { revenueTotal: FieldValue.increment(amount), updatedAt: now }));
+    workerBreakdown.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: booking.branchId || "talkha", dateKey, amount, now }));
     if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: action === "refund" ? "refund-order" : "mark-paid", collection: "bookings", entityId: id, branchId: booking.branchId, amount: transition.ledgerAmount, reason: action === "refund" ? reason : null, userId: request.auth.uid, requestId: action === "refund" ? idempotencyKey : null, createdAt: now });
     return { ok: true, paymentStatus: transition.status };
   });
 });
@@ -1230,8 +1854,8 @@ export const getCustomerPortal = onCall(publicOptions, async request => {
   else if (customer.authUid !== identity.uid) await customerRef.set({ authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   const bookings = bookingsSnapshot.docs.map(cleanDoc);
   return {
-    customer: { firstName: customer.firstName || "", lastName: customer.lastName || "", qrToken, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
-    upcomingBookings: bookings.filter(item => ["pending", "confirmed"].includes(item.status)).slice(0, 10),
+    customer: { firstName: customer.firstName || "", lastName: customer.lastName || "", qrToken, bookingCount: Number(customer.bookingCount || 0), completedVisits: Number(customer.completedVisits || 0), noShowCount: Number(customer.noShowCount || 0), lastBranchId: customer.lastBranchId || null, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
+    upcomingBookings: bookings.filter(item => ["pending", "confirmed", "arrived"].includes(item.status)).slice(0, 10),
     bookingHistory: bookings.slice(0, 20),
     lastBooking: bookings.find(item => !["cancelled", "rejected"].includes(item.status)) || null,
     walletActivity: walletSnapshot.docs.map(cleanDoc),
@@ -1251,11 +1875,36 @@ export const saveFavoriteBarber = onCall(publicOptions, async request => {
   return { ok: true, staffId };
 });
 
+export const rotateCustomerQr = onCall(adminOptions, async request => {
+  requirePermission(request, "customers");
+  const customerId = sanitizeText(request.data?.customerId, 100);
+  const reason = sanitizeText(request.data?.reason, 300);
+  const requestId = sanitizeText(request.data?.requestId, 100);
+  if (!customerId || !reason || !/^[A-Za-z0-9_-]{16,100}$/.test(requestId)) throw new HttpsError("invalid-argument", "بيانات تجديد QR غير صحيحة");
+  const customerRef = db.doc(`customers/${customerId}`);
+  const guardRef = db.doc(`qrRotationGuards/${hash(`${request.auth.uid}|${requestId}`)}`);
+  return db.runTransaction(async transaction => {
+    const [customer, guard] = await transaction.getAll(customerRef, guardRef);
+    if (!customer.exists) throw new HttpsError("not-found", "العميل غير موجود");
+    if (!itemInAllowedBranch(customer.data(), branchesFor(request))) throw new HttpsError("permission-denied", "العميل تابع لفرع غير مسموح");
+    if (guard.exists) return { ok: true, idempotent: true };
+    const previousToken = sanitizeText(customer.data()?.qrToken, 200);
+    const qrToken = customerQrToken();
+    const now = FieldValue.serverTimestamp();
+    if (previousToken) transaction.create(db.doc(`revokedQrTokens/${hash(previousToken)}`), { customerId, reason, revokedBy: request.auth.uid, revokedAt: now });
+    transaction.update(customerRef, { qrToken, qrRotatedAt: now, updatedAt: now });
+    transaction.create(guardRef, { customerId, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+    transaction.set(db.collection("activityLogs").doc(), { action: "rotate-customer-qr", targetType: "customer", targetId: customerId, branchId: customer.data()?.lastBranchId || null, reason, actorUid: request.auth.uid, requestId, createdAt: now });
+    return { ok: true, qrToken };
+  });
+});
+
 export const scanCustomerCode = onCall(adminOptions, async request => {
   requirePermission(request, hasPermission(request, "customers") ? "customers" : "pos");
   const code = sanitizeText(request.data?.code, 200);
   await enforceRateLimit(request, "customer_scan", 120, 15 * 60 * 1000, request.auth.uid);
   if (!/^mzc_[A-Za-z0-9_-]{20,100}$/.test(code)) throw new HttpsError("invalid-argument", "كود العميل غير صحيح");
+  if ((await db.doc(`revokedQrTokens/${hash(code)}`).get()).exists) throw new HttpsError("failed-precondition", "تم إلغاء هذا الكود؛ استخدم QR الأحدث للعميل", { code: "QR_REVOKED" });
   const snapshot = await db.collection("customers").where("qrToken", "==", code).limit(1).get();
   if (snapshot.empty) throw new HttpsError("not-found", "العميل غير موجود أو تم إلغاء الكود");
   const customer = cleanDoc(snapshot.docs[0]);
@@ -1304,42 +1953,79 @@ export const updateWhatsappConsent = onCall(adminOptions, async request => {
   return { ok: true, optedIn };
 });
 
+export const previewWhatsappCampaign = onCall(whatsappOptions, async request => {
+  requirePermission(request, "campaigns");
+  const templateName = sanitizeText(request.data?.templateName, 120);
+  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (!/^[a-z0-9_]{1,120}$/.test(templateName) || !/^(all|[a-z0-9-]{2,40})$/.test(branchId)) throw new HttpsError("invalid-argument", "القالب أو الفرع غير صحيح");
+  if (branchId !== "all") requireBranchAccess(request, branchId);
+  let query = db.collection("customers").where("whatsappOptIn", "==", true);
+  if (branchId !== "all") query = query.where("lastBranchId", "==", branchId);
+  const [count, settings] = await Promise.all([query.count().get(), readSettings()]);
+  return { templateName, branchId, eligibleCount: Number(count.data().count || 0), killSwitchEnabled: settings.whatsappCampaignsEnabled === true, metaConfigured: Boolean(whatsappAccessToken.value() && whatsappPhoneNumberId.value()), variables: [], testModeRecommended: true };
+});
+
 export const createWhatsappCampaign = onCall(adminOptions, async request => {
   requirePermission(request, "campaigns");
   const name = sanitizeText(request.data?.name, 120);
   const templateName = sanitizeText(request.data?.templateName, 120);
   const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
   const recipientCap = Math.max(1, Math.min(1000000, Math.floor(Number(request.data?.recipientCap || 100))));
-  if (!name || !/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("invalid-argument", "اسم الحملة أو القالب غير صحيح");
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!name || !/^[a-z0-9_]{1,120}$/.test(templateName) || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "اسم الحملة أو القالب غير صحيح");
+  if (branchId !== "all") requireBranchAccess(request, branchId);
   const settings = await readSettings();
   if (settings.whatsappCampaignsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الحملات متوقف من إعدادات النظام");
   const campaignRef = db.collection("campaigns").doc();
-  await campaignRef.create({ name, templateName, languageCode: sanitizeText(request.data?.languageCode || "ar", 10), branchId, state: "QUEUED", testMode: request.data?.testMode !== false, recipientCap, eligibleCount: null, sentCount: 0, failedCount: 0, lastCustomerId: null, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  const guardRef = db.doc(`campaignGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
+  const created = await db.runTransaction(async transaction => {
+    const guard = await transaction.get(guardRef);
+    if (guard.exists) return { campaignId: guard.data().campaignId, idempotent: true };
+    const now = FieldValue.serverTimestamp();
+    transaction.create(campaignRef, { name, templateName, languageCode: sanitizeText(request.data?.languageCode || "ar", 10), branchId, state: "QUEUED", testMode: request.data?.testMode !== false, recipientCap, eligibleCount: Number(request.data?.eligibleCount || 0), sentCount: 0, failedCount: 0, lastCustomerId: null, createdBy: request.auth.uid, requestId: idempotencyKey, createdAt: now, updatedAt: now });
+    transaction.create(guardRef, { campaignId: campaignRef.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+    transaction.set(db.collection("activityLogs").doc(), { action: "queue-whatsapp-campaign", targetType: "campaign", targetId: campaignRef.id, branchId, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    return { campaignId: campaignRef.id, idempotent: false };
+  });
+  if (created.idempotent) return { ok: true, campaignId: created.campaignId, state: "QUEUED", idempotent: true };
   await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId: campaignRef.id });
   return { ok: true, campaignId: campaignRef.id, state: "QUEUED" };
 });
 
-// Meta secrets are intentionally not bound while the official integration is disabled.
-// Re-add both secrets to this function's options when Meta onboarding is completed.
-export const sendWhatsappReceipt = onCall(adminOptions, async request => {
+export const sendWhatsappReceipt = onCall(whatsappOptions, async request => {
   requirePermission(request, "pos");
+  await enforceRateLimit(request, "whatsapp_receipt", 60, 15 * 60 * 1000, request.auth.uid);
   const bookingId = sanitizeText(request.data?.bookingId, 100);
   const bookingSnapshot = await db.doc(`bookings/${bookingId}`).get();
   if (!bookingSnapshot.exists) throw new HttpsError("not-found", "الشيك غير موجود");
   const booking = bookingSnapshot.data(); requireBranchAccess(request, booking.branchId);
   const settings = await readSettings();
   if (settings.whatsappReceiptsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الشيكات عبر واتساب متوقف");
-  const accessToken = whatsappToken; const phoneNumberId = whatsappPhoneNumberId;
+  const accessToken = whatsappAccessToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
   if (!accessToken || !phoneNumberId) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
   const templateName = sanitizeText(settings.whatsappReceiptTemplate, 120);
   if (!/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("failed-precondition", "قالب شيك واتساب غير مضبوط");
-  const guardRef = db.doc(`whatsappOperations/receipt_${bookingId}`); const guard = await guardRef.get();
-  if (guard.data()?.status === "SENT") return { ok: true, idempotent: true };
+  const guardRef = db.doc(`whatsappOperations/receipt_${bookingId}`);
+  const claim = await db.runTransaction(async transaction => {
+    const guard = await transaction.get(guardRef);
+    if (guard.data()?.status === "SENT") return "SENT";
+    if (guard.data()?.status === "SENDING" && Number(guard.data()?.leaseUntil?.toMillis?.() || 0) > Date.now()) return "BUSY";
+    transaction.set(guardRef, { bookingId, status: "SENDING", leaseUntil: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return "CLAIMED";
+  });
+  if (claim === "SENT") return { ok: true, idempotent: true };
+  if (claim === "BUSY") throw new HttpsError("already-exists", "إرسال الشيك جارٍ بالفعل");
   const phone = normalizePhone(booking.phone).replace(/^0/, "20");
   const itemText = (booking.items || []).map(item => `${item.nameAr}: ${item.workerNameAr || booking.staffNameAr || "—"}`).join("، ").slice(0, 900);
   const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: templateName, language: { code: "ar" }, components: [{ type: "body", parameters: [booking.branchNameAr || booking.branchId, booking.code || bookingId, itemText, String(booking.total || 0), booking.paymentStatus || "unpaid"].map(text => ({ type: "text", text: String(text) })) }] } }) });
+  const responseBody = await response.json().catch(() => ({}));
   if (!response.ok) { await guardRef.set({ bookingId, status: "FAILED", statusCode: response.status, updatedAt: FieldValue.serverTimestamp() }, { merge: true }); throw new HttpsError("unavailable", "تعذر إرسال الشيك عبر Meta حاليًا"); }
-  await guardRef.set({ bookingId, customerId: booking.phoneHash || null, status: "SENT", sentBy: request.auth.uid, sentAt: FieldValue.serverTimestamp() }, { merge: true });
+  const metaMessageId = sanitizeText(responseBody?.messages?.[0]?.id, 200) || null;
+  const now = FieldValue.serverTimestamp();
+  const batch = db.batch();
+  batch.set(guardRef, { bookingId, customerId: booking.phoneHash || null, status: "SENT", deliveryStatus: "sent", metaMessageId, leaseUntil: null, sentBy: request.auth.uid, sentAt: now }, { merge: true });
+  batch.set(db.collection("activityLogs").doc(), { action: "send-whatsapp-receipt", targetType: "booking", targetId: bookingId, branchId: booking.branchId, actorUid: request.auth.uid, createdAt: now });
+  await batch.commit();
   return { ok: true };
 });
 
@@ -1358,7 +2044,7 @@ export const updateWhatsappCampaignState = onCall(adminOptions, async request =>
   return { ok: true, state: states[action] };
 });
 
-export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 } }, async request => {
+export const processCampaignBatch = onTaskDispatched({ region, secrets: [whatsappAccessToken, whatsappPhoneNumberId], retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 } }, async request => {
   const campaignId = sanitizeText(request.data?.campaignId, 100);
   const ref = db.doc(`campaigns/${campaignId}`);
   const snapshot = await ref.get();
@@ -1366,7 +2052,7 @@ export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { ma
   const campaign = snapshot.data();
   const settings = await readSettings();
   if (settings.whatsappCampaignsEnabled !== true) { await ref.update({ state: "PAUSED", lastError: "FEATURE_DISABLED", updatedAt: FieldValue.serverTimestamp() }); return; }
-  const accessToken = whatsappToken; const phoneNumberId = whatsappPhoneNumberId;
+  const accessToken = whatsappAccessToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
   if (!accessToken || !phoneNumberId) { await ref.update({ state: "PAUSED", lastError: "META_NOT_CONFIGURED", updatedAt: FieldValue.serverTimestamp() }); return; }
   const remaining = Number(campaign.recipientCap || 100) - Number(campaign.sentCount || 0);
   if (remaining <= 0) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
@@ -1381,21 +2067,73 @@ export const processCampaignBatch = onTaskDispatched({ region, retryConfig: { ma
   for (const customerSnapshot of customers.docs) {
     const customer = customerSnapshot.data();
     const recipientRef = db.doc(`campaignRecipients/${campaignId}_${customerSnapshot.id}`);
-    if ((await recipientRef.get()).exists) continue;
     const allowed = !campaign.testMode || (Array.isArray(settings.whatsappTestCustomerIds) && settings.whatsappTestCustomerIds.includes(customerSnapshot.id));
-    if (!allowed) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SKIPPED_TEST_MODE", createdAt: FieldValue.serverTimestamp() }); continue; }
+    const claim = await db.runTransaction(async transaction => {
+      const existing = await transaction.get(recipientRef);
+      const value = existing.data() || {};
+      if (["SENT", "SKIPPED_TEST_MODE"].includes(value.status)) return false;
+      if (value.status === "SENDING" && Number(value.leaseUntil?.toMillis?.() || 0) > Date.now()) return false;
+      transaction.set(recipientRef, { campaignId, customerId: customerSnapshot.id, status: allowed ? "SENDING" : "SKIPPED_TEST_MODE", attempts: FieldValue.increment(allowed ? 1 : 0), leaseUntil: allowed ? Timestamp.fromMillis(Date.now() + 2 * 60 * 1000) : null, updatedAt: FieldValue.serverTimestamp(), ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
+      return allowed;
+    });
+    if (!claim) continue;
     try {
       const phone = normalizePhone(customer.phone).replace(/^0/, "20");
-      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
-      if (!response.ok) throw new Error(`META_${response.status}`);
-      await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "SENT", sentAt: FieldValue.serverTimestamp() }); sent++;
-    } catch (error) { await recipientRef.create({ campaignId, customerId: customerSnapshot.id, status: "FAILED", error: sanitizeText(error.message, 100), createdAt: FieldValue.serverTimestamp() }); failed++; }
+      let response;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
+        if (response.ok || (response.status < 500 && response.status !== 429)) break;
+      }
+      const responseBody = await response?.json().catch(() => ({}));
+      if (!response?.ok) throw new Error(`META_${response?.status || "NETWORK"}`);
+      const metaMessageId = sanitizeText(responseBody?.messages?.[0]?.id, 200) || null;
+      await recipientRef.set({ status: "SENT", deliveryStatus: "sent", metaMessageId, leaseUntil: null, sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true }); sent++;
+    } catch (error) { await recipientRef.set({ status: "FAILED", leaseUntil: null, error: sanitizeText(error.message, 100), updatedAt: FieldValue.serverTimestamp() }, { merge: true }); failed++; }
   }
   const lastCustomerId = customers.docs.at(-1).id;
   const nextSent = Number(campaign.sentCount || 0) + sent;
   const complete = customers.size < 100 || nextSent >= Number(campaign.recipientCap || 100);
   await ref.update({ state: complete ? (failed ? "PARTIAL" : "COMPLETED") : "QUEUED", sentCount: FieldValue.increment(sent), failedCount: FieldValue.increment(failed), lastCustomerId, updatedAt: FieldValue.serverTimestamp(), ...(complete ? { completedAt: FieldValue.serverTimestamp() } : {}) });
   if (!complete) await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId }, { scheduleDelaySeconds: 2 });
+});
+
+function validMetaSignature(request) {
+  const signature = String(request.get("x-hub-signature-256") || "");
+  if (!/^sha256=[a-f0-9]{64}$/.test(signature)) return false;
+  const expected = `sha256=${createHmac("sha256", whatsappAppSecret.value()).update(request.rawBody || Buffer.from("")).digest("hex")}`;
+  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+export const whatsappWebhook = onRequest(whatsappWebhookOptions, async (request, response) => {
+  response.set("Cache-Control", "no-store");
+  if (request.method === "GET") {
+    const mode = String(request.query["hub.mode"] || "");
+    const token = String(request.query["hub.verify_token"] || "");
+    const challenge = String(request.query["hub.challenge"] || "");
+    if (mode !== "subscribe" || !challenge || token !== whatsappWebhookVerifyToken.value()) return response.status(403).send("verification failed");
+    return response.status(200).send(challenge);
+  }
+  if (request.method !== "POST") return response.status(405).send("method not allowed");
+  if (!validMetaSignature(request)) return response.status(401).send("invalid signature");
+  const statuses = (Array.isArray(request.body?.entry) ? request.body.entry : [])
+    .flatMap(entry => Array.isArray(entry?.changes) ? entry.changes : [])
+    .flatMap(change => Array.isArray(change?.value?.statuses) ? change.value.statuses : [])
+    .slice(0, 100);
+  for (const item of statuses) {
+    const metaMessageId = sanitizeText(item?.id, 200);
+    const deliveryStatus = sanitizeText(item?.status, 30).toLowerCase();
+    if (!metaMessageId || !["sent", "delivered", "read", "failed"].includes(deliveryStatus)) continue;
+    const [receipts, recipients] = await Promise.all([
+      db.collection("whatsappOperations").where("metaMessageId", "==", metaMessageId).limit(1).get(),
+      db.collection("campaignRecipients").where("metaMessageId", "==", metaMessageId).limit(1).get()
+    ]);
+    const batch = db.batch();
+    const deliveryPatch = { deliveryStatus, deliveryUpdatedAt: FieldValue.serverTimestamp(), ...(deliveryStatus === "failed" ? { deliveryErrorCode: sanitizeText(item?.errors?.[0]?.code, 40) || "META_FAILED" } : {}) };
+    for (const snapshot of [...receipts.docs, ...recipients.docs]) batch.set(snapshot.ref, deliveryPatch, { merge: true });
+    if (receipts.size || recipients.size) await batch.commit();
+  }
+  structuredLog("whatsapp_webhook", { statuses: statuses.length });
+  return response.status(200).send("ok");
 });
 
 export const registerPushToken = onCall(adminOptions, async request => {

@@ -1,0 +1,14 @@
+.favorite-worker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #071524;
+}
+.favorite-worker img { object-fit: cover; border-radius: 50%; background: #0b1c2e; }
+.favorite-worker div, .favorite-worker span, .favorite-worker small { display: grid; gap: 3px; }
+.favorite-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.favorite-actions button { flex: 1; }

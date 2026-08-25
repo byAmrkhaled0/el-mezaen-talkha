@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
@@ -92,6 +92,10 @@ test("validates future appointment and business hours", () => {
   assert.throws(() => validateAppointment({ date: "2027-01-02", time: "22:30", duration: 60, openingTime: "11:00", closingTime: "23:00", now: new Date("2027-01-01T10:00:00") }), /OUTSIDE/);
 });
 
+test("same-day validation follows Cairo even when UTC is still on the prior evening", () => {
+  assert.throws(() => validateAppointment({ date: "2026-08-26", time: "00:15", duration: 15, openingTime: "00:00", closingTime: "23:59", now: new Date("2026-08-25T21:30:00Z") }), /PAST_APPOINTMENT/);
+});
+
 test("payment is idempotent and refund is negative", () => {
   assert.equal(paymentTransition({ paymentStatus: "paid", total: 200 }, "markPaid").changed, false);
   assert.equal(paymentTransition({ paymentStatus: "unpaid", total: 200 }, "markPaid", "cash").ledgerAmount, 200);
@@ -101,8 +105,13 @@ test("payment is idempotent and refund is negative", () => {
 test("rewards use server settings and minimum spend", () => {
   assert.deepEqual(calculateRewards(200, { loyaltyEnabled: true, pointsRate: .1, cashbackPercent: 5, rewardsMinimumSpend: 100 }), { points: 20, cashback: 10 });
   assert.deepEqual(calculateRewards(50, { loyaltyEnabled: true, pointsRate: 1, cashbackPercent: 10, rewardsMinimumSpend: 100 }), { points: 0, cashback: 0 });
+  assert.deepEqual(calculateRewards(200, { pointsRate: 1, cashbackPercent: 10 }), { points: 0, cashback: 0 });
 });
 
 test("legacy receipt worker is adapted per service line", () => {
   assert.deepEqual(normalizeLineWorkers([{ id: "cut", staffRequired: true }, { id: "wax", staffRequired: false }], "ali").map(item => item.workerId), ["ali", "none"]);
+});
+
+test("cash drawer expected balance follows the financial formula", () => {
+  assert.equal(calculateExpectedCash({ openingCash: 500, cashSales: 1200, cashIn: 100, cashOut: 250, cashRefunds: 50 }), 1500);
 });

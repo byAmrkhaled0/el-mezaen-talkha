@@ -1,7 +1,7 @@
 import "./admin.css";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
-import { adjustCustomerWallet, changeBooking, changeUserRole, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBusinessDashboard, getCollection, getDashboard, logout, recordExpense, recordPayrollPayment, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import { addCashMovement, adjustCustomerWallet, changeBooking, changeUserRole, closeBusinessDay, closeCashShift, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, currentAccess, deleteEntity, enablePush, findCustomerByPhone, getBookingCalendar, getBusinessDashboard, getCashierSnapshot, getCashOperations, getCollection, getCustomer360, getDashboard, logout, openCashShift, previewWhatsappCampaign, recordExpense, recordPayrollPayment, rescheduleBooking, rotateCustomerQr, saveEntity, scanCustomerCode, secureDeleteRecord, updateExpense, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { isVideoContent, videoSource } from "./media.js";
 
 const $ = selector => document.querySelector(selector);
@@ -15,7 +15,7 @@ const dateTime = value => {
 const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
-const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, loadedAt: { dashboard: 0, business: 0 }, posCart: [], posIdempotencyKey: "", editingExpenseId: "", editingUserId: "", collections: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingCount: null, editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
+const state = { user: null, role: null, permissions: new Set(), branchIds: [], dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, business: { payroll: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, calendar: { bookings: [], staff: [] }, cash: { state: null, shift: null, movements: [] }, loadedAt: { dashboard: 0, cashier: 0, business: 0, calendar: 0, cash: 0 }, posCart: [], posIdempotencyKey: "", posBookingId: "", editingExpenseId: "", editingUserId: "", collections: new Map(), collectionCursors: new Map(), section: "dashboard", expenseInventoryKind: "all", lastBookingIds: new Set(), editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" } };
 const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", revenue: "الدفع والإيرادات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = { cashier: ["dashboard", "pos", "bookings", "customers"], manager: Object.keys(permissionLabels).filter(value => value !== "activity") };
 
@@ -57,6 +57,7 @@ const fields = {
     ["baseSalary", "الراتب الأساسي الشهري", "number"], ["monthlyTarget", "تارجت الإيراد الشهري", "number"], ["targetBonusPercent", "نسبة الزيادة عند تحقيق التارجت %", "number"],
     ["available", "متاح", "boolean"], ["sortOrder", "ترتيب الظهور", "number"], ["bookingCount", "عدد الحجوزات", "number"], ["revenueTotal", "إجمالي الإيرادات", "number"], ["active", "مفعل", "boolean"]
   ],
+  workerLeaves: [["staffId", "العامل", "staff-select", true], ["branchId", "الفرع", "drink-branch-select", true], ["dateKey", "التاريخ", "date", true], ["startTime", "من", "time", true], ["endTime", "إلى", "time", true], ["reason", "السبب", "text"], ["active", "مفعلة", "boolean"]],
   inventoryItems: [
     ["nameAr", "اسم الصنف", "text", true], ["category", "النوع", "select", true, [["product", "بضاعة للبيع"], ["supply", "مستلزم تشغيل"]]], ["branchId", "الفرع", "branch-select", true],
     ["costPrice", "سعر التكلفة", "number", true], ["sellingPrice", "سعر البيع", "number", true], ["stockQty", "الرصيد الحالي", "number", true], ["minStock", "حد تنبيه النقص", "number"], ["unit", "الوحدة", "text"], ["sortOrder", "الترتيب", "number"], ["active", "متاح", "boolean"]
@@ -84,14 +85,14 @@ function setupPanels() {
     const presetCategory = panel.dataset.presetCategory ? ` data-preset-category="${escapeAttr(panel.dataset.presetCategory)}"` : "";
     const viewAttribute = inventoryView ? ` data-entity-view="${escapeAttr(inventoryView)}"` : "";
     const hint = collection === "drinks" ? "قسم مستقل عن البضاعة والمخزون؛ المشروب يظهر تلقائيًا في حجز الفرع ونقطة البيع." : inventoryView === "products" ? "البضاعة ومستلزمات التشغيل لها مخزون وتكلفة شراء مستقلة." : collection === "reviews" ? "راجع التقييمات وانشرها أو ارفضها وثبّت الأفضل ورد على العميل." : readonly ? "عرض البيانات المسجلة." : "إضافة وتعديل وإخفاء وحذف العناصر.";
-    panel.innerHTML = `<article class="admin-panel"><div class="panel-head wrap"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><div class="toolbar"><input data-entity-search="${collection}"${viewAttribute} placeholder="بحث في ${escapeAttr(panel.dataset.title)}">${reviewFilter}${customerFilter}${readonly ? "" : `<button class="small-button primary" data-new="${collection}"${presetCategory}>${addLabel}</button>`}</div></div>${collection === "customers" ? '<div class="customer-segment-summary" id="customerSegmentSummary"></div>' : ""}<div class="entity-grid" data-list="${listKey}"${viewAttribute}></div></article>`;
+    panel.innerHTML = `<article class="admin-panel"><div class="panel-head wrap"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><div class="toolbar"><input data-entity-search="${collection}"${viewAttribute} placeholder="بحث في ${escapeAttr(panel.dataset.title)}">${reviewFilter}${customerFilter}${readonly ? "" : `<button class="small-button primary" data-new="${collection}"${presetCategory}>${addLabel}</button>`}</div></div>${collection === "customers" ? '<div class="customer-segment-summary" id="customerSegmentSummary"></div>' : ""}<div class="entity-grid" data-list="${listKey}"${viewAttribute}></div><button class="small-button load-more" type="button" data-load-more="${collection}" hidden>تحميل المزيد</button></article>`;
   });
   $$('content-panel').forEach(panel => {
     const type = panel.dataset.type;
     const hint = type === "hair-system" ? "ارفع فيديو MP4 بترميز H.264 لعرضه سريعًا داخل صفحة التركيبات." : type === "result" ? "ارفع تصميم قبل وبعد جاهزًا، وحدد الفرع ثم انشره." : type === "news" ? "أضف صورة أو فيديو، وحدد الفرع الذي يظهر فيه المنشور." : "حدد الفرع وارفع صورة واضحة ومحسنة للهاتف.";
     panel.innerHTML = `<article class="admin-panel"><div class="panel-head"><div><h2>${escapeHtml(panel.dataset.title)}</h2><p>${hint}</p></div><button class="small-button primary" data-new="content" data-preset-type="${type}" data-preset-media="${type === "hair-system" ? "video" : "image"}">+ إضافة</button></div><div class="entity-grid" data-list="content-${type}"></div></article>`;
   });
-  const rewardsForm=$("#rewardsSettings");if(rewardsForm&&!rewardsForm.elements.whatsappReceiptsEnabled){rewardsForm.querySelector('button[type="submit"]')?.insertAdjacentHTML("beforebegin",'<label>إرسال شيكات واتساب<select name="whatsappReceiptsEnabled"><option value="false">متوقف</option><option value="true">مفعل</option></select></label><label>قالب الشيك في Meta<input name="whatsappReceiptTemplate" pattern="[a-z0-9_]*"></label><label>حملات واتساب<select name="whatsappCampaignsEnabled"><option value="false">متوقفة</option><option value="true">مفعلة</option></select></label><label class="full">Customer IDs للاختبار بفواصل<input name="whatsappTestCustomerIds"></label>')}
+  const rewardsForm=$("#rewardsSettings");if(rewardsForm&&!rewardsForm.elements.whatsappReceiptsEnabled){rewardsForm.querySelector('button[type="submit"]')?.insertAdjacentHTML("beforebegin",'<label>درج الكاش والورديات<select name="cashDrawerEnabled"><option value="false">متوقف (تشغيل آمن)</option><option value="true">مفعل وإلزامي للنقدي</option></select></label><label>إرسال شيكات واتساب<select name="whatsappReceiptsEnabled"><option value="false">متوقف</option><option value="true">مفعل</option></select></label><label>قالب الشيك في Meta<input name="whatsappReceiptTemplate" pattern="[a-z0-9_]*"></label><label>حملات واتساب<select name="whatsappCampaignsEnabled"><option value="false">متوقفة</option><option value="true">مفعلة</option></select></label><label class="full">Customer IDs للاختبار بفواصل<input name="whatsappTestCustomerIds"></label>')}
   const discountLabel=$("#posDiscount")?.closest("label");if(discountLabel&&!$("#posRedeemPoints"))discountLabel.insertAdjacentHTML("afterend",'<div class="pos-customer-fields"><label>استبدال نقاط<input id="posRedeemPoints" type="number" min="0" step="1" value="0"></label><label>استبدال كاش باك<input id="posRedeemCashback" type="number" min="0" step="0.01" value="0"></label></div>');
 }
 
@@ -111,7 +112,9 @@ function setTheme(theme) {
 }
 
 async function showSection(id) {
-  if (state.role !== "admin" && !state.permissions.has(id)) return toast("لا تملك صلاحية هذا القسم", true);
+  const requiredPermission = ({ calendar: "bookings", cash: "pos", dailyClosing: "revenue" })[id] || id;
+  if (id === "dailyClosing" && state.role !== "admin" && !(state.permissions.has("revenue") && state.permissions.has("expenses"))) return toast("إغلاق اليوم يحتاج صلاحية الإيرادات والمصروفات", true);
+  if (state.role !== "admin" && !state.permissions.has(requiredPermission)) return toast("لا تملك صلاحية هذا القسم", true);
   state.section = id;
   $$('.admin-section').forEach(section => section.classList.toggle("active", section.id === id));
   $$('[data-section]').forEach(button => button.classList.toggle("active", button.dataset.section === id));
@@ -120,21 +123,25 @@ async function showSection(id) {
   const activeSection = $("#" + id);
   activeSection?.classList.add("section-loading");
   const tasks = [];
-  if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(id) && Date.now() - state.loadedAt.dashboard > 45_000) tasks.push(loadDashboard());
-  const map = { pos: ["categories", "services", "packages", "staff", "customers"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
+  if (id === "pos" || (id === "bookings" && state.role === "cashier")) {
+    if (Date.now() - state.loadedAt.cashier > 60_000) tasks.push(loadCashierDashboard());
+  } else if (["dashboard", "bookings", "revenue", "expenses"].includes(id) && Date.now() - state.loadedAt.dashboard > 45_000) tasks.push(loadDashboard());
+  const map = { pos: ["categories", "services", "packages", "offers", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], celebrities: ["content"], posts: ["content"], settings: ["settings"], activity: ["activityLogs"], users: ["users"], services: ["categories", "services"] };
   tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
-  if (["pos", "expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
+  if (["expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
   try { await Promise.all(tasks); } finally { activeSection?.classList.remove("section-loading"); }
   if (id === "revenue") renderRevenue();
   if (id === "pos") renderPos();
   if (id === "users") renderUserAccounts();
   if (id === "campaigns") renderCampaigns();
+  if (id === "calendar") await loadCalendar();
+  if (id === "cash") await loadCashOperations();
 }
 
 function renderCampaigns(){const target=$("#campaignList");if(!target)return;const items=state.collections.get("campaigns")||[];target.innerHTML=items.map(item=>`<article class="entity-card"><h3>${escapeHtml(item.name||item.id)}</h3><p>${escapeHtml(item.state||"DRAFT")} • أرسل ${Number(item.sentCount||0)} • فشل ${Number(item.failedCount||0)} • ${item.testMode!==false?"وضع اختبار":"إنتاج"}</p><footer>${["QUEUED","SENDING"].includes(item.state)?`<button data-campaign-action="PAUSE" data-campaign-id="${escapeAttr(item.id)}">إيقاف مؤقت</button>`:""}${item.state==="PAUSED"?`<button data-campaign-action="RESUME" data-campaign-id="${escapeAttr(item.id)}">استكمال</button>`:""}${!["COMPLETED","CANCELLED"].includes(item.state)?`<button class="delete" data-campaign-action="CANCEL" data-campaign-id="${escapeAttr(item.id)}">إلغاء</button>`:""}</footer></article>`).join("")||'<div class="entity-card"><p>لا توجد حملات.</p></div>'}
 
 function applyAccess() {
-  $$('[data-section]').forEach(button => { button.hidden = state.role !== "admin" && !state.permissions.has(button.dataset.section); });
+  $$('[data-section]').forEach(button => { const required = ({ calendar: "bookings", cash: "pos", dailyClosing: "revenue" })[button.dataset.section] || button.dataset.section; button.hidden = state.role !== "admin" && (button.dataset.section === "dailyClosing" ? !(state.permissions.has("revenue") && state.permissions.has("expenses")) : !state.permissions.has(required)); });
   if (state.role !== "admin") $$('select').forEach(select => [...select.options].forEach(option => { if (["talkha", "mashaya"].includes(option.value) && !state.branchIds.includes(option.value)) option.remove(); }));
 }
 
@@ -203,12 +210,22 @@ async function submitUserAccount(event) {
 async function loadDashboard(silent = false) {
   try {
     const result = await getDashboard();
-    if (state.lastBookingCount !== null && result.bookings.length > state.lastBookingCount) notifyNewBooking();
-    state.lastBookingCount = result.bookings.length;
+    detectNewBookings(result.bookings || []);
     state.dashboard = result;
     state.loadedAt.dashboard = Date.now();
     renderDashboard();
   } catch (error) { if (!silent) toast(error.message || "تعذر تحميل لوحة الإدارة", true); }
+}
+
+async function loadCashierDashboard(silent = false) {
+  try {
+    const result = await getCashierSnapshot();
+    const nextBookings = Array.isArray(result.bookings) ? result.bookings : [];
+    detectNewBookings(nextBookings);
+    state.dashboard = { ...state.dashboard, bookings: nextBookings, stats: { ...state.dashboard.stats, ...(result.stats || {}) } };
+    state.loadedAt.cashier = Date.now();
+    renderDashboard();
+  } catch (error) { if (!silent) toast(error.message || "تعذر تحميل شاشة الكاشير", true); }
 }
 
 async function loadBusiness(silent = false) {
@@ -222,6 +239,86 @@ async function loadBusiness(silent = false) {
   } catch (error) { if (!silent) toast(error.message || "تعذر تحميل بيانات تشغيل المحل", true); }
 }
 
+async function loadCalendar(silent = false) {
+  const from = $("#calendarDate")?.value || cairoDateKey();
+  const view = $("#calendarView")?.value || "day";
+  const end = new Date(`${from}T12:00:00Z`);
+  if (view === "week") end.setUTCDate(end.getUTCDate() + 6);
+  const to = end.toISOString().slice(0, 10);
+  try { state.calendar = await getBookingCalendar(from, to); state.loadedAt.calendar = Date.now(); renderCalendar(); }
+  catch (error) { if (!silent) toast(error.message || "تعذر تحميل التقويم", true); }
+}
+
+function renderCalendar() {
+  const target = $("#bookingCalendar");
+  if (!target) return;
+  const bookings = state.calendar.bookings || [];
+  const workers = new Map((state.calendar.staff || []).map(item => [item.id, item.nameAr || item.id]));
+  const dates = [...new Set(bookings.map(item => item.bookingDate).filter(Boolean))];
+  target.innerHTML = dates.map(date => `<section class="calendar-day"><h3>${escapeHtml(date)}</h3><div class="calendar-grid">${bookings.filter(item => item.bookingDate === date).map(item => `<button type="button" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} • ${escapeHtml(statusLabel(item.status))}</small></button>`).join("") || '<p>لا توجد حجوزات.</p>'}</div></section>`).join("") || '<div class="empty-state">لا توجد حجوزات في الفترة الظاهرة.</div>';
+}
+
+function cashBranch() { return $("#openShiftForm [name=branchId]")?.value || state.branchIds[0] || "talkha"; }
+
+async function loadCashOperations(silent = false) {
+  try { state.cash = await getCashOperations(cashBranch()); state.loadedAt.cash = Date.now(); renderCashOperations(); }
+  catch (error) { if (!silent) toast(error.message || "تعذر تحميل وردية الكاش", true); }
+}
+
+function renderCashOperations() {
+  const shift = state.cash.shift || {};
+  const isOpen = state.cash.state?.status === "OPEN" && shift.status === "OPEN";
+  $("#cashOpening").textContent = money(shift.openingCash);
+  $("#cashSales").textContent = money(shift.cashSales);
+  $("#cashInOut").textContent = `${money(shift.cashIn)} / ${money(shift.cashOut)}`;
+  $("#cashExpected").textContent = money(shift.expectedCash);
+  $("#cashShiftStatus").textContent = isOpen ? `وردية مفتوحة منذ ${dateTime(shift.openedAt)} • ${shift.cashierName || ""}` : "لا توجد وردية مفتوحة.";
+  $("#openShiftForm").hidden = isOpen;
+  $("#cashMovementForm").hidden = !isOpen;
+  $("#closeShiftForm").hidden = !isOpen;
+  $("#cashMovements").innerHTML = (state.cash.movements || []).map(item => `<article class="entity-card"><h3>${escapeHtml(({ CASH_IN: "إيداع", CASH_OUT: "سحب", CASH_SALE: "بيع نقدي", CASH_REFUND: "استرداد نقدي" })[item.type] || item.type)}</h3><p>${money(item.amount)} • ${escapeHtml(item.reason || item.receiptNumber || item.bookingId || "")}</p><small>${escapeHtml(dateTime(item.createdAt))}</small></article>`).join("") || '<div class="empty-state">لا توجد حركات.</div>';
+}
+
+async function submitOpenShift(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form));
+  try { await openCashShift({ ...data, openingCash: Number(data.openingCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() }); form.reset(); form.dataset.key = ""; await loadCashOperations(); toast("تم فتح الوردية"); }
+  catch (error) { toast(error.message || "تعذر فتح الوردية", true); }
+}
+
+async function submitCashMovement(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form));
+  if (!confirm(`تأكيد ${data.type === "CASH_OUT" ? "سحب" : "إيداع"} ${money(data.amount)}؟`)) return;
+  try { await addCashMovement({ ...data, branchId: cashBranch(), amount: Number(data.amount), idempotencyKey: form.dataset.key ||= crypto.randomUUID() }); form.reset(); form.dataset.key = ""; await loadCashOperations(); toast("تم تسجيل حركة الدرج"); }
+  catch (error) { toast(error.message || "تعذر تسجيل الحركة", true); }
+}
+
+async function submitCloseShift(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form));
+  if (!confirm("تأكيد إغلاق وردية الكاش؟")) return;
+  try { const result = await closeCashShift({ ...data, branchId: cashBranch(), actualCash: Number(data.actualCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() }); form.reset(); form.dataset.key = ""; await loadCashOperations(); toast(`تم إغلاق الوردية • الفرق ${money(result.variance)}`); }
+  catch (error) { toast(error.message || "تعذر إغلاق الوردية", true); }
+}
+
+async function submitDailyClosing(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form));
+  if (!confirm(`إغلاق يوم ${data.businessDate} للفرع؟ لن تُقبل حركات مالية جديدة على التاريخ.`)) return;
+  try {
+    const result = await closeBusinessDay({ ...data, actualCash: Number(data.actualCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
+    const closing = result.closing || {};
+    $("#dailyClosingResult").innerHTML = `<h3>تم إغلاق اليوم</h3><p>إجمالي البيع: ${money(closing.grossSales)} • الصافي: ${money(closing.netSales)} • المصروفات: ${money(closing.expenses)} • الاستردادات: ${money(closing.refunds)}</p><p>المتوقع: ${money(closing.expectedCash)} • الفعلي: ${money(closing.actualCash)} • الفرق: ${money(closing.variance)}</p>`;
+    form.dataset.key = "";
+    toast("تم إغلاق يوم الفرع وتسجيل تقرير التسوية");
+  } catch (error) { toast(error.message || "تعذر إغلاق اليوم", true); }
+}
+
 function renderDashboard() {
   const s = state.dashboard.stats || {};
   $("#statTodayBookings").textContent = s.todayBookings || 0;
@@ -229,17 +326,23 @@ function renderDashboard() {
   const todayKey = cairoDateKey();
   const todayItems = state.dashboard.bookings.filter(item => item.dateKey === todayKey || item.bookingDate === todayKey);
   const todayReceipts = todayItems.filter(item => item.source === "pos");
-  const todayCustomers = new Set(todayItems.map(item => item.customerId || String(item.phone || "").replace(/\D/g, "")).filter(Boolean));
   const todayCash = todayReceipts.filter(item => item.paymentStatus === "paid" && (item.paymentMethod || "cash") === "cash").reduce((sum, item) => sum + Number(item.total || 0), 0);
-  $("#statTodayReceipts").textContent = todayReceipts.length;
-  $("#statTodayCash").textContent = money(todayCash);
-  $("#statTodayCustomers").textContent = todayCustomers.size;
+  $("#statTodayReceipts").textContent = s.ordersToday ?? todayReceipts.length;
+  $("#statTodayCash").textContent = money(s.cashSalesToday ?? todayCash);
+  $("#statTodayCustomers").textContent = s.newCustomersToday || 0;
   $("#statMonthRevenue").textContent = money(s.monthRevenue);
   $("#statMonthExpenses").textContent = money(s.monthExpenses);
   $("#statMonthNet").textContent = money(s.monthNetProfit);
   $("#statTotalRevenue").textContent = money(s.totalRevenue);
   $("#statUnpaid").textContent = s.unpaidCount || 0;
   $("#statLastCollected").textContent = money(s.lastCollected);
+  $("#statOpenShifts").textContent = s.openShifts || 0;
+  $("#statLowStock").textContent = s.lowStockCount || 0;
+  $("#statNoShow").textContent = s.noShowToday || 0;
+  $("#statUpcoming").textContent = s.upcomingBookings || 0;
+  $("#statCompleted").textContent = s.completedToday || 0;
+  $("#statCancelled").textContent = s.cancelledToday || 0;
+  $("#statExpectedCash").textContent = money(s.expectedCash);
   const paidToday = todayItems.filter(item => item.paymentStatus === "paid");
   $("#statAverageTicket").textContent = money(paidToday.length ? paidToday.reduce((sum, item) => sum + Number(item.total || 0), 0) / paidToday.length : 0);
   $("#statCollectionRate").textContent = `${todayItems.length ? Math.round((paidToday.length / todayItems.length) * 100) : 0}%`;
@@ -276,11 +379,17 @@ function renderBookings() {
   const query = $("#bookingSearch").value.trim().toLowerCase();
   const filter = $("#bookingStatusFilter").value;
   const branchFilter = $("#bookingBranchFilter").value;
-  const bookings = state.dashboard.bookings.filter(item => item.source !== "pos" && (branchFilter === "all" || (item.branchId || "talkha") === branchFilter) && (filter === "all" || item.status === filter) && (!query || [item.code, item.customerName, item.phone, item.branchNameAr].some(value => String(value || "").toLowerCase().includes(query))));
+  const activeStatuses = new Set(["pending", "confirmed", "arrived"]);
+  const bookings = state.dashboard.bookings.filter(item => item.source !== "pos" && (branchFilter === "all" || (item.branchId || "talkha") === branchFilter) && (filter === "all" || (filter === "active" ? activeStatuses.has(item.status) : item.status === filter)) && (!query || [item.code, item.customerName, item.phone, item.branchNameAr].some(value => String(value || "").toLowerCase().includes(query))));
   $("#bookingsTable").innerHTML = bookings.map(item => {
     const branchName = item.branchNameAr || branchLabel(item.branchId);
     const waMessage = encodeURIComponent(`مرحبًا ${item.customer?.firstName || ""}، بخصوص حجزك في مزين مصر – ${branchName} رقم ${item.code}: حالته الآن ${statusLabel(item.status)}.`);
-    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b><select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select><div class="row-actions">${item.paymentStatus === "unpaid" ? `<button class="pay" data-booking-action="markPaid" data-booking-id="${escapeAttr(item.id)}">تم الدفع</button>` : ""}${item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button><button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button><button data-booking-action="completed" data-booking-id="${escapeAttr(item.id)}">إكمال</button>${state.role === "admin" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}<a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
+    const terminal = ["completed", "no_show", "rejected", "cancelled"].includes(item.status);
+    const canCheckout = state.permissions.has("pos") || state.permissions.has("revenue");
+    const canRefund = state.permissions.has("revenue");
+    const checkout = !terminal && canCheckout ? `<button class="pay booking-checkout" data-booking-action="${item.paymentStatus === "paid" ? "completed" : "checkout"}" data-booking-id="${escapeAttr(item.id)}">${item.paymentStatus === "paid" ? "إكمال وإخفاء" : "تحصيل وإكمال"}</button>` : "";
+    const stateActions = item.status === "pending" ? `<button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "confirmed" ? `<button data-booking-action="arrived" data-booking-id="${escapeAttr(item.id)}">وصل</button><button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "arrived" ? `<button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button>` : "";
+    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b>${!terminal ? `<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select>` : ""}<div class="row-actions">${checkout}${canRefund && item.paymentStatus === "paid" ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions">${!terminal && canCheckout ? `<button data-booking-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>` : ""}<button data-print-booking="${escapeAttr(item.id)}">طباعة شيك</button>${["pending", "confirmed"].includes(item.status) ? `<button data-reschedule-booking="${escapeAttr(item.id)}">إعادة جدولة</button>` : ""}${stateActions}${state.role === "admin" && item.paymentStatus !== "paid" && item.source !== "pos" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}<a href="https://wa.me/2${String(item.phone || "").replace(/\D/g, "")}?text=${waMessage}" target="_blank" rel="noopener">واتساب</a></div></td></tr>`;
   }).join("") || emptyRow(9);
   $$('[data-print-booking]').forEach(button=>{if(!button.parentElement.querySelector('[data-whatsapp-receipt]'))button.insertAdjacentHTML('afterend',`<button data-whatsapp-receipt="${escapeAttr(button.dataset.printBooking)}">إرسال صورة الشيك</button>`)});
 }
@@ -290,7 +399,7 @@ function renderPosReceipts() {
   if (!target) return;
   const query = $("#posReceiptSearch")?.value.trim().toLowerCase() || "";
   const receipts = state.dashboard.bookings.filter(item => item.source === "pos" && (!query || [item.code, item.customerName, item.phone, ...(item.serviceNamesAr || [])].some(value => String(value || "").toLowerCase().includes(query)))).slice(0, 30);
-  target.innerHTML = receipts.map(item => `<tr><td><b>${escapeHtml(item.code || item.id)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName || "عميل نقدي")}<br><small>${escapeHtml(item.phone || "")}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</td><td>${escapeHtml(item.staffNameAr || "—")}</td><td><b>${money(item.total)}</b></td><td>${paymentLabel(item.paymentStatus)}</td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة</button><button data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال صورة الشيك</button></div></td></tr>`).join("") || emptyRow(7);
+  target.innerHTML = receipts.map(item => `<tr><td><b>${escapeHtml(item.receiptNumber || item.code || item.id)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td>${escapeHtml(item.customerName || "عميل نقدي")}<br><small>${escapeHtml(item.phone || "")}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</td><td>${escapeHtml(item.staffNameAr || "—")}</td><td><b>${money(item.total)}</b></td><td>${paymentLabel(item.paymentStatus)}</td><td><div class="row-actions"><button data-print-booking="${escapeAttr(item.id)}">طباعة / نسخة</button><button data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال صورة الشيك</button>${item.paymentStatus === "unpaid" && (state.permissions.has("revenue") || state.role === "admin") ? `<button class="delete" data-booking-action="void" data-booking-id="${escapeAttr(item.id)}">إلغاء الشيك</button>` : ""}</div></td></tr>`).join("") || emptyRow(7);
 }
 
 function setPosView(view = "new") {
@@ -298,8 +407,106 @@ function setPosView(view = "new") {
   if (!pos) return;
   pos.dataset.posView = view === "receipts" ? "receipts" : "new";
   pos.classList.remove("mobile-ticket-open");
-  $$('#pos [data-pos-view]').forEach(button => button.classList.toggle("active", button.dataset.posView === pos.dataset.posView));
+  $$('#pos [data-pos-view], #pos [data-new-pos]').forEach(button => button.classList.toggle("active", (button.hasAttribute("data-new-pos") ? "new" : button.dataset.posView) === pos.dataset.posView));
   if (pos.dataset.posView === "receipts") renderPosReceipts();
+}
+
+function hasPosDraft() {
+  return Boolean(state.posCart.length || $("#posPhone")?.value.trim() || $("#posFirstName")?.value.trim() || Number($("#posDiscount")?.value || 0));
+}
+
+function resetPosDraft({ focus = true } = {}) {
+  const form = $("#posForm");
+  if (!form) return;
+  const branchId = $("#posBranch")?.value || state.branchIds[0] || "talkha";
+  form.reset();
+  if ($(`#posBranch option[value="${CSS.escape(branchId)}"]`)) $("#posBranch").value = branchId;
+  $("#posCustomer").value = "";
+  $("#posPhone").value = "";
+  $("#posFirstName").value = "";
+  $("#posLastName").value = "";
+  $("#posStaff").value = "none";
+  $("#posDiscount").value = "0";
+  $("#posPaymentMethod").value = "cash";
+  $("#posPaid").checked = true;
+  if ($("#posRedeemPoints")) $("#posRedeemPoints").value = "0";
+  if ($("#posRedeemCashback")) $("#posRedeemCashback").value = "0";
+  if ($("#posItemSearch")) $("#posItemSearch").value = "";
+  if ($("#posSectionFilter")) $("#posSectionFilter").value = "service";
+  if ($("#posCategoryFilter")) $("#posCategoryFilter").value = "";
+  const details = $(".pos-extra-details");
+  if (details) details.open = false;
+  state.posCart = [];
+  state.posIdempotencyKey = "";
+  state.posBookingId = "";
+  $("#posSubmit").textContent = "حفظ الطلب وتجهيز الشيك";
+  setPosView("new");
+  renderPos();
+  if (focus) requestAnimationFrame(() => $("#posPhone")?.focus());
+}
+
+async function openNewPosDraft() {
+  if (hasPosDraft() && !confirm("يوجد شيك غير محفوظ. هل تريد مسحه وفتح شيك جديد؟")) return;
+  resetPosDraft({ focus: false });
+  await showSection("pos");
+  setPosView("new");
+  requestAnimationFrame(() => $("#posPhone")?.focus());
+}
+
+async function openBookingInPos(id) {
+  const booking = state.dashboard.bookings.find(item => item.id === id);
+  if (!booking) return toast("الحجز غير موجود", true);
+  await showSection("pos");
+  resetPosDraft({ focus: false });
+  state.posBookingId = id;
+  $("#posBranch").value = booking.branchId || "talkha";
+  $("#posPhone").value = booking.phone || "";
+  $("#posFirstName").value = booking.customer?.firstName || String(booking.customerName || "عميل").split(" ")[0];
+  $("#posLastName").value = booking.customer?.lastName || String(booking.customerName || "").split(" ").slice(1).join(" ");
+  $("#posStaff").value = booking.staffId || "none";
+  state.posCart = (booking.items || []).map(item => ({ id: item.id, kind: item.kind, qty: Number(item.qty || 1), option: item.option || "", workerId: item.workerId || booking.staffId || "none" }));
+  $("#posSubmit").textContent = "تحصيل الحجز وتجهيز الشيك";
+  renderPos();
+  toast(`تم فتح الحجز ${booking.code} بدون إنشاء حجز جديد`);
+}
+
+function rememberPosCustomer(customer) {
+  if (!customer?.id) return;
+  const customers = state.collections.get("customers") || [];
+  state.collections.set("customers", [customer, ...customers.filter(item => item.id !== customer.id)]);
+  renderPos();
+  $("#posCustomer").value = customer.id;
+  selectPosCustomer(customer.id);
+}
+
+function applyPosReceiptLocally(receipt) {
+  if (!receipt?.id && !receipt?.code) return false;
+  const id = receipt.id || receipt.code;
+  receipt.id = id;
+  const alreadyPresent = state.dashboard.bookings.some(item => item.id === id || item.code === receipt.code);
+  state.dashboard.bookings = [receipt, ...state.dashboard.bookings.filter(item => item.id !== id && item.code !== receipt.code)];
+  state.lastBookingCount = state.dashboard.bookings.length;
+  state.loadedAt.cashier = Date.now();
+  if (!alreadyPresent) {
+    const stats = state.dashboard.stats || (state.dashboard.stats = {});
+    stats.bookingCount = Number(stats.bookingCount || 0) + 1;
+    stats.todayBookings = Number(stats.todayBookings || 0) + 1;
+    if (receipt.paymentStatus === "paid") {
+      stats.paidCount = Number(stats.paidCount || 0) + 1;
+      stats.todayRevenue = Number(stats.todayRevenue || 0) + Number(receipt.total || 0);
+      stats.monthRevenue = Number(stats.monthRevenue || 0) + Number(receipt.total || 0);
+      stats.totalRevenue = Number(stats.totalRevenue || 0) + Number(receipt.total || 0);
+      stats.monthNetProfit = Number(stats.monthNetProfit || 0) + Number(receipt.total || 0);
+      stats.lastCollected = Number(receipt.total || 0);
+    } else stats.unpaidCount = Number(stats.unpaidCount || 0) + 1;
+    const sold = new Map((receipt.items || []).filter(item => item.kind === "inventory").map(item => [item.id, Number(item.qty || 1)]));
+    for (const source of [state.collections.get("inventoryItems"), state.business.inventory]) {
+      if (!Array.isArray(source)) continue;
+      source.forEach(item => { if (sold.has(item.id)) item.stockQty = Math.max(0, Number(item.stockQty || 0) - sold.get(item.id)); });
+    }
+  }
+  renderDashboard();
+  return true;
 }
 
 async function openReceiptInWhatsapp(id) {
@@ -370,7 +577,7 @@ async function openScanner() {
   }
 }
 function closeScanner(closeDialog = true) { scanControls?.stop?.(); scanControls = null; scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;scanLocked=false; if(closeDialog && $("#scannerDialog").open)$("#scannerDialog").close(); }
-async function findScanned() { const raw=$("#scannerCode").value.trim();if(!raw){scanLocked=false;return}if(raw.toLowerCase().startsWith("mzc_")){try{const result=await scanCustomerCode(raw);closeScanner();await loadCollection("customers",true);selectPosCustomer(result.customer.id);showSection("pos");toast(`تم فتح العميل ${result.customer.firstName||""}`)}catch(error){scanLocked=false;toast(error.message||"كود العميل غير صحيح",true)}return}const code=raw.toUpperCase();const found=state.dashboard.bookings.find(item=>String(item.code).toUpperCase()===code);if(!found){scanLocked=false;return toast("لم يتم العثور على الحجز أو المنتج",true)}closeScanner();$("#bookingSearch").value=found.code;renderBookings();document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});toast("تم فتح الحجز");}
+async function findScanned() { const raw=$("#scannerCode").value.trim();if(!raw){scanLocked=false;return}if(raw.toLowerCase().startsWith("mzc_")){try{const result=await scanCustomerCode(raw);closeScanner();await showSection("pos");rememberPosCustomer(result.customer);toast(`تم فتح العميل ${result.customer.firstName||""}`)}catch(error){scanLocked=false;toast(error.message||"كود العميل غير صحيح",true)}return}const code=raw.toUpperCase();const found=state.dashboard.bookings.find(item=>String(item.code).toUpperCase()===code);if(!found){scanLocked=false;return toast("لم يتم العثور على الحجز أو المنتج",true)}closeScanner();$("#bookingSearch").value=found.code;renderBookings();document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});toast("تم فتح الحجز");}
 
 function renderRevenue() {
   const serviceSelect = $("#revenueService");
@@ -396,7 +603,7 @@ function renderRevenue() {
   $("#revenueTable").innerHTML = rows.map(item => {
     const breakdown = item.revenueBreakdown || {};
     const details = [`خدمات: ${money(breakdown.services)}`, `بضاعة: ${money(breakdown.products)}`, `مشروبات: ${money(breakdown.drinks)}`].join("<br>");
-    return `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td><small>${details}</small></td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>${state.role === "admin" ? `<div class="row-actions"><button class="delete" data-secure-delete-revenue="${escapeAttr(item.id)}" data-secure-delete-label="عملية ${item.type === "refund" ? "الاسترداد" : "الدفع"} للحجز ${escapeAttr(item.bookingCode)}">حذف</button></div>` : "—"}</td></tr>`;
+    return `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td><small>${details}</small></td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>سجل مالي محفوظ</td></tr>`;
   }).join("") || emptyRow(9);
 }
 
@@ -462,9 +669,10 @@ function posCatalogItems() {
   const categories = new Map((state.collections.get("categories") || []).map(item => [item.id, item.nameAr || item.id]));
   const services = (state.collections.get("services") || []).filter(item => item.active !== false && (!item.branchIds?.length || item.branchIds.includes(branchId))).map(item => ({ id: item.id, kind: item.type === "product" ? "product" : "service", section: item.type === "product" ? "product" : "service", categoryId: item.categoryId || "", nameAr: item.nameAr, price: Number(item.price || 0), category: item.type === "product" ? "بضاعة" : categories.get(item.categoryId) || "بدون تصنيف" }));
   const packages = (state.collections.get("packages") || []).filter(item => item.active !== false && item.status !== "expired" && (!item.branchIds?.length || item.branchIds.includes(branchId))).map(item => ({ id: item.id, kind: "package", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), category: "باقة" }));
-  const inventory = (state.business.inventory || state.collections.get("inventoryItems") || []).filter(item => item.active !== false && item.category === "product" && item.branchId === branchId).map(item => ({ id: item.id, kind: "inventory", section: "product", categoryId: "", nameAr: item.nameAr, price: Number(item.sellingPrice || 0), stockQty: Number(item.stockQty || 0), category: inventoryCategory(item.category) }));
-  const drinks = (state.business.drinks || state.collections.get("drinks") || []).filter(item => item.active !== false && [branchId, "all"].includes(item.branchId)).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: `${drinkType(item.type)}${item.branchId === "all" ? " • كل الفروع" : ""}` }));
-  return [...services, ...packages, ...inventory, ...drinks];
+  const offers = (state.collections.get("offers") || []).filter(item => item.active !== false && item.status !== "expired" && (!item.branchIds?.length || item.branchIds.includes(branchId))).map(item => ({ id: item.id, kind: "offer", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.newPrice || 0), category: "عرض" }));
+  const inventory = (state.collections.get("inventoryItems") || state.business.inventory || []).filter(item => item.active !== false && item.category === "product" && item.branchId === branchId).map(item => ({ id: item.id, kind: "inventory", section: "product", categoryId: "", nameAr: item.nameAr, price: Number(item.sellingPrice || 0), stockQty: Number(item.stockQty || 0), category: inventoryCategory(item.category) }));
+  const drinks = (state.collections.get("drinks") || state.business.drinks || []).filter(item => item.active !== false && [branchId, "all"].includes(item.branchId)).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: `${drinkType(item.type)}${item.branchId === "all" ? " • كل الفروع" : ""}` }));
+  return [...services, ...packages, ...offers, ...inventory, ...drinks];
 }
 
 function fillCategoryFilter(selector, currentValue = "") {
@@ -547,22 +755,35 @@ async function submitPosOrder(event) {
   button.disabled = true;
   state.posIdempotencyKey ||= crypto.randomUUID();
   try {
+    if (state.posBookingId) {
+      const booking = state.dashboard.bookings.find(item => item.id === state.posBookingId);
+      const result = await changeBooking(state.posBookingId, booking?.paymentStatus === "paid" ? "completed" : "checkout", $("#posPaymentMethod").value);
+      if (booking) Object.assign(booking, { status: "completed", paymentStatus: "paid", paymentMethod: $("#posPaymentMethod").value, orderState: "PAID" });
+      const receiptId = state.posBookingId;
+      resetPosDraft();
+      renderDashboard();
+      toast(result.idempotent ? "تم حفظ وطباعة الشيك بالفعل" : "تم تحصيل الحجز وتجهيز الشيك مرة واحدة");
+      printReceipt(receiptId);
+      return;
+    }
     const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
-    state.posCart = [];
-    state.posIdempotencyKey = "";
-    $("#posDiscount").value = "0";
-    if($("#posRedeemPoints"))$("#posRedeemPoints").value="0";if($("#posRedeemCashback"))$("#posRedeemCashback").value="0";
-    await Promise.all([loadDashboard(), loadBusiness(true)]);
-    renderPos();
+    const receipt = result.receipt || { id: result.bookingCode, code: result.bookingCode, source: "pos", total: result.total, paymentStatus: result.paymentStatus, bookingDate: cairoDateKey(), createdAt: new Date().toISOString(), items: [] };
+    applyPosReceiptLocally(receipt);
+    resetPosDraft();
     toast(`تم حفظ الطلب ${result.bookingCode} وتجهيز الشيك`);
-    printReceipt(result.bookingCode);
+    printReceipt(receipt.id || result.bookingCode);
   } catch (error) { toast(error.message || "تعذر حفظ طلب المحل", true); }
   finally { button.disabled = false; }
 }
 
 function selectPosCustomer(id) {
   const customer = (state.collections.get("customers") || []).find(item => item.id === id);
-  if (!customer) return;
+  if (!customer) {
+    $("#posFirstName").value = "";
+    $("#posLastName").value = "";
+    $("#posPhone").value = "";
+    return;
+  }
   $("#posFirstName").value = customer.firstName || "";
   $("#posLastName").value = customer.lastName || "";
   $("#posPhone").value = customer.phone || "";
@@ -651,10 +872,26 @@ async function paySalary(staffId) {
 async function loadCollection(collection, refresh = false) {
   if (!refresh && state.collections.has(collection)) return renderCollection(collection);
   try {
-    const result = await getCollection(collection);
+    const result = await getCollection(collection, 100);
     state.collections.set(collection, result.items || []);
+    state.collectionCursors.set(collection, result.nextCursor || null);
     renderCollection(collection);
+    $$(`[data-load-more="${CSS.escape(collection)}"]`).forEach(button => { button.hidden = !result.nextCursor; });
   } catch (error) { toast(`تعذر تحميل ${collection}: ${error.message}`, true); }
+}
+
+async function loadMoreCollection(collection, button) {
+  const cursor = state.collectionCursors.get(collection);
+  if (!cursor) return;
+  await withButtonBusy(button, async () => {
+    const result = await getCollection(collection, 100, cursor);
+    const current = state.collections.get(collection) || [];
+    const merged = new Map([...current, ...(result.items || [])].map(item => [item.id, item]));
+    state.collections.set(collection, [...merged.values()]);
+    state.collectionCursors.set(collection, result.nextCursor || null);
+    button.hidden = !result.nextCursor;
+    renderCollection(collection);
+  }).catch(error => toast(error.message || "تعذر تحميل المزيد", true));
 }
 
 function renderCollection(collection) {
@@ -752,11 +989,19 @@ async function openCustomerDrawer(id) {
   if (!item) return toast("تعذر العثور على العميل", true);
   const name = `${item.firstName || ""} ${item.lastName || ""}`.trim() || "عميل بدون اسم";
   $("#customerDrawerTitle").textContent = name;
-  const token = item.qrToken || item.customerQrToken || "";
+  $("#customerDrawerBody").innerHTML = '<div class="empty-state">جارٍ تحميل ملف العميل…</div>';
+  if (!$("#customerDrawer").open) $("#customerDrawer").showModal();
+  let profile;
+  try { profile = await getCustomer360(id); }
+  catch (error) { return void ($("#customerDrawerBody").innerHTML = `<div class="empty-state">${escapeHtml(error.message || "تعذر تحميل الملف")}</div>`); }
+  const customer = profile.customer || item;
+  const overview = profile.overview || {};
+  const token = customer.qrToken || customer.customerQrToken || "";
   let qr = "";
   if (token) try { qr = await QRCode.toDataURL(token, { width: 180, margin: 1 }); } catch {}
-  $("#customerDrawerBody").innerHTML = `<section class="customer-drawer-hero"><div class="customer-avatar">${escapeHtml(name.charAt(0))}</div><div><b>${escapeHtml(name)}</b><a href="tel:+2${escapeAttr(item.phone || "")}">${escapeHtml(item.phone || "لا يوجد رقم")}</a></div>${qr ? `<img src="${qr}" alt="QR العميل" width="110" height="110">` : ""}</section><dl class="customer-drawer-stats"><div><dt>آخر فرع</dt><dd>${escapeHtml(item.lastBranchId ? branchLabel(item.lastBranchId) : "—")}</dd></div><div><dt>عدد الحجوزات</dt><dd>${Number(item.bookingCount || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(item.totalSpent)}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(item.lastBookingAt))}</dd></div><div><dt>النقاط</dt><dd>${Number(item.pointsBalance || 0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(item.cashbackBalance)}</dd></div><div><dt>الحلاق المفضل</dt><dd>${escapeHtml(item.favoriteWorkerNameAr || item.favoriteWorkerId || "—")}</dd></div><div><dt>موافقة التسويق</dt><dd>${item.whatsappOptIn === true ? "مسجلة" : "غير مسجلة"}</dd></div></dl><div class="customer-drawer-actions"><button data-customer-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(item.id)}">تعديل المحفظة</button>`:""}</div>`;
-  $("#customerDrawer").showModal();
+  const noShowWarning = Number(overview.noShows || 0) >= 3 ? `<p class="customer-warning">⚠ هذا العميل لديه ${Number(overview.noShows)} حالات عدم حضور سابقة</p>` : "";
+  const bookingList = items => items.map(row => `<li><b>${escapeHtml(row.code || row.receiptNumber || row.id)}</b><span>${escapeHtml(row.bookingDate || "")} ${escapeHtml(row.bookingTime || "")} • ${escapeHtml(statusLabel(row.status))} • ${money(row.total)}</span></li>`).join("") || "<li>لا توجد بيانات.</li>";
+  $("#customerDrawerBody").innerHTML = `<section class="customer-drawer-hero"><div class="customer-avatar">${escapeHtml(name.charAt(0))}</div><div><b>${escapeHtml(name)}</b><a href="tel:+2${escapeAttr(customer.phone || "")}">${escapeHtml(customer.phone || "لا يوجد رقم")}</a><small>ID: ${escapeHtml(customer.id)}</small></div>${qr ? `<img src="${qr}" alt="QR العميل" width="110" height="110">` : ""}</section>${noShowWarning}<dl class="customer-drawer-stats"><div><dt>الفرع المفضل</dt><dd>${escapeHtml(overview.preferredBranch ? branchLabel(overview.preferredBranch) : "—")}</dd></div><div><dt>إجمالي الزيارات</dt><dd>${Number(overview.totalVisits || 0)}</dd></div><div><dt>الزيارات المكتملة</dt><dd>${Number(overview.completedVisits || 0)}</dd></div><div><dt>أول زيارة</dt><dd>${escapeHtml(dateTime(customer.firstVisitAt || customer.createdAt))}</dd></div><div><dt>آخر زيارة</dt><dd>${escapeHtml(dateTime(customer.lastVisitAt || customer.lastBookingAt))}</dd></div><div><dt>الإلغاءات</dt><dd>${Number(overview.cancellations || 0)}</dd></div><div><dt>عدم الحضور</dt><dd>${Number(overview.noShows || 0)}</dd></div><div><dt>إجمالي المدفوع</dt><dd>${money(overview.totalSpent)}</dd></div><div><dt>متوسط الشيك</dt><dd>${money(overview.averageTicket)}</dd></div><div><dt>النقاط</dt><dd>${Number(customer.pointsBalance || 0)}</dd></div><div><dt>الكاش باك</dt><dd>${money(customer.cashbackBalance)}</dd></div><div><dt>الحلاق المفضل</dt><dd>${escapeHtml(customer.favoriteStaffNameAr || overview.favoriteWorkerId || "—")}</dd></div><div><dt>موافقة واتساب</dt><dd>${customer.whatsappOptIn === true ? "مسجلة" : "غير مسجلة"}</dd></div></dl><div class="customer-360-lists"><details open><summary>الحجوزات القادمة (${profile.upcoming.length})</summary><ul>${bookingList(profile.upcoming)}</ul></details><details><summary>آخر الحجوزات</summary><ul>${bookingList(profile.bookingHistory)}</ul></details><details><summary>آخر الشيكات</summary><ul>${bookingList(profile.orders)}</ul></details><details><summary>حركات المحفظة</summary><ul>${(profile.wallet || []).map(row => `<li><b>${escapeHtml(row.type || "حركة")}</b><span>${Number(row.points || 0)} نقطة • ${money(row.cashback)} • ${escapeHtml(dateTime(row.createdAt))}</span></li>`).join("") || "<li>لا توجد حركات.</li>"}</ul></details></div><div class="customer-drawer-actions"><button data-customer-pos="${escapeAttr(customer.id)}">فتح في نقطة البيع</button><button data-rotate-customer-qr="${escapeAttr(customer.id)}">تجديد QR</button>${state.permissions.has("rewards")||state.role==="admin"?`<button data-wallet-adjust="${escapeAttr(customer.id)}">تعديل المحفظة</button>`:""}</div>`;
 }
 
 function branchScopeLabel(ids) {
@@ -790,6 +1035,10 @@ function renderField([name, label, type, required = false, options = null, full 
   if (type === "category-select") {
     const categories = (state.collections.get("categories") || []).filter(category => category.active !== false);
     return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="">اختر التصنيف</option>${categories.map(category => `<option value="${escapeAttr(category.id)}" ${String(value) === category.id ? "selected" : ""}>${escapeHtml(category.nameAr || category.id)}</option>`).join("")}</select></label>`;
+  }
+  if (type === "staff-select") {
+    const staff = (state.collections.get("staff") || []).filter(member => member.active !== false);
+    return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="">اختر العامل</option>${staff.map(member => `<option value="${escapeAttr(member.id)}" ${String(value) === member.id ? "selected" : ""}>${escapeHtml(member.nameAr || member.id)}</option>`).join("")}</select></label>`;
   }
   if (type === "branch-scope") {
     const scope = Array.isArray(item[name]) ? item[name].join(",") : String(value);
@@ -875,6 +1124,7 @@ function openSecureDelete(kind, id, label) {
   state.secureDelete = { kind, id, label };
   $("#secureDeleteMessage").textContent = `سيتم حذف ${label} نهائيًا وتحديث الحسابات المرتبطة به. هذه العملية لا يمكن التراجع عنها.`;
   $("#secureDeletePassword").value = "";
+  $("#secureDeleteReason").value = "";
   $("#secureDeleteDialog").showModal();
   setTimeout(() => $("#secureDeletePassword").focus(), 50);
 }
@@ -882,6 +1132,7 @@ function openSecureDelete(kind, id, label) {
 function closeSecureDelete() {
   if ($("#secureDeleteDialog").open) $("#secureDeleteDialog").close();
   $("#secureDeletePassword").value = "";
+  $("#secureDeleteReason").value = "";
   state.secureDelete = { kind: "", id: "", label: "" };
 }
 
@@ -896,12 +1147,13 @@ function secureDeleteError(error) {
 async function submitSecureDelete(event) {
   event.preventDefault();
   const password = $("#secureDeletePassword").value;
+  const reason = $("#secureDeleteReason").value.trim();
   const pending = { ...state.secureDelete };
-  if (!pending.id || !password) return;
+  if (!pending.id || !password || (["booking", "expense"].includes(pending.kind) && !reason)) return toast("اكتب سبب الحذف لتسجيل العملية", true);
   $("#secureDeleteConfirm").disabled = true;
   try {
     await verifyAdminPassword(password);
-    await secureDeleteRecord(pending.kind, pending.id);
+    await secureDeleteRecord(pending.kind, pending.id, reason);
     closeSecureDelete();
     if (pending.kind === "expense" && state.editingExpenseId === pending.id) resetExpenseForm();
     await loadDashboard();
@@ -928,8 +1180,64 @@ async function updateReview(id, action, featured = false) {
 
 async function updateBookingAction(id, action) {
   const method = document.querySelector(`[data-payment-method="${CSS.escape(id)}"]`)?.value || "cash";
-  try { await changeBooking(id, action, method); await loadDashboard(); toast(action === "markPaid" ? "تم تسجيل الدفع مرة واحدة" : action === "refund" ? "تم تسجيل الاسترداد" : "تم تحديث حالة الحجز"); }
+  try {
+    let reason = "";
+    let idempotencyKey = "";
+    if (["refund", "void"].includes(action)) {
+      if (!confirm(action === "refund" ? "تأكيد استرداد الشيك بالكامل وعكس المخزون والمكافآت؟" : "تأكيد إلغاء الشيك غير المدفوع؟")) return;
+      reason = prompt("اكتب سبب العملية (إلزامي)")?.trim() || "";
+      if (!reason) return toast("سبب العملية مطلوب", true);
+      idempotencyKey = crypto.randomUUID();
+    }
+    const item = state.dashboard.bookings.find(value => value.id === id);
+    const wasPaid = item?.paymentStatus === "paid";
+    const result = await changeBooking(id, action, method, reason, idempotencyKey);
+    if (item) {
+      if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed", "void"].includes(action)) item.status = result.status || (action === "void" ? "cancelled" : action);
+      if (action === "checkout") { item.status = "completed"; item.paymentStatus = "paid"; item.paymentMethod = method; }
+      if (action === "markPaid") { item.paymentStatus = "paid"; item.paymentMethod = method; }
+      if (action === "refund") item.paymentStatus = "refunded";
+      if (action === "refund" && wasPaid) {
+        const stats = state.dashboard.stats || (state.dashboard.stats = {});
+        stats.paidCount = Math.max(0, Number(stats.paidCount || 0) - 1);
+        stats.todayRevenue = Number(stats.todayRevenue || 0) - Number(item.total || 0);
+        stats.monthRevenue = Number(stats.monthRevenue || 0) - Number(item.total || 0);
+        stats.totalRevenue = Number(stats.totalRevenue || 0) - Number(item.total || 0);
+        stats.monthNetProfit = Number(stats.monthNetProfit || 0) - Number(item.total || 0);
+      }
+      if (!wasPaid && ["checkout", "markPaid"].includes(action)) {
+        const stats = state.dashboard.stats || (state.dashboard.stats = {});
+        stats.unpaidCount = Math.max(0, Number(stats.unpaidCount || 0) - 1);
+        stats.paidCount = Number(stats.paidCount || 0) + 1;
+        stats.todayRevenue = Number(stats.todayRevenue || 0) + Number(item.total || 0);
+        stats.monthRevenue = Number(stats.monthRevenue || 0) + Number(item.total || 0);
+        stats.totalRevenue = Number(stats.totalRevenue || 0) + Number(item.total || 0);
+        stats.monthNetProfit = Number(stats.monthNetProfit || 0) + Number(item.total || 0);
+        stats.lastCollected = Number(item.total || 0);
+      }
+    }
+    state.loadedAt.cashier = Date.now();
+    renderDashboard();
+    toast(action === "checkout" ? "تم التحصيل وإكمال الحجز ونقله إلى السجل" : action === "markPaid" ? "تم تسجيل الدفع مرة واحدة" : action === "refund" ? "تم الاسترداد وعكس الآثار المالية والمخزون" : action === "void" ? "تم إلغاء الشيك مع تسجيل السبب" : action === "completed" ? "تم إكمال الحجز ونقله إلى السجل" : "تم تحديث حالة الحجز");
+  }
   catch (error) { toast(error.message || "تعذر تحديث الحجز", true); }
+}
+
+async function promptRescheduleBooking(id) {
+  const item = state.dashboard.bookings.find(value => value.id === id);
+  if (!item) return;
+  const date = prompt("التاريخ الجديد YYYY-MM-DD", item.bookingDate || cairoDateKey())?.trim();
+  if (!date) return;
+  const time = prompt("الوقت الجديد HH:MM", item.bookingTime || "11:00")?.trim();
+  if (!time) return;
+  const staffId = prompt("معرّف العامل", item.staffId || "")?.trim();
+  if (!staffId || !confirm(`تأكيد نقل الحجز إلى ${date} الساعة ${time}؟`)) return;
+  try {
+    const result = await rescheduleBooking({ id, date, time, staffId, requestId: crypto.randomUUID() });
+    Object.assign(item, { bookingDate: result.date, bookingTime: result.time, staffId: result.workerId, staffNameAr: result.workerNameAr });
+    renderDashboard();
+    toast("تم تأمين الموعد الجديد ثم تحرير الموعد القديم");
+  } catch (error) { toast(error.message || "تعذر إعادة الجدولة", true); }
 }
 
 function fillSettings(item) {
@@ -962,9 +1270,18 @@ function exportCsv(filename, headers, rows) {
   URL.revokeObjectURL(link.href);
 }
 
-function notifyNewBooking() {
-  toast("🔔 وصل حجز جديد");
-  if (Notification.permission === "granted") new Notification("حجز جديد في مزين مصر", { body: "افتح لوحة الحجوزات للمراجعة.", icon: "/assets/el-mezaen-logo.jpeg" });
+function detectNewBookings(items) {
+  const active = items.filter(item => item.source !== "pos" && ["pending", "confirmed"].includes(item.status));
+  if (!state.lastBookingIds.size) { state.lastBookingIds = new Set(active.map(item => item.id)); return; }
+  const fresh = active.find(item => !state.lastBookingIds.has(item.id));
+  active.forEach(item => state.lastBookingIds.add(item.id));
+  if (state.lastBookingIds.size > 500) state.lastBookingIds = new Set([...state.lastBookingIds].slice(-300));
+  if (fresh) notifyNewBooking(fresh);
+}
+
+function notifyNewBooking(item = {}) {
+  toast(`🔔 حجز جديد: ${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${item.code || ""}`);
+  if (Notification.permission === "granted") new Notification("حجز جديد وصل الآن", { body: `${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${branchLabel(item.branchId)}`, icon: "/assets/el-mezaen-logo.jpeg", tag: item.id || item.code || "booking" });
   try {
     const context = new AudioContext();
     const oscillator = context.createOscillator();
@@ -973,7 +1290,7 @@ function notifyNewBooking() {
   } catch {}
 }
 
-function statusLabel(value) { return ({ pending: "جديد", confirmed: "مؤكد", rejected: "مرفوض", cancelled: "ملغي", completed: "مكتمل" })[value] || value || "—"; }
+function statusLabel(value) { return ({ pending: "جديد", confirmed: "مؤكد", arrived: "وصل", no_show: "عدم حضور", rejected: "مرفوض", cancelled: "ملغي", completed: "مكتمل" })[value] || value || "—"; }
 function paymentLabel(value) { return ({ unpaid: "لم يدفع", paid: "مدفوع", refunded: "مسترد" })[value] || value || "—"; }
 function paymentMethod(value) { return ({ cash: "نقدي", vodafone_cash: "فودافون كاش", instapay: "إنستاباي", other: "أخرى" })[value] || value || "—"; }
 function emptyRow(columns) { return `<tr><td colspan="${columns}">لا توجد بيانات.</td></tr>`; }
@@ -1006,6 +1323,9 @@ document.addEventListener("click", async event => {
   const searchOperation = event.target.closest("[data-admin-search-operation]"); if (searchOperation) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; if (searchOperation.dataset.operationKind === "pos") { await showSection("pos"); setPosView("receipts"); $("#posReceiptSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderPosReceipts(); } else { await showSection("bookings"); $("#bookingSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderBookings(); } }
   const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
   const go = event.target.closest("[data-go]"); if (go) await withButtonBusy(go,()=>showSection(go.dataset.go));
+  const newPos = event.target.closest("[data-new-pos]"); if (newPos) await withButtonBusy(newPos, openNewPosDraft);
+  const loadMore = event.target.closest("[data-load-more]"); if (loadMore) await loadMoreCollection(loadMore.dataset.loadMore, loadMore);
+  const calendarBooking = event.target.closest("[data-calendar-booking]"); if (calendarBooking) { await showSection("bookings"); $("#bookingSearch").value = calendarBooking.dataset.calendarBooking; $("#bookingStatusFilter").value = "all"; renderBookings(); }
   const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);
   const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType, mediaType: add.dataset.presetMedia || "image" } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -1013,6 +1333,8 @@ document.addEventListener("click", async event => {
   const remove = event.target.closest("[data-delete-collection]"); if (remove) await withButtonBusy(remove,()=>deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId));
   const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) await withButtonBusy(toggle,()=>toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId));
   const booking = event.target.closest("[data-booking-action]"); if (booking) await withButtonBusy(booking,()=>updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction));
+  const reschedule = event.target.closest("[data-reschedule-booking]"); if (reschedule) await withButtonBusy(reschedule,()=>promptRescheduleBooking(reschedule.dataset.rescheduleBooking));
+  const bookingPos = event.target.closest("[data-booking-pos]"); if (bookingPos) await withButtonBusy(bookingPos,()=>openBookingInPos(bookingPos.dataset.bookingPos));
   const printButton = event.target.closest("[data-print-booking]"); if (printButton) printReceipt(printButton.dataset.printBooking);
   const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)await withButtonBusy(receipt,()=>openReceiptInWhatsapp(receipt.dataset.whatsappReceipt));
   const openCustomer=event.target.closest("[data-open-customer]");if(openCustomer)openCustomerDrawer(openCustomer.dataset.openCustomer);
@@ -1030,6 +1352,7 @@ document.addEventListener("click", async event => {
   const salary = event.target.closest("[data-pay-salary]"); if (salary) await withButtonBusy(salary,()=>paySalary(salary.dataset.paySalary));
   const review = event.target.closest("[data-review-action]"); if (review) await withButtonBusy(review,()=>updateReview(review.dataset.reviewId, review.dataset.reviewAction, review.dataset.reviewFeatured === "true"));
   const wallet=event.target.closest("[data-wallet-adjust]");if(wallet){const points=Number(prompt("تعديل النقاط (+ أو -)","0")||0);const cashback=Number(prompt("تعديل الكاش باك (+ أو -)","0")||0);const reason=prompt("سبب التعديل")||"";if(reason&&(points||cashback))await withButtonBusy(wallet,async()=>{try{await adjustCustomerWallet({customerId:wallet.dataset.walletAdjust,points,cashback,reason,idempotencyKey:crypto.randomUUID()});await loadCollection("customers",true);toast("تم تعديل المحفظة وتسجيل الحركة")}catch(error){toast(error.message||"تعذر التعديل",true)}})}
+  const rotateQr=event.target.closest("[data-rotate-customer-qr]");if(rotateQr){const reason=prompt("سبب إلغاء QR القديم وإصدار كود جديد")||"";if(reason&&confirm("سيصبح QR القديم غير صالح فورًا. هل تريد المتابعة؟"))await withButtonBusy(rotateQr,async()=>{try{await rotateCustomerQr({customerId:rotateQr.dataset.rotateCustomerQr,reason,requestId:crypto.randomUUID()});await openCustomerDrawer(rotateQr.dataset.rotateCustomerQr);toast("تم إلغاء QR القديم وإصدار كود جديد")}catch(error){toast(error.message||"تعذر تجديد QR",true)}})}
   const campaignAction=event.target.closest("[data-campaign-action]");if(campaignAction)await withButtonBusy(campaignAction,async()=>{try{await updateWhatsappCampaignState(campaignAction.dataset.campaignId,campaignAction.dataset.campaignAction);await loadCollection("campaigns",true);renderCampaigns();toast("تم تحديث الحملة")}catch(error){toast(error.message,true)}});
   const consent=event.target.closest("[data-whatsapp-consent]");if(consent){const optedIn=consent.dataset.currentConsent!=="true";if(confirm(optedIn?"أكد أن العميل وافق صراحة على رسائل واتساب التسويقية":"إلغاء موافقة العميل على التسويق؟"))await withButtonBusy(consent,async()=>{try{await updateWhatsappConsent(consent.dataset.whatsappConsent,optedIn);await loadCollection("customers",true);toast("تم تحديث الموافقة وحفظ سجلها")}catch(error){toast(error.message,true)}})}
 });
@@ -1082,7 +1405,7 @@ $("#accessForm").addEventListener("submit", submitAccessEdit);
 $("#customerDrawerClose").addEventListener("click", () => $("#customerDrawer").close());
 $("#entityForm").addEventListener("submit", saveEditor);
 [$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
-$("#campaignForm")?.addEventListener("submit",async event=>{event.preventDefault();const button=event.currentTarget.querySelector("button");button.disabled=true;try{const data=Object.fromEntries(new FormData(event.currentTarget));await createWhatsappCampaign({...data,testMode:data.testMode==="true",recipientCap:Number(data.recipientCap||100)});await loadCollection("campaigns",true);renderCampaigns();toast("تم وضع الحملة في قائمة الإرسال الآمنة")}catch(error){toast(error.message||"تعذر إنشاء الحملة",true)}finally{button.disabled=false}});
+$("#campaignForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;const button=form.querySelector("button");button.disabled=true;try{const data=Object.fromEntries(new FormData(form));const preview=await previewWhatsappCampaign(data);if(!preview.killSwitchEnabled)throw new Error("إرسال الحملات متوقف من إعدادات النظام");if(!confirm(`معاينة الحملة\nالقالب: ${preview.templateName}\nالفرع: ${branchLabel(preview.branchId)}\nالمؤهلون: ${preview.eligibleCount}\nالوضع: ${data.testMode==="true"?"اختبار آمن":"إنتاج"}\n\nتأكيد وضعها في الطابور؟`))return;await createWhatsappCampaign({...data,testMode:data.testMode==="true",recipientCap:Number(data.recipientCap||100),eligibleCount:preview.eligibleCount,idempotencyKey:form.dataset.key||=crypto.randomUUID()});form.dataset.key="";await loadCollection("campaigns",true);renderCampaigns();toast("تم وضع الحملة في قائمة الإرسال الآمنة")}catch(error){toast(error.message||"تعذر إنشاء الحملة",true)}finally{button.disabled=false}});
 $("#bookingSearch").addEventListener("input", renderBookings);
 $("#bookingStatusFilter").addEventListener("change", renderBookings);
 $("#bookingBranchFilter").addEventListener("change", renderBookings);
@@ -1097,6 +1420,13 @@ $("#secureDeleteClose").addEventListener("click", closeSecureDelete);
 $("#secureDeleteCancel").addEventListener("click", closeSecureDelete);
 $("#secureDeleteForm").addEventListener("submit", submitSecureDelete);
 $("#posForm").addEventListener("submit", submitPosOrder);
+$("#refreshCalendar")?.addEventListener("click", () => loadCalendar());
+$("#calendarView")?.addEventListener("change", () => loadCalendar());
+$("#openShiftForm")?.addEventListener("submit", submitOpenShift);
+$("#cashMovementForm")?.addEventListener("submit", submitCashMovement);
+$("#closeShiftForm")?.addEventListener("submit", submitCloseShift);
+$("#dailyClosingForm")?.addEventListener("submit", submitDailyClosing);
+$("#openShiftForm [name=branchId]")?.addEventListener("change", () => loadCashOperations());
 $("#posMobileSummary").addEventListener("click", () => $("#pos").classList.add("mobile-ticket-open"));
 $("#posTicketClose").addEventListener("click", () => $("#pos").classList.remove("mobile-ticket-open"));
 $("#posBranch").addEventListener("change", renderPos);
@@ -1104,7 +1434,7 @@ $("#posSectionFilter").addEventListener("change", () => { $("#posItemSearch").va
 $("#posCategoryFilter").addEventListener("change", renderPos);
 $("#serviceCategoryFilter").addEventListener("change", () => renderCollection("services"));
 $("#posCustomer").addEventListener("change", event => selectPosCustomer(event.target.value));
-let phoneLookupTimer;$("#posPhone").addEventListener("input",event=>{clearTimeout(phoneLookupTimer);const phone=event.target.value;if(String(phone).replace(/\D/g,"").length<11)return;phoneLookupTimer=setTimeout(async()=>{try{const result=await findCustomerByPhone(phone);if(result.customer){$("#posFirstName").value=result.customer.firstName||"";$("#posLastName").value=result.customer.lastName||"";toast("تم العثور على العميل بدون تحميل قاعدة العملاء كاملة")}}catch{}},350)});
+let phoneLookupTimer;$("#posPhone").addEventListener("input",event=>{clearTimeout(phoneLookupTimer);const phone=event.target.value;if(String(phone).replace(/\D/g,"").length<11)return;phoneLookupTimer=setTimeout(async()=>{try{const result=await findCustomerByPhone(phone);if(result.customer){rememberPosCustomer(result.customer);toast("تم العثور على العميل بدون تحميل قاعدة العملاء كاملة")}}catch{}},350)});
 $("#expenseForm").addEventListener("submit", submitExpense);
 $("#expenseCategory").addEventListener("change", toggleExpenseInventory);
 $("#expenseCancelEdit").addEventListener("click", resetExpenseForm);
@@ -1124,12 +1454,19 @@ $("#installAdmin").addEventListener("click", async () => { if (!deferredInstallP
 
 setupPanels();
 $("#reviewStatusFilter").addEventListener("change", () => renderCollection("reviews"));
-setTheme(localStorage.getItem("mz-admin-theme") === "light" ? "light" : "dark");
+setTheme(localStorage.getItem("mz-admin-theme") === "dark" ? "dark" : "light");
 setSidebarCollapsed(localStorage.getItem("mz-admin-sidebar-collapsed") === "true");
 $("#expenseDate").value = cairoDateKey();
 $("#payrollMonth").value = cairoDateKey().slice(0, 7);
+$("#calendarDate").value = cairoDateKey();
+$("#dailyClosingForm [name=businessDate]").value = cairoDateKey();
 toggleExpenseInventory();
+const updateConnectionState = () => { const target = $("#connectionState"); if (!target) return; target.textContent = navigator.onLine ? "● متصل" : "● غير متصل"; target.classList.toggle("offline", !navigator.onLine); };
+window.addEventListener("online", updateConnectionState);
+window.addEventListener("offline", updateConnectionState);
+updateConnectionState();
 if ("serviceWorker" in navigator && location.protocol !== "http:") navigator.serviceWorker.register("/sw.js").catch(() => {});
+let dashboardRefreshTimer;
 watchAuth(async user => {
   if (!user) { location.replace("/login/"); return; }
   try {
@@ -1141,6 +1478,12 @@ watchAuth(async user => {
     applyAccess();
     const firstSection = state.role === "admin" ? "dashboard" : ([...state.permissions].find(value => $(`#${value}`)) || "pos");
     await showSection(firstSection);
-    setInterval(() => { if (["dashboard", "bookings", "revenue", "pos", "expenses"].includes(state.section)) loadDashboard(true); }, 20000);
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = setInterval(() => {
+      if (document.hidden) return;
+      if (state.section === "pos" || (state.section === "bookings" && state.role === "cashier")) loadCashierDashboard(true);
+      else if (["dashboard", "bookings", "revenue", "expenses"].includes(state.section)) loadDashboard(true);
+    }, 60000);
   } catch { location.replace("/login/"); }
 });
+window.addEventListener("beforeunload", () => clearInterval(dashboardRefreshTimer), { once: true });
