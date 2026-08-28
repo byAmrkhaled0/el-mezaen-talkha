@@ -3,7 +3,6 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-ch
 import { browserLocalPersistence, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
-import { deleteToken, getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const configured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
@@ -12,6 +11,13 @@ let auth;
 let functions;
 let storage;
 const FRONTEND_VERSION = "2.0.0";
+let messagingModulePromise;
+const loadMessaging = () => messagingModulePromise ||= import("firebase/messaging");
+
+async function getActiveServiceWorker() {
+  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  return registration.active ? registration : navigator.serviceWorker.ready;
+}
 
 function assertBackendCompatibility(data) {
   const current = FRONTEND_VERSION.split(".").map(Number);
@@ -58,9 +64,10 @@ export async function currentAccess(user) {
 export async function logout() {
   if (!auth) return;
   try {
-    if (configured && Notification.permission === "granted" && await isSupported()) {
+    const { deleteToken, getMessaging, getToken, isSupported } = await loadMessaging();
+    if (configured && "Notification" in globalThis && Notification.permission === "granted" && await isSupported()) {
       const messaging = getMessaging(app);
-      const registration = await navigator.serviceWorker.getRegistration("/sw.js") || await navigator.serviceWorker.ready;
+      const registration = await getActiveServiceWorker();
       const token = await getToken(messaging, { vapidKey: globalThis.__VAPID_KEY__, serviceWorkerRegistration: registration });
       if (token) await Promise.race([call("unregisterPushToken", { token }), new Promise(resolve => setTimeout(resolve, 3000))]);
       await deleteToken(messaging);
@@ -109,7 +116,7 @@ async function readCall(name, data = {}) {
   throw lastError;
 }
 
-export const getDashboard = () => readCall("getAdminDashboard");
+export const getDashboard = (branchId = "all") => readCall("getAdminDashboard", { branchId });
 export const getCashierSnapshot = () => readCall("getCashierSnapshot");
 export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
 export const getServiceTargetsDashboard = (month, branchId = "all") => readCall("getServiceTargetsDashboard", { month, branchId });
@@ -246,11 +253,14 @@ export async function createVideoPoster(file) {
 }
 
 export async function enablePush() {
-  if (!configured || !globalThis.__VAPID_KEY__ || !await isSupported()) throw new Error("PUSH_NOT_CONFIGURED");
-  const registration = await navigator.serviceWorker.register("/sw.js");
-  const permission = await Notification.requestPermission();
+  if (!configured || !globalThis.__VAPID_KEY__ || !("Notification" in globalThis) || !("serviceWorker" in navigator)) throw new Error("PUSH_NOT_CONFIGURED");
+  const { getMessaging, getToken, isSupported } = await loadMessaging();
+  if (!await isSupported()) throw new Error("PUSH_NOT_CONFIGURED");
+  const registration = await getActiveServiceWorker();
+  const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
   if (permission !== "granted") throw new Error("PUSH_DENIED");
   const token = await getToken(getMessaging(app), { vapidKey: globalThis.__VAPID_KEY__, serviceWorkerRegistration: registration });
+  if (!token) throw new Error("PUSH_TOKEN_FAILED");
   await call("registerPushToken", { token });
   return true;
 }

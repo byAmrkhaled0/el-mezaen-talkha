@@ -831,7 +831,11 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const canDailyRevenue = access.has("dashboard") || access.has("revenue") || access.has("pos");
   const canRevenue = access.has("revenue");
   const canExpenses = access.has("expenses");
-  const allowedBranches = branchesFor(request);
+  const claimedBranches = branchesFor(request);
+  const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (requestedBranch !== "all" && !["talkha", "mashaya"].includes(requestedBranch)) throw new HttpsError("invalid-argument", "اختر نطاق فرع صحيحًا");
+  if (requestedBranch !== "all" && claimedBranches.length && !claimedBranches.includes(requestedBranch)) throw new HttpsError("permission-denied", "هذا الحساب غير مصرح له بهذا الفرع");
+  const allowedBranches = requestedBranch === "all" ? claimedBranches : [requestedBranch];
   const dashboardBranchIds = allowedBranches.length ? allowedBranches : ["talkha", "mashaya"];
   const today = businessDateParts().dateKey;
   const month = today.slice(0, 7);

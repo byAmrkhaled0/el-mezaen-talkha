@@ -144,6 +144,41 @@ test("mobile admin widgets stay mobile-only and use outlined SVG icons", async (
   assert.match(css, /fill:none!important;stroke:currentColor!important/);
 });
 
+test("desktop admin exposes the team and can reconnect an existing push permission", async () => {
+  const [html, admin, api, css] = await Promise.all([read("admin/index.html"), read("src/admin.js"), read("src/admin-api.js"), read("src/admin.css")]);
+  assert.match(html, /class="desktop-primary-nav"[\s\S]*?data-section="staff"[\s\S]*?فريق العمل/);
+  assert.doesNotMatch(html, />عرض الموقع<\/a>/);
+  assert.match(css, /\.desktop-primary-nav,\.desktop-dashboard-filter,\.desktop-action,[^}]+\{display:none\}/);
+  assert.match(css, /@media\(min-width:1024px\)/);
+  assert.match(admin, /permission === "granted" \? "إعادة ربط الإشعارات"/);
+  assert.match(admin, /connectAdminPush\(\)/);
+  assert.match(api, /import\("firebase\/messaging"\)/);
+  assert.match(api, /getActiveServiceWorker/);
+});
+
+test("receipt actions keep print and WhatsApp image sharing together on desktop", async () => {
+  const [admin, css] = await Promise.all([read("src/admin.js"), read("src/admin.css")]);
+  assert.match(admin, /function receiptActionButtons/);
+  assert.match(admin, /receipt-print[\s\S]*receipt-whatsapp/);
+  assert.match(admin, /whatsappWindow = nativeFileShare \? null : window\.open\("about:blank"/);
+  assert.match(admin, /navigator\.clipboard\.write/);
+  assert.match(admin, /Ctrl\+V داخل واتساب/);
+  assert.match(css, /\.header-branch-chip\{display:none\}/);
+  assert.match(css, /\.row-actions \.receipt-whatsapp/);
+});
+
+test("desktop operations add exact branch scope, shift health, pagination and team summaries", async () => {
+  const [html, admin, api, backend, css] = await Promise.all([read("admin/index.html"), read("src/admin.js"), read("src/admin-api.js"), read("functions/src/index.js"), read("src/admin.css")]);
+  for (const id of ["dashboardBranchFilter", "dashboardShiftState", "dashboardDateFilter", "dashboardStaffFilter", "dashboardPageSize", "dashboardPagePrev", "staffSummary", "receiptDrawer", "adminAlertsDialog"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(admin, /let dashboardPage = 1/);
+  assert.match(admin, /function renderStaffSummary/);
+  assert.match(admin, /function renderAdminAlerts/);
+  assert.match(admin, /event\.ctrlKey \|\| event\.metaKey/);
+  assert.match(api, /getDashboard = \(branchId = "all"\)/);
+  assert.match(backend, /requestedBranch !== "all"[\s\S]*claimedBranches\.includes\(requestedBranch\)/);
+  assert.match(css, /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+});
+
 test("admin can safely install only missing fixed-id packages and inspect full details", async () => {
   const [admin, css] = await Promise.all([read("src/admin.js"), read("src/admin.css")]);
   assert.match(admin, /import \{ newMashayaPackages \}/);
