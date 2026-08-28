@@ -1,5 +1,8 @@
 import "./styles.css";
 import { getCatalog, trackEvent } from "./firebase-client.js";
+import { bindSafeBack } from "./navigation.js";
+
+bindSafeBack();
 
 const branchId = document.body.dataset.branchPage;
 const book = document.querySelector("[data-choose-branch]");

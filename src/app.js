@@ -40,6 +40,7 @@ const state = {
   managedBooking: null,
   manageCredentials: null
 };
+const homepagePackageIds = ["package-mashaya-friends-250", "package-mashaya-silver-600", "package-mashaya-450"];
 
 const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
 const localized = (item, key = "name") => item?.[`${key}${state.lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
@@ -47,6 +48,7 @@ const needsAppointment = () => cartItems().some(item => !["product", "inventory"
 const settings = () => state.catalog.settings || {};
 const currentBranch = () => state.catalog.branches.find(item => item.id === state.branchId && item.active !== false) || null;
 const availableAtBranch = item => !state.branchId || !Array.isArray(item?.branchIds) || !item.branchIds.length || item.branchIds.includes(state.branchId);
+const explicitlyAvailableAtBranch = item => Boolean(state.branchId && Array.isArray(item?.branchIds) && item.branchIds.includes(state.branchId));
 const branchName = branch => localized(branch) || (state.lang === "ar" ? branch?.nameAr : branch?.nameEn) || "";
 const branchAddress = branch => state.lang === "ar" ? branch?.addressAr : branch?.addressEn || branch?.addressAr;
 const phoneHref = value => {
@@ -63,13 +65,25 @@ const safeWebUrl = value => {
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch { return ""; }
 };
+const lineIconPaths = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/>',
+  moon: '<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  map: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+  sparkles: '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
+  phone: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/>',
+  cart: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.5 11h10l3-8H7"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  cup: '<path d="M5 8h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V8Z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2M8 3v2M12 3v2"/>'
+};
+const lineIcon = (name, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${lineIconPaths[name] || lineIconPaths.sparkles}</svg>`;
 const socialIcons = {
-  Facebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>',
-  Instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>',
-  TikTok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v11a4 4 0 1 1-4-4v4a1 1 0 1 0 1 1V3h3c.4 2 2 3.6 4 4v3c-1.5 0-2.9-.5-4-1.3V3Z"/></svg>',
-  WhatsApp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg>',
-  Phone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/></svg>',
-  Map: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>'
+  Facebook: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v9h4v-9h3l1-4h-4V9c0-1 .3-1 1-1Z"/></svg>',
+  Instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>',
+  TikTok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v11a4 4 0 1 1-4-4v4a1 1 0 1 0 1 1V3h3c.4 2 2 3.6 4 4v3c-1.5 0-2.9-.5-4-1.3V3Z"/></svg>',
+  WhatsApp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg>',
+  Phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/></svg>',
+  Map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>'
 };
 
 function itemIndex() {
@@ -83,7 +97,21 @@ function itemIndex() {
 
 function cartItems() {
   const index = itemIndex();
-  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1, option: line.option || "" })).filter(item => item.id && availableAtBranch(item));
+  return state.cart.map(line => ({ ...index.get(line.id), qty: line.qty || 1, option: line.option || "", choices: line.choices && typeof line.choices === "object" ? line.choices : {} })).filter(item => item.id && availableAtBranch(item));
+}
+
+function dedupeCatalogCards(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = [String(item.nameAr || "").trim().replace(/^ال/, ""), item.categoryId || "", Number(item.price || 0), Number(item.duration || 0), ...(item.branchIds || []).slice().sort()].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function packageChoiceMissing(item) {
+  return (item.choiceGroups || []).find(group => group.required !== false && !(group.options || []).some(option => option.id === item.choices?.[group.id]));
 }
 
 function subtotal() { return cartItems().reduce((sum, item) => sum + Number(item.price || item.newPrice || 0) * item.qty, 0); }
@@ -117,7 +145,7 @@ function setTheme(theme) {
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("mz-theme", theme);
-  $("#themeToggle").textContent = theme === "dark" ? "☀" : "☾";
+  $("#themeToggle").innerHTML = lineIcon(theme === "dark" ? "sun" : "moon", 22);
 }
 
 function setLanguage(lang) {
@@ -159,27 +187,80 @@ function renderOffers() {
 }
 
 function renderPackages() {
-  $("#packageGrid").innerHTML = state.catalog.packages.filter(item => availableAtBranch(item) && item.active !== false && item.status !== "expired").map(item => {
+  const packagesById = new Map(state.catalog.packages.filter(item => item.active !== false && item.status !== "expired").map(item => [item.id, item]));
+  $("#packageGrid").innerHTML = homepagePackageIds.map(id => packagesById.get(id)).filter(Boolean).map(item => {
     const badge = item.badge === "popular" ? t("featured", state.lang) : item.badge === "special" ? t("special", state.lang) : t("package", state.lang);
+    const included = state.lang === "ar" ? item.includedItemsAr : item.includedItemsEn || item.includedItemsAr;
+    const oldPrice = Number(item.originalPrice || item.price || 0);
+    const branchOnly = Array.isArray(item.branchIds) && item.branchIds.length === 1 ? (item.branchLabelAr || (item.branchIds[0] === "mashaya" ? "خاص بفرع المشاية – المنصورة" : "خاص بفرع طلخا")) : "";
     return `<article class="package-card ${item.badge ? "highlight" : ""} reveal">
       <div class="package-cover"><img src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 33vw"><span>${badge}</span></div>
-      <div class="card-top"><span class="card-tag">♛ ${badge}</span><span class="duration">◷ ${item.duration} ${t("minute", state.lang)}</span></div>
+      <div class="card-top"><span class="card-tag">${lineIcon("sparkles", 18)} ${badge}</span>${Number(item.duration) > 0 ? `<span class="duration">${lineIcon("clock", 17)} ${item.duration} ${t("minute", state.lang)}</span>` : ""}</div>
+      ${branchOnly ? `<span class="package-branch">${lineIcon("map", 17)} ${escapeHtml(branchOnly)}</span>` : ""}
       <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p>
-      <div class="price-row"><strong class="price">${money(item.price)}</strong></div>
-      <button class="btn btn-primary" data-add-id="${escapeAttr(item.id)}" data-kind="package">${t("addCart", state.lang)}</button>
+      ${Array.isArray(included) && included.length ? `<ul class="package-services package-services-preview">${included.slice(0, 3).map(value => `<li>${escapeHtml(value)}</li>`).join("")}${included.length > 3 ? `<li class="more-services">+${included.length - 3} ${state.lang === "ar" ? "خدمات أخرى" : "more services"}</li>` : ""}</ul>` : ""}
+      <div class="price-row package-price"><div>${oldPrice > Number(item.price) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.price)}</strong></div></div>
+      <div class="package-card-actions"><button class="btn btn-ghost" type="button" data-package-details="${escapeAttr(item.id)}">${state.lang === "ar" ? "تفاصيل الباقة" : "Package details"}</button><button class="btn btn-primary" type="button" data-add-id="${escapeAttr(item.id)}" data-kind="package">${t("addCart", state.lang)}</button></div>
     </article>`;
   }).join("");
 }
 
+function openPackageDetails(id) {
+  const item = state.catalog.packages.find(value => value.id === id && value.active !== false);
+  if (!item) return;
+  const included = state.lang === "ar" ? item.includedItemsAr : item.includedItemsEn || item.includedItemsAr;
+  const oldPrice = Number(item.originalPrice || item.price || 0);
+  const branch = state.catalog.branches.find(value => (item.branchIds || []).includes(value.id));
+  $("#packageDetailsTitle").textContent = localized(item);
+  $("#packageDetailsBody").innerHTML = `
+    <img class="package-details-image" src="${escapeAttr(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeAttr(localized(item))}" loading="lazy" decoding="async">
+    <div class="package-details-copy">
+      ${branch ? `<span class="package-branch">${lineIcon("map", 17)} ${escapeHtml(branchName(branch))}</span>` : ""}
+      ${localized(item, "description") ? `<p>${escapeHtml(localized(item, "description"))}</p>` : ""}
+      <div class="package-details-price">${oldPrice > Number(item.price) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.price)}</strong></div>
+      ${Array.isArray(included) && included.length ? `<h3>${state.lang === "ar" ? "الخدمات داخل الباقة" : "Included services"}</h3><ul class="package-services">${included.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}
+      ${(item.choiceGroups || []).length ? `<h3>${state.lang === "ar" ? "اختر خدمة واحدة من كل مجموعة" : "Choose one from each group"}</h3><div class="package-alternatives">${item.choiceGroups.map(group => `<span><b>${escapeHtml(state.lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)}:</b> ${(group.options || []).map(value => escapeHtml(state.lang === "ar" ? value.labelAr : value.labelEn || value.labelAr)).join(" / ")}</span>`).join("")}</div>` : ""}
+      ${localized(item, "terms") ? `<p class="package-terms"><b>${state.lang === "ar" ? "الشروط:" : "Terms:"}</b> ${escapeHtml(localized(item, "terms"))}</p>` : ""}
+      ${item.phone ? `<a class="package-phone" href="${escapeAttr(phoneHref(item.phone))}" aria-label="${state.lang === "ar" ? "اتصل بالفرع على" : "Call the branch at"} ${escapeAttr(item.phone)}">${lineIcon("phone", 18)} <span>${escapeHtml(item.phone)}</span></a>` : ""}
+    </div>`;
+  $("#packageDetailsAdd").dataset.addPackageId = item.id;
+  $("#packageDetailsAdd").textContent = t("addCart", state.lang);
+  const dialog = $("#packageDetailsDialog");
+  if (!dialog.open) dialog.showModal();
+  document.body.style.overflow = "hidden";
+}
+
+function closePackageDetails() {
+  const dialog = $("#packageDetailsDialog");
+  if (dialog.open) dialog.close();
+  document.body.style.overflow = "";
+}
+
+function serviceIconSvg(categoryId) {
+  const icons = {
+    hair: '<circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><path d="m8.5 8.5 11-5M8.5 15.5l11 5M10 12h10"/>',
+    beard: '<path d="M7 4c1.5-1.3 8.5-1.3 10 0v6c0 5-2.2 9-5 10-2.8-1-5-5-5-10V4Z"/><path d="M9 9h.01M15 9h.01M9 14c2 1.5 4 1.5 6 0"/>',
+    skin: '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
+    wax: '<path d="M12 3S6 10 6 15a6 6 0 0 0 12 0c0-5-6-12-6-12Z"/><path d="M9 16a3 3 0 0 0 3 3"/>',
+    "hair-care": '<path d="M4 5h16v5H4zM6 10v8M9 10v6M12 10v8M15 10v6M18 10v8"/>',
+    service: '<path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 3-3-3 3-3Z"/>',
+    installation: '<path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1-1"/>',
+    products: '<path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    extras: '<path d="M12 4v16M4 12h16"/>'
+  };
+  const aliases = { "beard-care": "beard", "facial-cleaning": "skin" };
+  const icon = icons[categoryId] || icons[aliases[categoryId]] || icons.hair;
+  return `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>`;
+}
+
 function renderServices() {
-  const active = state.catalog.services.filter(item => availableAtBranch(item) && item.active !== false);
+  const active = dedupeCatalogCards(state.catalog.services.filter(item => availableAtBranch(item) && item.active !== false)).sort((a, b) => Number(b.featured === true) - Number(a.featured === true) || Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   $("#categoryFilters").innerHTML = `<button class="filter-chip ${state.category === "all" ? "active" : ""}" type="button" data-category="all" role="tab">${t("all", state.lang)}</button>` + state.catalog.categories.filter(cat => cat.active !== false && cat.id !== "packages" && active.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${state.category === cat.id ? "active" : ""}" type="button" data-category="${escapeAttr(cat.id)}" role="tab">${escapeHtml(localized(cat))}</button>`).join("");
-  const visible = (state.category === "all" ? active : active.filter(item => item.categoryId === state.category)).slice(0, 6);
-  const icons = { hair: "✂", beard: "♢", skin: "✦", extras: "+", wax: "◈", "beard-care": "♢", "hair-care": "✧", service: "▦", installation: "⌁", products: "▣", "facial-cleaning": "✦" };
+  const visible = (state.category === "all" ? active : active.filter(item => item.categoryId === state.category)).slice(0, 3);
   $("#serviceGrid").innerHTML = visible.map(item => `<article class="service-card reveal">
-    <span class="service-icon" aria-hidden="true">${icons[item.categoryId] || "✂"}</span>
-    <div class="service-meta"><span>${escapeHtml(categoryName(item.categoryId))}</span><span>◷ ${item.duration} ${t("minute", state.lang)}</span></div>
-    <h3>${escapeHtml(localized(item))}</h3>
+    <span class="service-icon" data-service-icon="${escapeAttr(item.categoryId || "hair")}">${serviceIconSvg(item.categoryId)}</span>
+    <div class="service-meta"><span>${escapeHtml(categoryName(item.categoryId))}</span><span>${lineIcon("clock", 16)} ${item.duration} ${t("minute", state.lang)}</span></div>
+    <h3>${escapeHtml(localized(item))}</h3>${localized(item, "description") ? `<p class="service-description">${escapeHtml(localized(item, "description"))}</p>` : ""}
     <div class="price-row"><div>${item.startsFrom ? `<small>${t("from", state.lang)}</small>` : ""}<strong class="price">${money(item.price)}</strong></div>${item.type === "product" ? `<span class="type-pill">${t("product", state.lang)}</span>` : ""}</div>
     <button class="btn btn-ghost" data-add-id="${escapeAttr(item.id)}" data-kind="${item.type === "product" ? "product" : "service"}">${t("addCart", state.lang)}</button>
   </article>`).join("");
@@ -187,27 +268,27 @@ function renderServices() {
 }
 
 function renderTeam() {
-  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => availableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
-    <img class="team-photo" src="${escapeAttr(item.imageUrl || "/assets/el-mezaen-logo.jpeg")}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">
+  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
+    ${item.imageUrl ? `<img class="team-photo" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${state.lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeAttr(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${state.lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}
     <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
     <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
   </article>`).join("");
 }
 
 function renderContent() {
-  const results = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "result" && item.imageUrl);
+  const results = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "result" && item.imageUrl);
   $("#results").hidden = results.length === 0;
   $("#resultsGrid").innerHTML = results.slice(0, 3).map(item => `<a class="result-card reveal" href="/results/"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" width="1080" height="1080"><span>${escapeHtml(localized(item, "title"))}</span><small>${escapeHtml(contentBranchLabel(item))}</small></a>`).join("");
-  const celebrities = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "celebrity");
+  const celebrities = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "celebrity");
   $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 32vw" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
-  const gallery = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "gallery");
+  const gallery = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "gallery");
   const galleryItems = gallery.length ? gallery : [
     { imageUrl: "/assets/hero-barbershop-cyan.webp", titleAr: "من أعمال مزين مصر", titleEn: "El Mezaen Egypt Work" },
     { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
     { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
   ];
   $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(renderGalleryMedia).join("");
-  const news = state.catalog.content.filter(item => availableAtBranch(item) && item.active !== false && item.type === "news");
+  const news = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
   $("#newsGrid").innerHTML = news.map(item => { const link = safeWebUrl(item.linkUrl); return `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${link ? `<a class="btn btn-ghost" href="${escapeAttr(link)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`; }).join("");
 }
@@ -223,7 +304,7 @@ function renderGalleryMedia(item) {
 
 function renderReviews() {
   const published = (state.catalog.reviews || []).filter(item => item.active !== false);
-  const reviews = [...published].sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 9);
+  const reviews = [...published].sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 3);
   const average = published.length ? published.reduce((sum, item) => sum + Number(item.rating || 0), 0) / published.length : 0;
   $("#reviewAverage").textContent = published.length ? average.toFixed(1) : "—";
   $("#reviewAverageStars").textContent = published.length ? `${"★".repeat(Math.round(average))}${"☆".repeat(5 - Math.round(average))}` : "☆☆☆☆☆";
@@ -288,9 +369,9 @@ function renderSettings() {
 function renderBranchPicker() {
   const branches = state.catalog.branches.filter(item => item.active !== false);
   $("#branchPicker").innerHTML = branches.map(branch => `<article class="branch-choice ${branch.id === state.branchId ? "selected" : ""}">
-    <div class="branch-choice-top"><span class="branch-marker">⌖</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div>${branch.id === state.branchId ? `<b class="selected-check">✓</b>` : ""}</div>
+    <div class="branch-choice-top"><span class="branch-marker">${lineIcon("map", 22)}</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div>${branch.id === state.branchId ? `<b class="selected-check">✓</b>` : ""}</div>
     <p>${escapeHtml(branchAddress(branch))}</p>
-    <div class="branch-quick-info"><span>◷ ${escapeHtml(branch.openingTime || "11:00")} – ${escapeHtml(branch.closingTime || "23:00")}</span><span>☎ ${escapeHtml(branch.phone)}</span></div>
+    <div class="branch-quick-info"><span>${lineIcon("clock", 16)} ${escapeHtml(branch.openingTime || "11:00")} – ${escapeHtml(branch.closingTime || "23:00")}</span><span>${lineIcon("phone", 16)} ${escapeHtml(branch.phone)}</span></div>
     <button class="btn btn-primary" type="button" data-select-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button>
   </article>`).join("") || `<div class="empty-state">${state.lang === "ar" ? "لا توجد فروع متاحة حاليًا" : "No branches are currently available"}</div>`;
 }
@@ -300,7 +381,7 @@ function renderBranchFooter() {
     const wa = whatsappNumber(branch.whatsapp || branch.phone);
     const socials = [[branch.facebook, "Facebook"], [branch.instagram, "Instagram"], [branch.tiktok, "TikTok"]].filter(([url]) => url);
     return `<article class="footer-branch-card ${branch.id === state.branchId ? "selected" : ""}">
-      <header><span class="branch-marker">⌖</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div></header>
+      <header><span class="branch-marker">${lineIcon("map", 22)}</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div></header>
       <p>${escapeHtml(branchAddress(branch))}</p>
       <div class="branch-contact-numbers"><a href="${phoneHref(branch.phone)}">${socialIcons.Phone}<span>${escapeHtml(branch.phone)}</span></a>${branch.secondaryPhone ? `<a href="${phoneHref(branch.secondaryPhone)}">${socialIcons.Phone}<span>${escapeHtml(branch.secondaryPhone)}</span></a>` : ""}</div>
       <div class="contact-actions three"><a class="contact-action call" href="${phoneHref(branch.phone)}" aria-label="${t("callNow", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Phone}<span>${t("callNow", state.lang)}</span></a><a class="contact-action whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener" aria-label="WhatsApp ${escapeAttr(branchName(branch))}">${socialIcons.WhatsApp}<span>${t("whatsappBranch", state.lang)}</span></a><a class="contact-action maps" href="${escapeAttr(branch.mapsUrl)}" target="_blank" rel="noopener" aria-label="${t("directions", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Map}<span>${t("directions", state.lang)}</span></a></div>
@@ -327,8 +408,12 @@ function renderAll() {
 function addToCart(id, option = "") {
   const item = itemIndex().get(id);
   if (!item) return;
+  if (state.branchId && item.branchIds?.length && !item.branchIds.includes(state.branchId)) {
+    showToast(state.lang === "ar" ? "هذه الباقة متاحة في فرع المشاية؛ غيّر الفرع أولًا" : "This package is available at El Mashaya; change the branch first");
+    return;
+  }
   const existing = state.cart.find(line => line.id === id);
-  if (!existing) state.cart.push({ id, qty: 1, option: item.kind === "drink" ? option || item.drinkOptions?.[0] || "" : "" });
+  if (!existing) state.cart.push({ id, qty: 1, option: item.kind === "drink" ? option || item.drinkOptions?.[0] || "" : "", choices: {} });
   else if (item.kind === "drink") { existing.qty = Math.min(Number(item.maxQty || 20), Number(existing.qty || 1) + 1); existing.option = option || existing.option || item.drinkOptions?.[0] || ""; }
   saveCart();
   trackEvent("add_to_cart", { item_id: id, branch_id: state.branchId || "unselected" });
@@ -358,7 +443,7 @@ function renderDrinks() {
   $("#drinkOptions").innerHTML = drinks.map(item => {
     const qty = state.cart.find(line => line.id === item.id)?.qty || 0;
     const options = Array.isArray(item.drinkOptions) ? item.drinkOptions : [];
-    return `<article class="drink-option"><span class="drink-cup" aria-hidden="true">☕</span><div><b>${escapeHtml(localized(item))}</b><small>${money(item.price)}${qty ? ` • في الحجز: ${qty}` : ""}</small></div>${options.length ? `<label><span>التحضير</span><select data-drink-option="${escapeAttr(item.id)}">${options.map(option => `<option value="${escapeAttr(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}<button type="button" data-add-drink="${escapeAttr(item.id)}" aria-label="إضافة ${escapeAttr(localized(item))}">＋ إضافة • ${money(item.price)}</button></article>`;
+    return `<article class="drink-option"><span class="drink-cup" aria-hidden="true">${lineIcon("cup", 24)}</span><div><b>${escapeHtml(localized(item))}</b><small>${money(item.price)}${qty ? ` • في الحجز: ${qty}` : ""}</small></div>${options.length ? `<label><span>التحضير</span><select data-drink-option="${escapeAttr(item.id)}">${options.map(option => `<option value="${escapeAttr(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}<button type="button" data-add-drink="${escapeAttr(item.id)}" aria-label="إضافة ${escapeAttr(localized(item))}">${lineIcon("plus", 20)} إضافة • ${money(item.price)}</button></article>`;
   }).join("");
 }
 
@@ -372,7 +457,7 @@ function removeFromCart(id) {
 
 function renderCart() {
   const items = cartItems();
-  $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line"><div><b>${escapeHtml(localized(item))}</b><small>${item.kind === "drink" ? `مشروب • ${item.qty}${item.option ? ` • ${escapeHtml(item.option)}` : ""}` : `${item.duration ?? 0} ${t("minute", state.lang)}`}</small></div>${item.kind === "drink" ? `<div class="cart-qty"><button type="button" data-cart-qty="-1" data-cart-id="${escapeAttr(item.id)}">−</button><b>${item.qty}</b><button type="button" data-cart-qty="1" data-cart-id="${escapeAttr(item.id)}">＋</button></div>` : ""}<strong class="line-price">${money(Number(item.price || item.newPrice) * item.qty)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button></div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
+  $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line ${item.kind === "package" ? "package-cart-line" : ""}"><div><b>${escapeHtml(localized(item))}</b><small>${item.kind === "drink" ? `مشروب • ${item.qty}${item.option ? ` • ${escapeHtml(item.option)}` : ""}` : `${item.duration ?? 0} ${t("minute", state.lang)}`}</small></div>${item.kind === "drink" ? `<div class="cart-qty"><button type="button" data-cart-qty="-1" data-cart-id="${escapeAttr(item.id)}">−</button><b>${item.qty}</b><button type="button" data-cart-qty="1" data-cart-id="${escapeAttr(item.id)}">＋</button></div>` : ""}<strong class="line-price">${money(Number(item.price || item.newPrice) * item.qty)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button>${item.kind === "package" && (item.choiceGroups || []).length ? `<div class="package-choice-fields">${item.choiceGroups.map(group => `<label><span>${escapeHtml(state.lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)} <b aria-hidden="true">*</b></span><select data-package-choice="${escapeAttr(item.id)}" data-choice-group="${escapeAttr(group.id)}" required><option value="">${state.lang === "ar" ? "اختر واحدًا" : "Choose one"}</option>${(group.options || []).map(option => `<option value="${escapeAttr(option.id)}" ${item.choices?.[group.id] === option.id ? "selected" : ""}>${escapeHtml(state.lang === "ar" ? option.labelAr : option.labelEn || option.labelAr)}</option>`).join("")}</select></label>`).join("")}</div>` : ""}</div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
   saveCart();
   renderDrinks();
   updateProductOnlyUi();
@@ -380,7 +465,7 @@ function renderCart() {
 
 function renderStaffPicker() {
   const any = `<button class="staff-choice ${state.staffId === "any" ? "selected" : ""}" type="button" data-staff-id="any"><b>${t("anyStaff", state.lang)}</b><small>${state.lang === "ar" ? "أقرب متخصص متاح" : "Nearest available specialist"}</small></button>`;
-  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => availableAtBranch(item) && item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
+  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
 }
 
 function updateProductOnlyUi() {
@@ -423,9 +508,9 @@ async function refreshCatalog(silent = true) {
     try { repeat = JSON.parse(sessionStorage.getItem("mz-repeat-booking") || "null"); } catch {}
     if (repeat) {
       state.branchId = state.catalog.branches.some(item => item.id === repeat.branchId && item.active !== false) ? repeat.branchId : "";
-      state.staffId = state.catalog.staff.some(item => item.id === repeat.staffId && item.active !== false && availableAtBranch(item)) ? repeat.staffId : "any";
+      state.staffId = state.catalog.staff.some(item => item.id === repeat.staffId && item.active !== false && explicitlyAvailableAtBranch(item)) ? repeat.staffId : "any";
       const index = itemIndex();
-      state.cart = (repeat.items || []).filter(line => { const item = index.get(line.id); return item && availableAtBranch(item); }).map(line => ({ id: line.id, qty: Math.max(1, Number(line.qty || 1)), option: line.option || "" }));
+      state.cart = (repeat.items || []).filter(line => { const item = index.get(line.id); return item && availableAtBranch(item); }).map(line => ({ id: line.id, qty: Math.max(1, Number(line.qty || 1)), option: line.option || "", choices: line.choices || {} }));
       sessionStorage.removeItem("mz-repeat-booking");
       if (state.branchId) localStorage.setItem("mz-branch", state.branchId);
       saveCart();
@@ -435,7 +520,7 @@ async function refreshCatalog(silent = true) {
     try { favorite = JSON.parse(sessionStorage.getItem("mz-favorite-booking") || "null"); } catch {}
     if (favorite) {
       state.branchId = state.catalog.branches.some(item => item.id === favorite.branchId && item.active !== false) ? favorite.branchId : "";
-      state.staffId = state.catalog.staff.some(item => item.id === favorite.staffId && item.active !== false && availableAtBranch(item)) ? favorite.staffId : "any";
+      state.staffId = state.catalog.staff.some(item => item.id === favorite.staffId && item.active !== false && explicitlyAvailableAtBranch(item)) ? favorite.staffId : "any";
       if (state.branchId) localStorage.setItem("mz-branch", state.branchId);
       sessionStorage.removeItem("mz-favorite-booking");
       showToast("تم اختيار الحلاق المفضل؛ اختر الخدمة ثم التاريخ والموعد المتاح");
@@ -452,7 +537,8 @@ async function refreshCatalog(silent = true) {
 async function openBooking() {
   trackEvent("booking_started", { branch_id: state.branchId || "unselected", cart_size: state.cart.length });
   if (firebaseConfigured) await refreshCatalog(true);
-  openBranchDialog(true);
+  if (currentBranch()) showBookingDialog();
+  else openBranchDialog(true);
 }
 
 function openBranchDialog(continueToBooking = false) {
@@ -531,7 +617,7 @@ function goToStep(step) {
   $("#dialogActions").hidden = state.step === 5;
   $("#bookingSummary").hidden = state.step === 5;
   $("#prevStep").style.visibility = state.step === 1 ? "hidden" : "visible";
-  $("#nextStep").textContent = state.step === 4 ? t("createBooking", state.lang) : t("next", state.lang);
+  $("#nextStep").textContent = state.step === 4 ? t("createBooking", state.lang) : state.step === 1 ? (state.lang === "ar" ? "متابعة الحجز" : "Continue booking") : t("next", state.lang);
   updateProductOnlyUi();
   updateSummary();
 }
@@ -539,6 +625,10 @@ function goToStep(step) {
 function canAdvance() {
   if (!state.branchId || !currentBranch()) { showToast(t("chooseBranch", state.lang)); return false; }
   if (state.step === 1 && !state.cart.length) { showToast(t("cartHint", state.lang)); return false; }
+  if (state.step === 1) {
+    const missing = cartItems().map(item => ({ item, group: packageChoiceMissing(item) })).find(value => value.group);
+    if (missing) { showToast(`${state.lang === "ar" ? "اختر" : "Choose"} ${state.lang === "ar" ? missing.group.labelAr : missing.group.labelEn || missing.group.labelAr}`); document.querySelector(`[data-package-choice="${CSS.escape(missing.item.id)}"][data-choice-group="${CSS.escape(missing.group.id)}"]`)?.focus(); return false; }
+  }
   if (state.step === 3 && needsAppointment() && (!state.date || !state.time)) { showToast(t("required", state.lang)); return false; }
   return true;
 }
@@ -620,7 +710,7 @@ async function submitBooking() {
   try {
     const result = await createBooking({
       branchId: state.branchId,
-      items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty, option: item.option || "" })),
+      items: cartItems().map(item => ({ id: item.id, kind: item.kind, qty: item.qty, option: item.option || "", choices: item.choices || {} })),
       staffId: state.staffId,
       bookingDate: state.date || null,
       bookingTime: state.time || null,
@@ -742,6 +832,17 @@ function observeReveals() {
   $$('.reveal:not(.visible)').forEach(el => observer.observe(el));
 }
 
+let faqModulePromise;
+async function openFaqChat() {
+  const button = $("[data-open-faq-chat]");
+  button?.setAttribute("aria-busy", "true");
+  try {
+    faqModulePromise ||= import("./faq-chatbot.js");
+    const module = await faqModulePromise;
+    module.openFaqChat({ faqs: (state.catalog.faqs || []).filter(item => availableAtBranch(item) && item.active !== false), lang: state.lang, branch: currentBranch() || state.catalog.branches.find(item => item.id === "mashaya") });
+  } finally { button?.removeAttribute("aria-busy"); }
+}
+
 document.addEventListener("click", event => {
   const video = event.target.closest("[data-video-src]");
   if (video) playNewsVideo(video);
@@ -749,12 +850,16 @@ document.addEventListener("click", event => {
   if (cancelBooking && !cancelBooking.disabled) cancelManagedBooking(cancelBooking);
   const add = event.target.closest("[data-add-id]");
   if (add) addToCart(add.dataset.addId);
+  const packageDetails = event.target.closest("[data-package-details]");
+  if (packageDetails) openPackageDetails(packageDetails.dataset.packageDetails);
+  if (event.target.closest("[data-close-package-details]")) closePackageDetails();
   const drink = event.target.closest("[data-add-drink]");
   if (drink) addToCart(drink.dataset.addDrink, document.querySelector(`[data-drink-option="${CSS.escape(drink.dataset.addDrink)}"]`)?.value || "");
   const remove = event.target.closest("[data-remove-id]");
   if (remove) removeFromCart(remove.dataset.removeId);
   const quantity = event.target.closest("[data-cart-qty]");
   if (quantity) changeCartQty(quantity.dataset.cartId, Number(quantity.dataset.cartQty || 0));
+  if (event.target.closest("[data-open-faq-chat]")) openFaqChat();
   const filter = event.target.closest("[data-category]");
   if (filter) { state.category = filter.dataset.category; renderServices(); }
   const staff = event.target.closest("[data-staff-id]");
@@ -770,8 +875,25 @@ document.addEventListener("click", event => {
   if (event.target.closest("[data-close-branch]")) closeBranchDialog();
 });
 
+$("#packageDetailsAdd").addEventListener("click", event => {
+  const id = event.currentTarget.dataset.addPackageId;
+  if (id) addToCart(id);
+  closePackageDetails();
+});
+
 $("#langToggle").addEventListener("click", () => setLanguage(state.lang === "ar" ? "en" : "ar"));
 $("#themeToggle").addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
+const scrollTopButton = $("#scrollTop");
+let scrollFrame = 0;
+function syncScrollControls() {
+  scrollFrame = 0;
+  const scrolled = window.scrollY > 520;
+  scrollTopButton.hidden = !scrolled;
+  document.querySelector(".site-header")?.classList.toggle("scrolled", window.scrollY > 24);
+}
+window.addEventListener("scroll", () => { if (!scrollFrame) scrollFrame = requestAnimationFrame(syncScrollControls); }, { passive: true });
+scrollTopButton.addEventListener("click", () => window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
+syncScrollControls();
 $("#menuToggle").addEventListener("click", () => {
   const open = $("#navLinks").classList.toggle("open");
   $("#menuToggle").setAttribute("aria-expanded", String(open));
@@ -788,10 +910,24 @@ $("#drinkUpsellToggle").addEventListener("click", () => {
 });
 $("#bookingDate").addEventListener("change", event => { state.date = event.target.value; renderTimes(); updateSummary(); });
 $("#bookingTime").addEventListener("change", event => { state.time = event.target.value; updateSummary(); });
+$("#cartLines").addEventListener("change", event => {
+  const select = event.target.closest("[data-package-choice]");
+  if (!select) return;
+  const line = state.cart.find(item => item.id === select.dataset.packageChoice);
+  if (!line) return;
+  line.choices ||= {};
+  if (select.value) line.choices[select.dataset.choiceGroup] = select.value;
+  else delete line.choices[select.dataset.choiceGroup];
+  state.coupon = null;
+  saveCart();
+  updateSummary();
+});
 $("#bookingDialog").addEventListener("click", event => { if (event.target === $("#bookingDialog")) closeBooking(); });
 $("#bookingDialog").addEventListener("close", () => { document.body.style.overflow = ""; });
 $("#branchDialog").addEventListener("click", event => { if (event.target === $("#branchDialog")) closeBranchDialog(); });
 $("#branchDialog").addEventListener("close", () => { if (!$("#bookingDialog").open) document.body.style.overflow = ""; });
+$("#packageDetailsDialog").addEventListener("click", event => { if (event.target === $("#packageDetailsDialog")) closePackageDetails(); });
+$("#packageDetailsDialog").addEventListener("close", () => { document.body.style.overflow = ""; });
 
 async function init() {
   setTheme(state.theme);

@@ -1,5 +1,8 @@
 import "./login.css";
 import { configured, currentRole, login, watchAuth } from "./admin-api.js";
+import { bindSafeBack } from "./navigation.js";
+
+bindSafeBack();
 
 const form = document.querySelector("#loginForm");
 const errorBox = document.querySelector("#loginError");

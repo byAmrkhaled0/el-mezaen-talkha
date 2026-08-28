@@ -103,6 +103,29 @@ export function createSlotKeys(staffId, date, time, duration, step = 5, branchId
   return keys;
 }
 
+export function distanceMeters(latitudeA, longitudeA, latitudeB, longitudeB) {
+  const values = [latitudeA, longitudeA, latitudeB, longitudeB].map(Number);
+  if (values.some(value => !Number.isFinite(value))) throw new Error("INVALID_COORDINATES");
+  const [latA, lngA, latB, lngB] = values;
+  if (Math.abs(latA) > 90 || Math.abs(latB) > 90 || Math.abs(lngA) > 180 || Math.abs(lngB) > 180) throw new Error("INVALID_COORDINATES");
+  const radians = value => value * Math.PI / 180;
+  const deltaLat = radians(latB - latA);
+  const deltaLng = radians(lngB - lngA);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(radians(latA)) * Math.cos(radians(latB)) * Math.sin(deltaLng / 2) ** 2;
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function validateAttendanceLocation({ branchLatitude, branchLongitude, latitude, longitude, accuracy, radiusMeters = 100 } = {}) {
+  const safeAccuracy = Number(accuracy);
+  const radius = Number(radiusMeters);
+  if (!Number.isFinite(safeAccuracy) || safeAccuracy <= 0 || safeAccuracy > 150) throw new Error("LOCATION_ACCURACY_TOO_LOW");
+  if (!Number.isFinite(radius) || radius < 25 || radius > 1000) throw new Error("INVALID_ATTENDANCE_RADIUS");
+  const distance = distanceMeters(branchLatitude, branchLongitude, latitude, longitude);
+  const tolerance = Math.min(50, safeAccuracy);
+  if (distance > radius + tolerance) throw new Error("OUTSIDE_BRANCH_GEOFENCE");
+  return { distanceMeters: Math.round(distance), accuracyMeters: Math.round(safeAccuracy), radiusMeters: Math.round(radius) };
+}
+
 export function priceItems(lines, docsById, now = new Date(), branchId = "") {
   if (!Array.isArray(lines) || !lines.length || lines.length > 30) throw new Error("INVALID_ITEMS");
   const seen = new Set();
@@ -111,7 +134,7 @@ export function priceItems(lines, docsById, now = new Date(), branchId = "") {
     if (!id || seen.has(id)) throw new Error("DUPLICATE_OR_INVALID_ITEM");
     seen.add(id);
     const source = docsById.get(id);
-    if (!source || source.active === false) throw new Error("ITEM_UNAVAILABLE");
+    if (!source || source.active === false || source.catalogVisible === false) throw new Error("ITEM_UNAVAILABLE");
     if (branchId && Array.isArray(source.branchIds) && source.branchIds.length && !source.branchIds.includes(branchId)) throw new Error("ITEM_UNAVAILABLE_AT_BRANCH");
     const kind = line.kind === "product" ? "product" : line.kind;
     if (source.kind !== kind && !(source.kind === "service" && kind === "product" && source.type === "product")) throw new Error("INVALID_ITEM_TYPE");
@@ -119,6 +142,13 @@ export function priceItems(lines, docsById, now = new Date(), branchId = "") {
     if (source.startAt && new Date(source.startAt).getTime() > now.getTime()) throw new Error("ITEM_NOT_STARTED");
     if (source.endAt && new Date(source.endAt).getTime() < now.getTime()) throw new Error("ITEM_EXPIRED");
     const qty = source.kind === "product" ? Math.max(1, Math.min(20, Number(line.qty || 1))) : 1;
+    const choices = validatePackageChoices(source, line.choices);
+    const serviceIds = source.kind === "service"
+      ? [id]
+      : [...new Set([
+          ...(Array.isArray(source.includedServiceIds) ? source.includedServiceIds : []),
+          ...choices.map(choice => choice.serviceId)
+        ].map(value => String(value || "")).filter(Boolean))];
     const unitPrice = Number(source.newPrice ?? source.price);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("INVALID_SERVER_PRICE");
     return {
@@ -130,8 +160,40 @@ export function priceItems(lines, docsById, now = new Date(), branchId = "") {
       qty,
       unitPrice,
       lineTotal: unitPrice * qty,
-      staffRequired: source.kind !== "product"
+      staffRequired: source.kind !== "product",
+      serviceIds,
+      choices
     };
+  });
+}
+
+export function validatePackageChoices(source, requested = {}) {
+  const groups = Array.isArray(source?.choiceGroups) ? source.choiceGroups.slice(0, 10) : [];
+  const entries = requested && typeof requested === "object" && !Array.isArray(requested) ? requested : {};
+  if (!groups.length) {
+    if (Object.keys(entries).length) throw new Error("UNEXPECTED_PACKAGE_CHOICES");
+    return [];
+  }
+  const allowedGroupIds = new Set(groups.map(group => String(group?.id || "")).filter(Boolean));
+  if (Object.keys(entries).some(id => !allowedGroupIds.has(String(id)))) throw new Error("INVALID_PACKAGE_CHOICE_GROUP");
+  return groups.flatMap(group => {
+    const groupId = String(group?.id || "");
+    const optionId = String(entries[groupId] || "");
+    const options = Array.isArray(group?.options) ? group.options.slice(0, 12) : [];
+    const selected = options.find(option => String(option?.id || "") === optionId);
+    if (!selected) {
+      if (group?.required !== false) throw new Error("PACKAGE_CHOICE_REQUIRED");
+      return [];
+    }
+    return [{
+      groupId,
+      groupLabelAr: String(group?.labelAr || groupId),
+      groupLabelEn: String(group?.labelEn || group?.labelAr || groupId),
+      optionId,
+      optionLabelAr: String(selected?.labelAr || optionId),
+      optionLabelEn: String(selected?.labelEn || selected?.labelAr || optionId),
+      serviceId: selected?.serviceId ? String(selected.serviceId) : null
+    }];
   });
 }
 
@@ -191,6 +253,45 @@ export function calculateRewards(total, settings = {}) {
 
 export function normalizeLineWorkers(items = [], legacyStaffId = "none") {
   return items.map(item => ({ ...item, workerId: String(item.workerId || (item.staffRequired ? legacyStaffId : "none") || "none") }));
+}
+
+export function serviceTargetEntries(items = []) {
+  const result = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const kind = String(item?.kind || "").toLowerCase();
+    const itemId = String(item?.id || "").trim();
+    if (!["service", "package", "offer"].includes(kind) || !/^[A-Za-z0-9_-]{1,100}$/.test(itemId)) continue;
+    const qty = Math.max(1, Math.min(100, Math.floor(Number(item?.qty || 1))));
+    const key = `${kind}:${itemId}`;
+    const current = result.get(key);
+    if (current) current.count += qty;
+    else result.set(key, {
+      itemId,
+      kind,
+      nameAr: String(item?.nameAr || itemId).trim().slice(0, 120),
+      nameEn: String(item?.nameEn || item?.nameAr || itemId).trim().slice(0, 120),
+      count: qty
+    });
+  }
+  return [...result.values()];
+}
+
+export function serviceTargetDocumentId({ month, branchId, kind, itemId } = {}) {
+  const values = [month, branchId, kind, itemId].map(value => String(value || "").trim());
+  const monthNumber = Number(values[0].slice(5));
+  if (!/^\d{4}-\d{2}$/.test(values[0]) || monthNumber < 1 || monthNumber > 12 || !/^[a-z0-9-]{2,40}$/.test(values[1]) || !["service", "package", "offer"].includes(values[2]) || !/^[A-Za-z0-9_-]{1,100}$/.test(values[3])) throw new Error("INVALID_SERVICE_TARGET_KEY");
+  return values.join("_");
+}
+
+export function calculateServiceTargetProgress(targetCount = 0, achievedCount = 0) {
+  const target = Math.max(0, Math.floor(Number(targetCount || 0)));
+  const achieved = Math.max(0, Math.floor(Number(achievedCount || 0)));
+  return {
+    targetCount: target,
+    achievedCount: achieved,
+    remainingCount: Math.max(0, target - achieved),
+    progressPercent: target ? Math.max(0, Math.min(100, Math.round(achieved / target * 100))) : 0
+  };
 }
 
 export function calculateExpectedCash({ openingCash = 0, cashSales = 0, cashIn = 0, cashOut = 0, cashRefunds = 0 } = {}) {

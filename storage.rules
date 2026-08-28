@@ -13,6 +13,18 @@ service firebase.storage {
           && request.resource.contentType.matches('video/(mp4|webm)'))
       );
     }
+    function isOwnWorkerPhoto(staffId) {
+      return request.auth != null
+        && request.auth.token.role == 'worker'
+        && request.auth.token.staffId == staffId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+    }
+    match /public/staff/{staffId}/{fileName} {
+      allow read: if true;
+      allow create, update: if canManageMedia() || isOwnWorkerPhoto(staffId);
+      allow delete: if canManageMedia();
+    }
     match /public/{allPaths=**} {
       allow read: if true;
       allow create, update: if canManageMedia() && isValidMedia();

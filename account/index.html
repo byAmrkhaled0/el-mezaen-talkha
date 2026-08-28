@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="ar" dir="rtl" data-theme="dark">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><script src="/theme-init.js"></script>
   <meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#071a2c">
   <link rel="icon" href="/assets/icon-192.png" type="image/png"><title>حسابي | مزين مصر</title>
 </head>
 <body>
-  <header class="account-header"><a href="/">← الموقع</a><strong>مزين مصر • حسابي</strong><button id="logout" type="button" hidden>خروج</button></header>
+  <header class="account-header"><a href="/account/" data-safe-back data-back-fallback="/account/"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg><span>رجوع</span></a><strong>مزين مصر • حسابي</strong><button id="logout" type="button" hidden>خروج</button></header>
   <main class="account-main">
     <section class="account-card" id="loginCard"><h1>دخول العميل</h1><p>اكتب رقم الهاتف المسجل في حجزك. سيصلك رمز تحقق من Firebase.</p><form id="phoneForm"><label>رقم الهاتف<input id="phone" type="tel" inputmode="tel" required placeholder="01xxxxxxxxx"></label><button id="sendCode" type="submit">إرسال رمز التحقق</button></form><form id="codeForm" hidden><label>رمز التحقق<input id="code" inputmode="numeric" autocomplete="one-time-code" required></label><button id="verifyCode" type="submit">تأكيد الدخول</button></form><div id="recaptcha"></div><p class="message" id="loginMessage"></p></section>
     <section id="portal" hidden><nav class="account-quick-actions" aria-label="إجراءات سريعة"><a href="/#services">احجز موعدًا</a><a href="#upcomingCard">حجوزاتي</a><a href="#walletCard">محفظتي</a></nav><div class="account-grid"><article class="account-card profile"><div><small>مرحبًا</small><h1 id="customerName">عميل مزين مصر</h1><span class="member-tier" id="memberTier">عضو مزين</span></div><canvas id="customerQr" width="220" height="220"></canvas><small>الكود لا يحتوي على اسمك أو رقم هاتفك.</small></article><article class="account-card" id="walletCard"><div class="card-heading"><div><small>رصيدك الحالي</small><h2>المحفظة</h2></div><span>تُحدّث بعد الدفع</span></div><div class="balances"><div><span>النقاط</span><strong id="points">0</strong></div><div><span>الكاش باك</span><strong id="cashback">0 ج.م</strong></div></div><div class="member-progress"><div><span id="tierProgressLabel">ابدأ زياراتك لتحصل على مزايا أكثر</span><b id="tierProgressValue">0%</b></div><i><span id="tierProgressBar"></span></i></div></article></div>

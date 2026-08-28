@@ -21,12 +21,15 @@ export default defineConfig({
         admin: resolve(import.meta.dirname, "admin/index.html"),
         login: resolve(import.meta.dirname, "login/index.html")
         ,services: resolve(import.meta.dirname, "services/index.html")
+        ,packages: resolve(import.meta.dirname, "packages/index.html")
+        ,reviews: resolve(import.meta.dirname, "reviews/index.html")
         ,team: resolve(import.meta.dirname, "team/index.html")
         ,branchTalkha: resolve(import.meta.dirname, "branches/talkha/index.html")
         ,branchMashaya: resolve(import.meta.dirname, "branches/mashaya/index.html")
         ,hairSystems: resolve(import.meta.dirname, "hair-systems/index.html")
         ,account: resolve(import.meta.dirname, "account/index.html")
         ,results: resolve(import.meta.dirname, "results/index.html")
+        ,notFound: resolve(import.meta.dirname, "404.html")
       }
     }
   },

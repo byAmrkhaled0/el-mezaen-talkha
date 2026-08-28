@@ -13,6 +13,8 @@
 ## الصفحات الأساسية
 - [الرئيسية](https://el-mezaen-talkha.vercel.app/): نظرة عامة على مزين مصر والحجز المباشر.
 - [الخدمات والأسعار](https://el-mezaen-talkha.vercel.app/services/): قائمة خدمات الحلاقة والعناية الرجالية والأسعار الحالية.
+- [الباقات](https://el-mezaen-talkha.vercel.app/packages/): كل الباقات الحالية مع الفرع والخدمات والأسعار.
+- [التقييمات](https://el-mezaen-talkha.vercel.app/reviews/): تقييمات العملاء المنشورة بعد المراجعة.
 - [تركيب الشعر الرجالي](https://el-mezaen-talkha.vercel.app/hair-systems/): تركيب وصيانة وتنظيف شبكية الشعر في المنصورة وطلخا.
 - [فرع طلخا](https://el-mezaen-talkha.vercel.app/branches/talkha/): عنوان الفرع ووسائل التواصل والحجز.
 - [فرع المشاية بالمنصورة](https://el-mezaen-talkha.vercel.app/branches/mashaya/): عنوان الفرع ووسائل التواصل والحجز.

@@ -280,6 +280,31 @@
       "collectionGroup": "cashShifts",
       "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "businessDate", "order": "ASCENDING" }, { "fieldPath": "openingCash", "order": "ASCENDING" }, { "fieldPath": "cashSales", "order": "ASCENDING" }, { "fieldPath": "cashIn", "order": "ASCENDING" }, { "fieldPath": "cashOut", "order": "ASCENDING" }, { "fieldPath": "cashRefunds", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "attendanceDays",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "bookingDate", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "workerTasks",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "assigneeStaffId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "workerNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
     }
   ],
   "fieldOverrides": []

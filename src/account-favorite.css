@@ -12,3 +12,5 @@
 .favorite-worker div, .favorite-worker span, .favorite-worker small { display: grid; gap: 3px; }
 .favorite-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .favorite-actions button { flex: 1; }
+html[data-theme="light"] .favorite-worker { background: #f8fafc; }
+html[data-theme="light"] .favorite-worker img { background: #fff; }

@@ -67,6 +67,10 @@ test("Firestore denies direct writes to customer and financial data", async () =
   await assertFails(updateDoc(doc(customerDb, "users/customer-1"), { points: 999 }));
   await assertFails(setDoc(doc(adminDb, "walletTransactions/tx-1"), { amount: 999 }));
   await assertFails(setDoc(doc(adminDb, "orders/order-1"), { total: 1 }));
+  await assertFails(setDoc(doc(adminDb, "serviceTargets/2026-08_mashaya_service_hair-001"), { targetCount: 1_000_000, achievedCount: 1_000_000 }));
+  await assertFails(setDoc(doc(adminDb, "attendanceDays/2026-08-27_worker-1"), { status: "PRESENT" }));
+  await assertFails(setDoc(doc(adminDb, "workerTasks/task-1"), { status: "DONE" }));
+  await assertFails(setDoc(doc(adminDb, "workerNotifications/notice-1"), { read: true }));
 });
 
 test("Storage public media is readable but private files are denied", async () => {
@@ -91,6 +95,14 @@ test("Storage permits authorized manager and admin media uploads", async () => {
   await assertSucceeds(uploadBytes(ref(resultsManager, "public/results/before-after.webp"), image(), { contentType: "image/webp" }));
   await assertSucceeds(uploadBytes(ref(hairManager, "public/hair/video.mp4"), image(), { contentType: "video/mp4" }));
   await assertSucceeds(uploadBytes(ref(admin, "public/admin.mp4"), image(), { contentType: "video/mp4" }));
+});
+
+test("Storage permits a worker to update only their own validated profile photo", async () => {
+  const worker = auth("worker-uid", { role: "worker", staffId: "worker-1" }).storage();
+  await assertSucceeds(uploadBytes(ref(worker, "public/staff/worker-1/profile.webp"), image(), { contentType: "image/webp" }));
+  await assertFails(uploadBytes(ref(worker, "public/staff/worker-2/profile.webp"), image(), { contentType: "image/webp" }));
+  await assertFails(uploadBytes(ref(worker, "public/staff/worker-1/profile.html"), image(), { contentType: "text/html" }));
+  await assertFails(deleteObject(ref(worker, "public/staff/worker-1/profile.webp")));
 });
 
 test("Storage rejects invalid MIME and oversized images", async () => {

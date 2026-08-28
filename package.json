@@ -14,7 +14,9 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs",
     "test:functions": "npm --prefix functions test",
-    "test:rules": "npx firebase-tools emulators:exec --project el-mezaen-talkha --only firestore,storage \"node --test tests/firebase-rules.emulator.mjs\""
+    "test:rules": "npx firebase-tools emulators:exec --project el-mezaen-talkha --only firestore,storage \"node --test tests/firebase-rules.emulator.mjs\"",
+    "migration:catalog:dry": "npm --prefix functions run migration:catalog:dry",
+    "migration:catalog:apply": "npm --prefix functions run migration:catalog:apply --"
   },
   "dependencies": {
     "@fontsource/alexandria": "^5.2.8",

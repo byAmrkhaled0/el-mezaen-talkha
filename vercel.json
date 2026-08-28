@@ -12,6 +12,8 @@
     { "source": "/account/:path*", "destination": "/account/index.html" },
     { "source": "/booking/:path*", "destination": "/index.html" },
     { "source": "/services/:path*", "destination": "/services/index.html" },
+    { "source": "/packages/:path*", "destination": "/packages/index.html" },
+    { "source": "/reviews/:path*", "destination": "/reviews/index.html" },
     { "source": "/team/:path*", "destination": "/team/index.html" }
     ,{ "source": "/hair-systems/:path*", "destination": "/hair-systems/index.html" }
     ,{ "source": "/results/:path*", "destination": "/results/index.html" }
@@ -19,6 +21,7 @@
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "public,max-age=0,must-revalidate" }] },
     { "source": "/firebase-messaging-sw.js", "headers": [{ "key": "Cache-Control", "value": "public,max-age=0,must-revalidate" }] },
+    { "source": "/theme-init.js", "headers": [{ "key": "Cache-Control", "value": "public,max-age=0,must-revalidate" }] },
     { "source": "/manifest.webmanifest", "headers": [{ "key": "Cache-Control", "value": "public,max-age=3600,must-revalidate" }] },
     { "source": "/sitemap.xml", "headers": [{ "key": "Cache-Control", "value": "public,max-age=3600,must-revalidate" }] },
     { "source": "/robots.txt", "headers": [{ "key": "Cache-Control", "value": "public,max-age=3600,must-revalidate" }] },
@@ -27,8 +30,14 @@
     { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public,max-age=604800,stale-while-revalidate=86400" }] },
     { "source": "/assets/(.*)\\.(js|css)", "headers": [{ "key": "Cache-Control", "value": "public,max-age=31536000,immutable" }] },
     { "source": "/firebase-config.js", "headers": [{ "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
+    { "source": "/admin", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
+    { "source": "/admin/", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
     { "source": "/admin/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
+    { "source": "/login", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
+    { "source": "/login/", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
     { "source": "/login/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
+    { "source": "/account", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
+    { "source": "/account/", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }, { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0" }] },
     { "source": "/account/:path*", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "private,no-store,max-age=0" }] },
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },

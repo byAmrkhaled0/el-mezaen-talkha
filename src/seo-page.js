@@ -1,4 +1,7 @@
 import "./styles.css";
+import { bindSafeBack } from "./navigation.js";
+
+bindSafeBack();
 
 document.documentElement.dataset.theme = localStorage.getItem("mz-theme") === "light" ? "light" : "dark";
 

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="/theme-init.js"></script>
   <meta name="theme-color" content="#071a2c">
   <meta name="description" content="مزين مصر للحلاقة الرجالية وتركيب الشعر في المنصورة وطلخا منذ 1995. احجز القصات، العناية، تنظيف البشرة وتركيب وصيانة الشبكية في فرعي المشاية وطلخا.">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
@@ -107,10 +108,10 @@
         <a href="/account/">حسابي</a>
       </nav>
       <div class="nav-actions">
-        <button class="branch-switch" id="branchSwitch" type="button" data-open-branch><span aria-hidden="true">⌖</span><b data-branch-switch-text data-i18n="chooseBranch">اختر الفرع</b></button>
+        <button class="branch-switch" id="branchSwitch" type="button" data-open-branch><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><b data-branch-switch-text data-i18n="chooseBranch">اختر الفرع</b></button>
         <button class="icon-btn" id="langToggle" type="button" data-i18n-aria="language" aria-label="تغيير اللغة">EN</button>
-        <button class="icon-btn" id="themeToggle" type="button" data-i18n-aria="theme" aria-label="تغيير المظهر">☀</button>
-        <button class="icon-btn menu-toggle" id="menuToggle" type="button" data-i18n-aria="menu" aria-label="القائمة" aria-controls="navLinks" aria-expanded="false">☰</button>
+        <button class="icon-btn" id="themeToggle" type="button" data-i18n-aria="theme" aria-label="تغيير المظهر"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg></button>
+        <button class="icon-btn menu-toggle" id="menuToggle" type="button" data-i18n-aria="menu" aria-label="القائمة" aria-controls="navLinks" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
         <button class="btn btn-primary nav-book" type="button" data-open-booking data-i18n="bookNow">احجز الآن</button>
       </div>
     </div>
@@ -122,7 +123,7 @@
       <span class="floating-tool comb" aria-hidden="true">▥</span>
       <div class="container hero-grid">
         <div class="hero-copy reveal">
-          <button class="selected-branch-pill" type="button" data-open-branch><span aria-hidden="true">⌖</span><span data-branch-pill-text data-i18n="chooseBranch">اختر الفرع</span><b>‹</b></button>
+          <button class="selected-branch-pill" type="button" data-open-branch><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span data-branch-pill-text data-i18n="chooseBranch">اختر الفرع</span><b>‹</b></button>
           <span class="eyebrow" data-i18n="heroBadge">منذ 1995 • خبرة تصنع الفارق</span>
           <h1 id="hero-title"><span data-i18n="heroTitle1">حلاقة رجالية وتركيب شعر</span> <em data-i18n="heroTitle2">في المنصورة وطلخا</em></h1>
           <p data-i18n="heroText">منذ 1995 بنقدم قصات وعناية رجالية وتركيب وصيانة شبكية الشعر في فرعي المشاية وطلخا، مع حجز مباشر واختيار المتخصص والموعد.</p>
@@ -174,7 +175,8 @@
     <section class="section-pad" id="packages" aria-labelledby="packages-title">
       <div class="container">
         <div class="section-head reveal"><div><span class="section-kicker" data-i18n="packagesTag">قيمة أكبر في زيارة واحدة</span><h2 id="packages-title" data-i18n="packagesTitle">الباقات</h2><p data-i18n="packagesText">اختار الفرع ثم احجز الباقة المناسبة بسهولة.</p></div></div>
-        <div class="package-grid horizontal-cards" id="packageGrid"></div>
+        <div class="package-grid" id="packageGrid"></div>
+        <div class="section-more"><a class="btn btn-ghost" href="/packages/">عرض كل الباقات <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a></div>
       </div>
     </section>
 
@@ -186,7 +188,7 @@
         </div>
         <div class="filter-row" id="categoryFilters" role="tablist" aria-label="تصنيفات الخدمات"></div>
         <div class="service-grid" id="serviceGrid"></div>
-        <div class="section-more"><a class="btn btn-ghost" href="/services/">عرض كل الخدمات والأسعار ←</a></div>
+        <div class="section-more"><a class="btn btn-ghost" href="/services/">عرض كل الخدمات <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a></div>
       </div>
     </section>
 
@@ -231,27 +233,15 @@
     <section class="section-pad reviews-section" id="reviews" aria-labelledby="reviews-title">
       <div class="container review-layout">
         <div class="review-intro reveal"><span class="section-kicker">رأيك يهمنا</span><h2 id="reviews-title">قيّم تجربتك مع مزين مصر</h2><p>نراجع كل تقييم قبل نشره حفاظًا على جودة المحتوى وخصوصية عملائنا.</p><div class="review-score"><strong id="reviewAverage">—</strong><span id="reviewAverageStars">☆☆☆☆☆</span><small id="reviewCount">لا توجد تقييمات منشورة بعد</small></div></div>
-        <form class="review-form panel reveal" id="reviewForm"><label class="field"><span>الاسم</span><input name="name" required maxlength="60"></label><label class="field"><span>رقم الحجز</span><input name="bookingCode" maxlength="40" placeholder="اختياري"></label><fieldset class="rating-picker"><legend>التقييم</legend><div><input type="radio" id="star5" name="rating" value="5" checked><label for="star5">★</label><input type="radio" id="star4" name="rating" value="4"><label for="star4">★</label><input type="radio" id="star3" name="rating" value="3"><label for="star3">★</label><input type="radio" id="star2" name="rating" value="2"><label for="star2">★</label><input type="radio" id="star1" name="rating" value="1"><label for="star1">★</label></div></fieldset><label class="field"><span>اكتب رأيك</span><textarea name="comment" required maxlength="500" rows="4"></textarea></label><button class="btn btn-primary" type="submit">إرسال التقييم</button></form>
+        <form class="review-form panel reveal" id="reviewForm"><label class="field"><span>الاسم</span><input name="name" required maxlength="60"></label><label class="field"><span>رقم الحجز</span><input name="bookingCode" maxlength="40" placeholder="اختياري"></label><fieldset class="rating-picker"><legend>التقييم من نجمة واحدة إلى خمس نجوم</legend><div><input type="radio" id="star5" name="rating" value="5" checked><label for="star5" aria-label="خمس نجوم" title="خمس نجوم">★</label><input type="radio" id="star4" name="rating" value="4"><label for="star4" aria-label="أربع نجوم" title="أربع نجوم">★</label><input type="radio" id="star3" name="rating" value="3"><label for="star3" aria-label="ثلاث نجوم" title="ثلاث نجوم">★</label><input type="radio" id="star2" name="rating" value="2"><label for="star2" aria-label="نجمتان" title="نجمتان">★</label><input type="radio" id="star1" name="rating" value="1"><label for="star1" aria-label="نجمة واحدة" title="نجمة واحدة">★</label></div></fieldset><label class="field"><span>اكتب رأيك</span><textarea name="comment" required maxlength="500" rows="4"></textarea></label><button class="btn btn-primary" type="submit">إرسال التقييم</button></form>
       </div>
-      <div class="container"><div class="published-reviews" id="publishedReviews" aria-live="polite"></div></div>
+      <div class="container"><div class="published-reviews" id="publishedReviews" aria-live="polite"></div><div class="section-more"><a class="btn btn-ghost" href="/reviews/">عرض كل التقييمات <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a></div></div>
     </section>
 
     <section class="section-pad" id="newsSection" aria-labelledby="news-title" hidden>
       <div class="container">
         <div class="section-head"><div><span class="section-kicker">صور وفيديوهات الفروع</span><h2 id="news-title">من فروعنا</h2></div></div>
         <div class="content-grid" id="newsGrid"></div>
-      </div>
-    </section>
-
-    <section class="section-pad faq-section" id="faq" aria-labelledby="home-faq-title">
-      <div class="container narrow">
-        <div class="section-head"><div><span class="section-kicker" data-i18n="faqTag">إجابات سريعة</span><h2 id="home-faq-title" data-i18n="faqTitle">أسئلة عن مزين مصر</h2></div></div>
-        <div class="faq-list">
-          <details open><summary data-i18n="faqBestQ">إزاي أختار أفضل حلاق في المنصورة؟</summary><p data-i18n="faqBestA">اختار المكان حسب خبرة الفريق، نظافة الأدوات، وضوح الخدمات والأسعار، سهولة الحجز، وقرب الفرع. مزين مصر يعمل منذ 1995 وله فرع في المشاية بالمنصورة وفرع في طلخا.</p></details>
-          <details><summary data-i18n="faqHairQ">هل متاح تركيب شعر رجالي وشبكية؟</summary><p data-i18n="faqHairA">نعم، تشمل الخدمات تركيب شبكة جديدة وقصها وتنظيفها وصيانتها والسيرفيس. المعاينة داخل الفرع تحدد الخيار الأنسب للحالة.</p></details>
-          <details><summary data-i18n="faqBranchesQ">أين توجد فروع مزين مصر؟</summary><p data-i18n="faqBranchesA">فرع المشاية في المشاية السفلية أمام بوابة نادي الجزيرة الثانية، وفرع طلخا في تقسيم بهاء الشربيني أمام محل LONDONE.</p></details>
-          <details><summary data-i18n="faqHoursQ">ما مواعيد العمل والحجز؟</summary><p data-i18n="faqHoursA">المواعيد الحالية يوميًا من 11 صباحًا إلى 11 مساءً. يمكنك اختيار الفرع والخدمات والمتخصص والموعد من الموقع.</p></details>
-        </div>
       </div>
     </section>
 
@@ -276,11 +266,20 @@
       </div>
       <div class="footer-branch-grid" id="branchFooterGrid" aria-live="polite"></div>
     </div>
-    <div class="container footer-bottom"><span>© 2026 El Mezaen Egypt</span><div class="developer-credit"><strong data-i18n="developedBy">تم البرمجة بواسطة المهندس عمرو خالد</strong><a href="https://wa.me/201008454029" target="_blank" rel="noopener" aria-label="واتساب المبرمج"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg><span>01008454029</span></a></div></div>
+    <div class="container footer-bottom"><span>© 2026 El Mezaen Egypt</span><div class="developer-credit"><strong data-i18n="developedBy">تم البرمجة بواسطة المهندس عمرو خالد</strong><a href="https://wa.me/201008454029" target="_blank" rel="noopener" aria-label="واتساب المبرمج"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1c0 2-1 3-3 3-4 0-7-3-7-7 0-2 1-3 2-3l1 2-1 0Z"/></svg><span>01008454029</span></a></div></div>
   </footer>
 
-  <button class="cart-fab btn btn-primary" type="button" data-open-booking aria-label="فتح سلة الحجز">🛒 <span data-i18n="cart">السلة</span> <span class="count-badge" data-cart-count>0</span></button>
-  <nav class="mobile-quick-actions" id="mobileQuickActions" aria-label="إجراءات الفرع السريعة"><a id="mobileCall" href="#contact">☎<span>اتصال</span></a><a id="mobileWhatsapp" href="#contact" target="_blank" rel="noopener">◉<span>واتساب</span></a><a id="mobileMap" href="#contact" target="_blank" rel="noopener">⌖<span>الموقع</span></a><button type="button" data-open-booking>✂<span>احجز</span><b class="count-badge" data-cart-count>0</b></button></nav>
+  <button class="cart-fab btn btn-primary" type="button" data-open-booking aria-label="فتح سلة الحجز"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.5 11h10l3-8H7"/></svg><span data-i18n="cart">السلة</span><span class="count-badge" data-cart-count>0</span></button>
+  <button class="faq-chat-fab" type="button" data-open-faq-chat aria-label="فتح مساعد الأسئلة" aria-controls="faqChatPanel" aria-expanded="false"><span aria-hidden="true">؟</span><b>اسأل مزين</b></button>
+  <button class="scroll-top" id="scrollTop" type="button" aria-label="العودة إلى أعلى الصفحة" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+  <section class="faq-chat-panel" id="faqChatPanel" role="dialog" aria-labelledby="faqChatTitle" aria-hidden="true" hidden>
+    <header><div><small>FAQ</small><h2 id="faqChatTitle">مساعد مزين مصر</h2></div><button id="faqChatClose" type="button" aria-label="إغلاق مساعد الأسئلة">×</button></header>
+    <p id="faqChatIntro">اختر سؤالًا سريعًا. لا يتم حفظ المحادثة أو أي بيانات شخصية.</p>
+    <label class="faq-chat-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="faqChatSearch" type="search" autocomplete="off" placeholder="ابحث عن سؤال…" aria-label="البحث في الأسئلة"></label>
+    <div class="faq-chat-answer" id="faqChatAnswer" tabindex="-1" role="status" aria-live="polite"></div>
+    <div class="faq-chat-questions" id="faqChatQuestions" aria-label="الأسئلة السريعة"></div>
+  </section>
+  <nav class="mobile-quick-actions" id="mobileQuickActions" aria-label="إجراءات الفرع السريعة"><a id="mobileCall" href="#contact" aria-label="اتصال بالفرع"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-4-1-1.5 2a15 15 0 0 1-9.5-9.5L8 7 7 3Z"/></svg><span>اتصال</span></a><a id="mobileWhatsapp" href="#contact" target="_blank" rel="noopener" aria-label="واتساب الفرع"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1"/></svg><span>واتساب</span></a><a id="mobileMap" href="#contact" target="_blank" rel="noopener" aria-label="موقع الفرع"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg><span>الموقع</span></a><button type="button" data-open-booking aria-label="فتح السلة"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.5 11h10l3-8H7"/></svg><span>السلة</span><b class="count-badge" data-cart-count>0</b></button></nav>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="network-status" id="networkStatus" role="status" aria-live="polite" hidden></div>
 
@@ -297,6 +296,14 @@
     </div>
   </dialog>
 
+  <dialog class="package-details-dialog" id="packageDetailsDialog" aria-labelledby="packageDetailsTitle">
+    <article class="package-details-shell">
+      <header><div><span>تفاصيل الباقة</span><h2 id="packageDetailsTitle">—</h2></div><button class="dialog-close" type="button" data-close-package-details aria-label="إغلاق">×</button></header>
+      <div class="package-details-body" id="packageDetailsBody"></div>
+      <footer><button class="btn btn-ghost" type="button" data-close-package-details>رجوع</button><button class="btn btn-primary" id="packageDetailsAdd" type="button">إضافة إلى السلة</button></footer>
+    </article>
+  </dialog>
+
   <dialog class="booking-dialog" id="bookingDialog" aria-labelledby="booking-title">
     <div class="dialog-shell">
       <header class="dialog-head">
@@ -304,7 +311,7 @@
         <button class="dialog-close" type="button" data-close-booking aria-label="إغلاق">×</button>
       </header>
       <div class="booking-branch-bar">
-        <span class="booking-branch-icon" aria-hidden="true">⌖</span>
+        <span class="booking-branch-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
         <div><small data-i18n="selectedBranch">الفرع المختار</small><strong id="bookingBranchName">—</strong><span id="bookingBranchAddress">—</span></div>
         <button type="button" data-change-branch data-i18n="changeBranch">تغيير الفرع</button>
       </div>
@@ -318,7 +325,7 @@
       <div class="booking-body">
         <div class="booking-main">
           <section class="booking-step active" data-step="1">
-            <h3 data-i18n="chooseItems">راجع خدماتك وباقاتك</h3>
+            <h3>سلة الحجز</h3><p class="muted">راجع اختياراتك، ثم اضغط «متابعة الحجز» لاختيار العامل والموعد.</p>
             <div class="cart-lines" id="cartLines"></div>
             <div class="drink-upsell" id="drinkUpsell" hidden>
               <button class="drink-upsell-toggle" id="drinkUpsellToggle" type="button" aria-expanded="false" aria-controls="drinkMenu"><span class="drink-plus">＋</span><span><b>إيه رأيك تعدّل مزاجك بمشروب؟</b><small>اختياري ويتضاف على نفس الحجز</small></span><span class="drink-chevron">⌄</span></button>

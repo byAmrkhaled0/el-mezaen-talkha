@@ -8,7 +8,7 @@ export const firebaseConfigured = Boolean(config.projectId && !String(config.pro
 let functions;
 let app;
 let analyticsPromise;
-const CATALOG_CACHE_KEY = "mz-public-catalog-v2";
+const CATALOG_CACHE_KEY = "mz-public-catalog-v3";
 const CATALOG_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const FRONTEND_VERSION = "2.0.0";
 
@@ -85,6 +85,7 @@ export async function getCatalog() {
       offers: Array.isArray(remote.offers) ? remote.offers : fallback.offers,
       drinks: Array.isArray(remote.drinks) ? remote.drinks : [],
       content: remote.content?.length ? remote.content : fallback.content,
+      faqs: remote.faqs?.length ? remote.faqs : fallback.faqs,
       reviews: Array.isArray(remote.reviews) ? remote.reviews : [],
       translations: Array.isArray(remote.translations) ? remote.translations : [],
       settings: { ...fallback.settings, ...(remote.settings || {}) },
@@ -101,6 +102,12 @@ export async function getCatalog() {
     console.debug("Firebase catalog is not available yet; using the bundled catalog.", error?.code || error?.message || error);
     return { ...localCatalog(), preview: true };
   }
+}
+
+export async function getPublishedReviews(pageSize = 12, cursor = "") {
+  if (firebaseConfigured) return await callFunction("getPublishedReviews", { pageSize, cursor }, 15000);
+  const items = (localCatalog().reviews || []).filter(item => item.active !== false).slice(0, pageSize);
+  return { items, nextCursor: null, preview: true };
 }
 
 export async function validateCoupon(payload) {

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [backend, core, admin, api, app, html, indexes, vercel, robots] = await Promise.all([
+const [backend, core, admin, api, app, html, indexes, vercel, robots, migration] = await Promise.all([
   readFile("functions/src/index.js", "utf8"),
   readFile("functions/src/core.js", "utf8"),
   readFile("src/admin.js", "utf8"),
@@ -11,7 +11,8 @@ const [backend, core, admin, api, app, html, indexes, vercel, robots] = await Pr
   readFile("admin/index.html", "utf8"),
   readFile("firestore.indexes.json", "utf8"),
   readFile("vercel.json", "utf8"),
-  readFile("public/robots.txt", "utf8")
+  readFile("public/robots.txt", "utf8"),
+  readFile("functions/scripts/catalog-migration.mjs", "utf8")
 ]);
 
 test("production App Check is secure by default and rate limits avoid raw PII keys", () => {
@@ -32,6 +33,13 @@ test("booking creation and reschedule use request guards and transactional slot 
   assert.match(backend, /workerLeaves/);
 });
 
+test("package pricing revalidates every linked service against Firestore and branch scope", () => {
+  assert.match(backend, /const linkedServiceIds = \[\.\.\.new Set\(/);
+  assert.match(backend, /PACKAGE_SERVICE_UNAVAILABLE/);
+  assert.match(backend, /serviceBranches\.includes\(branchId\)/);
+  assert.match(backend, /TOO_MANY_LINKED_SERVICES/);
+});
+
 test("all business date decisions use the Cairo clock", () => {
   assert.match(core, /timeZone: "Africa\/Cairo"/);
   assert.match(backend, /function businessDateParts/);
@@ -48,6 +56,9 @@ test("POS finalization is idempotent and separates read-only printing", () => {
   assert.match(backend, /receiptNumber: code/);
   assert.match(admin, /طباعة \/ نسخة/);
   assert.match(admin, /resetPosDraft\(\)/);
+  assert.match(admin, /data-pos-choice/);
+  assert.match(admin, /اختر بديلًا واحدًا من كل مجموعة داخل الباقة/);
+  assert.match(admin, /choices: Array\.isArray\(item\.choices\)/);
 });
 
 test("refund, void, stock reversal and financial delete controls are server-side", () => {
@@ -89,13 +100,65 @@ test("multi-worker receipts post per-line revenue and scalable monthly totals", 
   assert.match(admin, /data-pos-worker/);
 });
 
+test("monthly service targets are server-counted, branch-scoped and reversed on refund", () => {
+  assert.match(backend, /export const getServiceTargetsDashboard/);
+  assert.match(backend, /export const upsertServiceTarget/);
+  assert.match(backend, /requireRole\(request, \["admin"\]\)/);
+  assert.match(backend, /postServiceMonthlyTargets/);
+  assert.match(backend, /direction: action === "refund" \? -1 : 1/);
+  assert.match(backend, /serviceTargetsPosted/);
+  assert.match(core, /serviceTargetEntries/);
+  assert.match(api, /upsertServiceTarget/);
+  assert.match(admin, /data-edit-service-target/);
+  assert.match(html, /id="serviceTargetForm"/);
+});
+
+test("catalog migration defaults to dry-run, keeps fixed package ids and never deletes records", () => {
+  assert.match(migration, /mode: apply \? "APPLY" : "DRY_RUN"/);
+  assert.match(migration, /newMashayaPackages/);
+  assert.match(migration, /No records are deleted/);
+  assert.doesNotMatch(migration, /batch\.delete|\.delete\(/);
+  assert.match(migration, /needs-branch-decision/);
+  assert.match(migration, /verifiedBranchGeofences/);
+  assert.match(migration, /preserve-existing-valid-coordinates/);
+  assert.match(migration, /skip-unresolved-services/);
+  assert.match(migration, /unresolvedServiceIds/);
+  assert.match(migration, /packageDiff/);
+  assert.match(migration, /resolvablePackageIds/);
+  assert.match(migration, /31\.0520115/);
+  assert.match(migration, /31\.0456639/);
+});
+
+test("dashboard separates daily cashier figures from privileged monthly financial totals", () => {
+  assert.match(backend, /const canDailyRevenue = access\.has\("dashboard"\) \|\| access\.has\("revenue"\) \|\| access\.has\("pos"\)/);
+  assert.match(backend, /const canRevenue = access\.has\("revenue"\)/);
+  assert.match(backend, /const canExpenses = access\.has\("expenses"\)/);
+  assert.match(backend, /monthlyRevenueTarget/);
+  assert.match(backend, /branches\/\$\{branchId\}/);
+});
+
+test("workers without an explicit branch are rejected by booking and POS server paths", () => {
+  assert.match(backend, /Array\.isArray\(member\.branchIds\) && member\.branchIds\.includes\(branchId\)/);
+  assert.match(backend, /!Array\.isArray\(worker\.branchIds\) \|\| !worker\.branchIds\.includes\(branch\.id\)/);
+  assert.match(backend, /يحتاج تحديد فرعه من الإدارة/);
+  assert.match(backend, /if \(Array\.isArray\(item\.branchIds\) && item\.branchIds\.length\)[^\n]+\n  return false;/);
+});
+
+test("public staff and content require explicit branch scope while legacy services stay compatible", () => {
+  assert.match(app, /explicitlyAvailableAtBranch/);
+  assert.match(app, /catalog\.staff\.filter\(item => explicitlyAvailableAtBranch/);
+  assert.match(app, /catalog\.content\.filter\(item => explicitlyAvailableAtBranch/);
+  assert.match(app, /const availableAtBranch = item/);
+});
+
 test("daily dashboard, range calendar, leave, no-show, low-stock and Customer 360 are wired", () => {
   assert.match(backend, /AggregateField\.sum/);
   assert.match(backend, /export const getBookingCalendar/);
   assert.match(backend, /export const getCustomer360/);
   assert.match(backend, /noShowCount/);
   assert.match(admin, /customer-warning/);
-  assert.match(admin, /lowStockCount/);
+  assert.match(backend, /lowStockCount/);
+  assert.match(html, /data-section="inventory"/);
   assert.match(html, /id="bookingCalendar"/);
   assert.match(html, /data-new="workerLeaves"/);
 });

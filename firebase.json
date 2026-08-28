@@ -25,6 +25,10 @@
         "headers": [{ "key": "Cache-Control", "value": "private,no-store,max-age=0" }]
       },
       {
+        "source": "/theme-init.js",
+        "headers": [{ "key": "Cache-Control", "value": "public,max-age=0,must-revalidate" }]
+      },
+      {
         "source": "**",
         "headers": [
           { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -41,6 +45,8 @@
       { "source": "/login/**", "destination": "/login/index.html" },
       { "source": "/account/**", "destination": "/account/index.html" },
       { "source": "/services/**", "destination": "/services/index.html" },
+      { "source": "/packages/**", "destination": "/packages/index.html" },
+      { "source": "/reviews/**", "destination": "/reviews/index.html" },
       { "source": "/team/**", "destination": "/team/index.html" },
       { "source": "/branches/talkha/**", "destination": "/branches/talkha/index.html" },
       { "source": "/branches/mashaya/**", "destination": "/branches/mashaya/index.html" },

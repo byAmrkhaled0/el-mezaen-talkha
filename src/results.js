@@ -11,10 +11,10 @@ let search = "";
 let visibleItems = [];
 let viewerIndex = 0;
 
-const branchLabel = item => item.branchId === "mashaya" ? "فرع المشاية" : item.branchId === "talkha" ? "فرع طلخا" : "كل الفروع";
+const branchLabel = item => item.branchIds?.length === 1 && item.branchIds[0] === "mashaya" ? "فرع المشاية" : item.branchIds?.length === 1 && item.branchIds[0] === "talkha" ? "فرع طلخا" : item.branchIds?.length > 1 ? "كل الفروع" : "يحتاج تحديد الفرع";
 
 function render() {
-  visibleItems = items.filter(item => (branch === "all" || item.branchId === branch || item.branchId === "all") && (!search || `${item.titleAr || ""} ${item.titleEn || ""}`.toLowerCase().includes(search)));
+  visibleItems = items.filter(item => (branch === "all" || item.branchIds?.includes(branch)) && (!search || `${item.titleAr || ""} ${item.titleEn || ""}`.toLowerCase().includes(search)));
   document.querySelector("#resultsCount").textContent = visibleItems.length ? `${visibleItems.length} نتيجة` : "";
   document.querySelector("#allResultsGrid").innerHTML = visibleItems.map((item, index) => `<button class="result-card" type="button" data-result-index="${index}" aria-label="عرض ${escapeHtml(item.titleAr || "نتيجة من مزين مصر")}"><img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.titleAr || "نتيجة من مزين مصر")}" loading="lazy" decoding="async" width="1080" height="1080"><span>${escapeHtml(item.titleAr || "نتيجة من مزين مصر")}</span><small>${branchLabel(item)}</small></button>`).join("") || '<div class="results-empty">لا توجد نتائج مطابقة حاليًا.</div>';
 }
@@ -57,7 +57,7 @@ async function load() {
   const app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   const response = await httpsCallable(getFunctions(app, "europe-west1"), "getCatalog", { timeout: 20000 })();
-  items = (response.data?.content || []).filter(item => item.active !== false && item.type === "result" && item.imageUrl);
+  items = (response.data?.content || []).filter(item => item.active !== false && item.type === "result" && item.imageUrl).map(item => ({ ...item, branchIds: Array.isArray(item.branchIds) ? item.branchIds.filter(value => ["talkha", "mashaya"].includes(value)) : [item.branchId].filter(value => ["talkha", "mashaya"].includes(value)) }));
   render();
 }
 

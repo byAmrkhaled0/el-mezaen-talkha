@@ -22,3 +22,13 @@ body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -1
 .login-error { min-height: 22px; color: #ff7287 !important; }
 .login-card small { display: block; color: #7593a2; margin-top: 13px; }
 @media (max-width: 480px) { .login-shell { padding: 13px; } .login-card { padding: 24px 17px; } .login-card h1 { font-size: 23px; } }
+html[data-theme="light"] body{color:#111827;background:#fff}
+html[data-theme="light"] .login-back{color:#667c85}
+html[data-theme="light"] .login-card{border-color:#e5e7eb;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,.07)}
+html[data-theme="light"] .login-card>span{color:#0b7285}
+html[data-theme="light"] .login-card p,html[data-theme="light"] .login-card small{color:#667c85}
+html[data-theme="light"] .login-card input{border-color:#e5e7eb;color:#111827;background:#fff}
+html[data-theme="light"] .login-card input::placeholder{color:#738a92;opacity:1}
+html[data-theme="light"] .login-card input:focus{border-color:#0b7285;box-shadow:0 0 0 3px rgba(11,114,133,.13);outline:0}
+html[data-theme="light"] .login-button{color:#fff;background:#0b7285}
+.login-back{display:inline-flex;align-items:center;gap:7px}.login-back svg{fill:none;stroke:currentColor}

@@ -1,16 +1,18 @@
+import { newMashayaPackages } from "./package-definitions.js";
+
 const categories = [
   ["hair", "الشعر", "Hair"],
-  ["beard", "الذقن", "Beard"],
-  ["skin", "البشرة", "Skin"],
+  ["beard", "حلاقة الدقن", "Beard Shaving"],
+  ["skin", "العناية الأساسية بالبشرة", "Basic Skin Care"],
   ["extras", "إضافات", "Extras"],
   ["wax", "شمع", "Waxing"],
-  ["beard-care", "دقن", "Beard Care"],
+  ["beard-care", "العناية بالذقن", "Beard Care"],
   ["hair-care", "عناية بالشعر", "Hair Care"],
   ["service", "سيرفيس", "Service & Hair Systems"],
   ["packages", "الباقات", "Packages"],
   ["installation", "تركيب", "Installation"],
   ["products", "بضاعة", "Products"],
-  ["facial-cleaning", "تنظيف بشرة", "Facial Cleansing"]
+  ["facial-cleaning", "تنظيف البشرة الاحترافي", "Professional Facial Cleansing"]
 ].map(([id, nameAr, nameEn], sortOrder) => ({ id, nameAr, nameEn, active: true, sortOrder }));
 
 const sharedSocial = {
@@ -33,6 +35,10 @@ const branches = [
     secondaryPhone: "0502535810",
     whatsapp: "201093008896",
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=%D8%AA%D9%82%D8%B3%D9%8A%D9%85+%D8%A8%D9%87%D8%A7%D8%A1+%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D9%8A%D9%86%D9%8A+%D8%B7%D9%84%D8%AE%D8%A7",
+    latitude: 31.0520115,
+    longitude: 31.3815616,
+    attendanceRadiusMeters: 100,
+    monthlyRevenueTarget: 0,
     openingTime: "11:00",
     closingTime: "23:00",
     slotMinutes: 15,
@@ -53,6 +59,10 @@ const branches = [
     secondaryPhone: "0502253357",
     whatsapp: "201101006961",
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=%D8%B4%D8%A7%D8%B1%D8%B9+%D8%AD%D8%B3%D8%A7%D9%85+%D8%B1%D8%A8%D9%8A%D8%B9+%D8%A7%D9%84%D9%85%D8%B4%D8%A7%D9%8A%D8%A9+%D8%A7%D9%84%D8%B3%D9%81%D9%84%D9%8A%D8%A9+%D8%A7%D9%84%D9%85%D9%86%D8%B5%D9%88%D8%B1%D8%A9",
+    latitude: 31.0456639,
+    longitude: 31.3670561,
+    attendanceRadiusMeters: 100,
+    monthlyRevenueTarget: 0,
     openingTime: "11:00",
     closingTime: "23:00",
     slotMinutes: 15,
@@ -170,6 +180,29 @@ const services = [
   s("facial-cleaning-003", "facial-cleaning", "هيدرافيشال", "HydraFacial", 20, 500)
 ];
 
+const serviceClarifications = {
+  "hair-005": { nameAr: "استشوار شعر (يبدأ من)", descriptionAr: "استشوار للشعر الطبيعي؛ السعر يبدأ من القيمة الظاهرة حسب الطول والكثافة." },
+  "beard-004": { nameAr: "حلاقة دقن بالبخار", descriptionAr: "حلاقة دقن مع استخدام البخار." },
+  "skin-001": { nameAr: "تنظيف بشرة أساسي", descriptionAr: "تنظيف أساسي للبشرة ضمن قسم العناية اليومية." },
+  "service-006": { nameAr: "استشوار شبكية – سيرفيس", descriptionAr: "استشوار مخصص للشبكية ضمن خدمات السيرفيس." },
+  "service-007": { nameAr: "تركيب جديد – فئة 4900", descriptionAr: "تركيب جديد بسعر الفئة المسجلة 4900 جنيه." },
+  "service-012": { nameAr: "تركيب جديد – فئة 3450", descriptionAr: "تركيب جديد بسعر الفئة المسجلة 3450 جنيه." },
+  "service-013": { nameAr: "تركيب جديد – فئة 3500", descriptionAr: "تركيب جديد بسعر الفئة المسجلة 3500 جنيه." },
+  "service-016": { nameAr: "تركيب جديد – فئة 7500", descriptionAr: "تركيب جديد بسعر الفئة المسجلة 7500 جنيه." },
+  "service-017": { nameAr: "تركيب جديد – فئة 2850", descriptionAr: "تركيب جديد بسعر الفئة المسجلة 2850 جنيه." },
+  "facial-cleaning-001": { nameAr: "تنظيف بشرة احترافي", descriptionAr: "جلسة تنظيف بشرة ضمن قسم التنظيف الاحترافي." },
+  "facial-cleaning-002": { nameAr: "تنظيف بشرة بروفيشنال", descriptionAr: "جلسة تنظيف بشرة بروفيشنال بالسعر والمدة المسجلين." }
+};
+services.forEach(item => {
+  const clarification = serviceClarifications[item.id] || {};
+  Object.assign(item, clarification, {
+    descriptionAr: clarification.descriptionAr || `${item.nameAr} بالسعر والمدة الموضحين في الكارت.`,
+    descriptionEn: clarification.descriptionEn || item.nameEn,
+    branchIds: ["talkha", "mashaya"]
+  });
+});
+Object.assign(services.find(item => item.id === "hair-028"), { duplicateOf: "hair-010", catalogVisible: false, descriptionAr: "سجل قديم مطابق لخدمة كيرلي كريم؛ محفوظ للتوافق مع الحجوزات السابقة ولا يظهر ككارت جديد." });
+
 const p = (id, nameAr, nameEn, duration, price, badge = "") => ({
   id,
   nameAr,
@@ -186,6 +219,7 @@ const p = (id, nameAr, nameEn, duration, price, badge = "") => ({
   status: "active",
   active: true,
   badge,
+  branchIds: ["talkha", "mashaya"],
   sortOrder: Number(id.split("-").at(-1))
 });
 
@@ -195,7 +229,8 @@ const packages = [
   p("package-003", "الباقة الأساسية", "Essential Package", 45, 250),
   p("package-004", "عرض الشباب", "Youth Offer", 30, 150, "popular"),
   p("package-005", "عرض رأس السنة", "New Year Offer", 60, 550, "special"),
-  p("package-006", "الباقة المتكاملة", "Complete Package – 60 Minutes", 60, 400, "popular")
+  p("package-006", "الباقة المتكاملة – 60 دقيقة", "Complete Package – 60 Minutes", 60, 400, "popular"),
+  ...newMashayaPackages
 ];
 [
   "/assets/package-premium.webp", "/assets/package-haircut.webp", "/assets/package-beard.webp",
@@ -264,11 +299,24 @@ const coupons = [{
 }];
 
 const content = [
-  { id: "celebrity-001", type: "celebrity", titleAr: "من صور مزين مصر مع المشاهير", titleEn: "El Mezaen Egypt Celebrity Gallery", imageUrl: "/assets/celebrity-1.webp", bodyAr: "", bodyEn: "", active: true, sortOrder: 1 },
-  { id: "celebrity-002", type: "celebrity", titleAr: "لحظات مميزة في مزين مصر", titleEn: "Special Moments at El Mezaen Egypt", imageUrl: "/assets/celebrity-2.webp", bodyAr: "", bodyEn: "", active: true, sortOrder: 2 },
-  { id: "celebrity-003", type: "celebrity", titleAr: "لقاء مميز من أرشيف مزين مصر", titleEn: "A Special Moment from El Mezaen Egypt", imageUrl: "/assets/celebrity-3.webp", bodyAr: "", bodyEn: "", active: true, sortOrder: 3 },
-  { id: "celebrity-004", type: "celebrity", titleAr: "من لقاءات مزين مصر المميزة", titleEn: "A Memorable El Mezaen Egypt Encounter", imageUrl: "/assets/celebrity-4.webp", bodyAr: "", bodyEn: "", active: true, sortOrder: 4 }
+  { id: "celebrity-001", type: "celebrity", titleAr: "من صور مزين مصر مع المشاهير", titleEn: "El Mezaen Egypt Celebrity Gallery", imageUrl: "/assets/celebrity-1.webp", bodyAr: "", bodyEn: "", branchIds: ["talkha", "mashaya"], active: true, sortOrder: 1 },
+  { id: "celebrity-002", type: "celebrity", titleAr: "لحظات مميزة في مزين مصر", titleEn: "Special Moments at El Mezaen Egypt", imageUrl: "/assets/celebrity-2.webp", bodyAr: "", bodyEn: "", branchIds: ["talkha", "mashaya"], active: true, sortOrder: 2 },
+  { id: "celebrity-003", type: "celebrity", titleAr: "لقاء مميز من أرشيف مزين مصر", titleEn: "A Special Moment from El Mezaen Egypt", imageUrl: "/assets/celebrity-3.webp", bodyAr: "", bodyEn: "", branchIds: ["talkha", "mashaya"], active: true, sortOrder: 3 },
+  { id: "celebrity-004", type: "celebrity", titleAr: "من لقاءات مزين مصر المميزة", titleEn: "A Memorable El Mezaen Egypt Encounter", imageUrl: "/assets/celebrity-4.webp", bodyAr: "", bodyEn: "", branchIds: ["talkha", "mashaya"], active: true, sortOrder: 4 }
 ];
+
+const faqs = [
+  { id: "faq-branches", questionAr: "أين توجد الفروع والعناوين؟", questionEn: "Where are the branches?", answerAr: "فرع المشاية في المشاية السفلية أمام بوابة نادي الجزيرة الثانية، وفرع طلخا في تقسيم بهاء الشربيني أمام محل LONDONE.", answerEn: "El Mashaya is opposite Al Gezira Club Gate 2. Talkha is in Bahaa El-Sherbiny Division opposite LONDONE.", actions: ["branch", "whatsapp"], keywords: ["الفروع", "العنوان", "المشاية", "طلخا"], active: true, sortOrder: 1 },
+  { id: "faq-hours", questionAr: "ما مواعيد العمل؟", questionEn: "What are the working hours?", answerAr: "المواعيد الحالية يوميًا من 11 صباحًا إلى 11 مساءً، وتظهر المواعيد المتاحة الفعلية أثناء الحجز.", answerEn: "Current hours are daily from 11 AM to 11 PM; actual availability appears during booking.", actions: ["book"], keywords: ["المواعيد", "العمل", "الساعة"], active: true, sortOrder: 2 },
+  { id: "faq-booking", questionAr: "كيف أحجز موعدًا؟", questionEn: "How do I book?", answerAr: "اختر الفرع ثم الخدمة أو الباقة والعامل والتاريخ والوقت، وبعد مراجعة السعر أدخل بياناتك واضغط تأكيد مرة واحدة.", answerEn: "Choose a branch, service or package, specialist, date and time, then review the total and confirm once.", actions: ["book", "services"], keywords: ["حجز", "موعد", "عامل"], active: true, sortOrder: 3 },
+  { id: "faq-change-cancel", questionAr: "كيف أعدّل أو ألغي الحجز؟", questionEn: "How do I change or cancel a booking?", answerAr: "استخدم قسم «راجع أو ألغِ حجزك» بكود الحجز ورقم الهاتف. طلب التعديل متاح عبر واتساب الفرع، والإلغاء يظهر للحجوزات المؤهلة.", answerEn: "Use the manage-booking section with the booking code and phone. Changes go through branch WhatsApp; eligible bookings can be cancelled online.", actions: ["manage", "whatsapp"], keywords: ["تعديل", "إلغاء", "كود الحجز"], active: true, sortOrder: 4 },
+  { id: "faq-services-prices", questionAr: "أين أجد الخدمات والأسعار؟", questionEn: "Where can I find services and prices?", answerAr: "صفحة الخدمات تعرض الأسعار والمدد الحالية. السعر النهائي للحجز يُعاد حسابه آمنًا من الخادم.", answerEn: "The services page shows current prices and durations. The final booking total is recalculated securely by the server.", actions: ["services", "book"], keywords: ["الخدمات", "الأسعار", "سعر"], active: true, sortOrder: 5 },
+  { id: "faq-packages", questionAr: "ما الباقات والعروض المتاحة؟", questionEn: "Which packages and offers are available?", answerAr: "اختر الفرع أولًا لتظهر الباقات المتاحة له. عروض الصحاب وصبغة السيلفر وعرض الـ450 خاصة بفرع المشاية.", answerEn: "Choose a branch first to see its packages. The Friends, Silver Dye and EGP 450 offers are exclusive to El Mashaya.", actions: ["book", "branch"], keywords: ["الباقات", "العروض", "الصحاب", "السيلفر", "450"], active: true, sortOrder: 6 },
+  { id: "faq-worker", questionAr: "هل يمكنني اختيار العامل؟", questionEn: "Can I choose a specialist?", answerAr: "نعم، اختر العامل التابع للفرع أثناء الحجز أو اختر أقرب متخصص متاح.", answerEn: "Yes. Choose a specialist assigned to the branch or select the nearest available specialist.", actions: ["book"], keywords: ["العامل", "الحلاق", "المتخصص"], active: true, sortOrder: 7 },
+  { id: "faq-hair-system", questionAr: "هل متاح تركيب الشعر والشبكية؟", questionEn: "Are hair systems available?", answerAr: "نعم، تشمل الخدمات التركيب والقص والتنظيف والصيانة والسيرفيس. المعاينة داخل الفرع تحدد الخيار الأنسب.", answerEn: "Yes. Services include fitting, cutting, cleaning, maintenance and servicing. An in-branch consultation determines the best option.", actions: ["hair", "whatsapp"], keywords: ["تركيب الشعر", "الشبكية", "صيانة", "سيرفيس"], active: true, sortOrder: 8 },
+  { id: "faq-contact", questionAr: "كيف أتواصل عبر واتساب؟", questionEn: "How do I contact WhatsApp?", answerAr: "اختر الفرع أولًا ثم اضغط واتساب ليتم توجيهك إلى رقم الفرع الصحيح.", answerEn: "Choose a branch first, then tap WhatsApp to contact the correct branch number.", actions: ["branch", "whatsapp"], keywords: ["واتساب", "تواصل", "رقم"], active: true, sortOrder: 9 }
+];
+faqs.forEach(item => { item.branchIds = ["talkha", "mashaya"]; });
 
 const settings = {
   businessNameAr: "مزين مصر",
@@ -282,5 +330,5 @@ const settings = {
   currency: "EGP"
 };
 
-export const seedCatalog = { branches, categories, services, packages, staff, offers, coupons, drinks: [], content, settings };
-export const collectionsForSeed = { branches, categories, services, packages, staff, offers, coupons, content };
+export const seedCatalog = { branches, categories, services, packages, staff, offers, coupons, drinks: [], content, faqs, settings };
+export const collectionsForSeed = { branches, categories, services, packages, staff, offers, coupons, content, faqs };

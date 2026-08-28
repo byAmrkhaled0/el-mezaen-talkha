@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "../src/core.js";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, distanceMeters, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, validateAppointment, validateAttendanceLocation } from "../src/core.js";
+import { newMashayaPackages } from "../../src/package-definitions.js";
 
 test("normalizes Egyptian mobile numbers", () => {
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
@@ -69,6 +70,27 @@ test("prices only from trusted server documents", () => {
   assert.equal(result[0].lineTotal, 100);
 });
 
+test("hidden legacy duplicate services cannot be booked again", () => {
+  const docs = new Map([["hair-028", { kind: "service", active: true, catalogVisible: false, nameAr: "كيرلي كريم", price: 100, duration: 20 }]]);
+  assert.throws(() => priceItems([{ id: "hair-028", kind: "service" }], docs), /ITEM_UNAVAILABLE/);
+});
+
+test("service targets count only sold service, package and offer lines", () => {
+  assert.deepEqual(serviceTargetEntries([
+    { id: "hair-001", kind: "service", nameAr: "قص شعر", qty: 1 },
+    { id: "package-001", kind: "package", nameAr: "باقة", qty: 1 },
+    { id: "water", kind: "drink", nameAr: "مياه", qty: 4 },
+    { id: "hair-001", kind: "service", nameAr: "قص شعر", qty: 2 }
+  ]), [
+    { itemId: "hair-001", kind: "service", nameAr: "قص شعر", nameEn: "قص شعر", count: 3 },
+    { itemId: "package-001", kind: "package", nameAr: "باقة", nameEn: "باقة", count: 1 }
+  ]);
+  assert.equal(serviceTargetDocumentId({ month: "2026-08", branchId: "mashaya", kind: "service", itemId: "hair-001" }), "2026-08_mashaya_service_hair-001");
+  assert.throws(() => serviceTargetDocumentId({ month: "2026-13", branchId: "mashaya", kind: "service", itemId: "hair-001" }), /INVALID_SERVICE_TARGET_KEY/);
+  assert.deepEqual(calculateServiceTargetProgress(10, 7), { targetCount: 10, achievedCount: 7, remainingCount: 3, progressPercent: 70 });
+  assert.deepEqual(calculateServiceTargetProgress(10, 12), { targetCount: 10, achievedCount: 12, remainingCount: 0, progressPercent: 100 });
+});
+
 test("preserves product quantity and rejects duplicate lines", () => {
   const docs = new Map([["product-001", { kind: "product", type: "product", active: true, nameAr: "مشط", nameEn: "Comb", price: 5, duration: 0 }]]);
   assert.equal(priceItems([{ id: "product-001", kind: "product", qty: 3 }], docs)[0].lineTotal, 15);
@@ -86,6 +108,27 @@ test("applies coupon limits and item scope", () => {
 test("creates non-overlapping five-minute lock keys", () => {
   assert.deepEqual(createSlotKeys("staff-1", "2026-08-01", "11:00", 15), ["staff-1_2026-08-01_1100", "staff-1_2026-08-01_1105", "staff-1_2026-08-01_1110"]);
   assert.deepEqual(createSlotKeys("staff-1", "2026-08-01", "11:00", 10, 5, "talkha"), ["talkha_staff-1_2026-08-01_1100", "talkha_staff-1_2026-08-01_1105"]);
+});
+
+test("attendance geofence validates distance, accuracy and configurable radius", () => {
+  assert.equal(Math.round(distanceMeters(31.0409, 31.3785, 31.0409, 31.3785)), 0);
+  const accepted = validateAttendanceLocation({ branchLatitude: 31.0409, branchLongitude: 31.3785, latitude: 31.0411, longitude: 31.3785, accuracy: 12, radiusMeters: 100 });
+  assert.ok(accepted.distanceMeters < 100);
+  assert.throws(() => validateAttendanceLocation({ branchLatitude: 31.0409, branchLongitude: 31.3785, latitude: 31.05, longitude: 31.3785, accuracy: 10, radiusMeters: 100 }), /OUTSIDE_BRANCH_GEOFENCE/);
+  assert.throws(() => validateAttendanceLocation({ branchLatitude: 31.0409, branchLongitude: 31.3785, latitude: 31.0409, longitude: 31.3785, accuracy: 300, radiusMeters: 100 }), /LOCATION_ACCURACY_TOO_LOW/);
+});
+
+test("new package price, branch and exclusive choices are enforced by the server", () => {
+  const source = { ...newMashayaPackages[0], kind: "package" };
+  const docs = new Map([[source.id, source]]);
+  const choices = Object.fromEntries(source.choiceGroups.map(group => [group.id, group.options[0].id]));
+  const priced = priceItems([{ id: source.id, kind: "package", price: 1, choices }], docs, new Date(), "mashaya");
+  assert.equal(priced[0].unitPrice, 250);
+  assert.deepEqual(priced[0].serviceIds, ["hair-001", "hair-011", "skin-002", "beard-care-004", "beard-001", "hair-006"]);
+  assert.equal(priced[0].choices.length, 2);
+  assert.throws(() => priceItems([{ id: source.id, kind: "package", choices }], docs, new Date(), "talkha"), /ITEM_UNAVAILABLE_AT_BRANCH/);
+  assert.throws(() => priceItems([{ id: source.id, kind: "package", choices: {} }], docs, new Date(), "mashaya"), /PACKAGE_CHOICE_REQUIRED/);
+  assert.throws(() => priceItems([{ id: source.id, kind: "package", choices: { ...choices, "beard-finish": "not-valid" } }], docs, new Date(), "mashaya"), /PACKAGE_CHOICE_REQUIRED/);
 });
 
 test("rejects an item that is unavailable at the selected branch", () => {

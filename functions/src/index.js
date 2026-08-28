@@ -8,12 +8,12 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { defineSecret } from "firebase-functions/params";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, validateAppointment } from "./core.js";
+import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, validateAppointment, validateAttendanceLocation } from "./core.js";
 
 initializeApp();
 const db = getFirestore();
 const region = "europe-west1";
-const API_VERSION = "2026-08-25";
+const API_VERSION = "2026-08-27";
 const MIN_FRONTEND_VERSION = "2.0.0";
 const whatsappAccessToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
 const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
@@ -27,17 +27,16 @@ const catalogOptions = { ...publicOptions, minInstances: process.env.KEEP_CATALO
 const adminOptions = { region, cors: true, enforceAppCheck: enforcePublicAppCheck, memory: "512MiB", cpu: 1, concurrency: 40, maxInstances: 50, timeoutSeconds: 30 };
 const whatsappOptions = { ...adminOptions, secrets: [whatsappAccessToken, whatsappPhoneNumberId] };
 const whatsappWebhookOptions = { region, cors: false, memory: "256MiB", maxInstances: 20, timeoutSeconds: 15, secrets: [whatsappWebhookVerifyToken, whatsappAppSecret] };
-const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "translations", "reviews"];
-const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "workerLeaves", "offers", "coupons", "content", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
-// Keep "worker" only as a legacy cashier role so previously-created accounts still work.
+const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "faqs", "translations", "reviews"];
+const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "workerLeaves", "offers", "coupons", "content", "faqs", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
-const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "results", "hairMedia", "celebrities", "posts", "settings", "activity", "users"];
+const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "attendance", "tasks", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "results", "hairMedia", "celebrities", "posts", "faqs", "settings", "activity", "users"];
 const ROLE_DEFAULT_PERMISSIONS = {
   manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
-  cashier: ["dashboard", "pos", "bookings", "customers"],
-  worker: ["dashboard", "pos", "bookings", "customers"]
+  cashier: ["dashboard", "pos", "bookings", "attendance", "tasks", "customers"],
+  worker: ["attendance", "tasks"]
 };
-const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", workerLeaves: "schedule", offers: "offers", coupons: "coupons", content: "posts", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll", cashShifts: "pos", cashMovements: "pos", dailyClosings: "revenue" };
+const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", workerLeaves: "schedule", offers: "offers", coupons: "coupons", content: "posts", faqs: "faqs", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll", cashShifts: "pos", cashMovements: "pos", dailyClosings: "revenue" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
@@ -53,7 +52,7 @@ export const health = onRequest({ region, cors: false, memory: "256MiB", maxInst
   catch { response.set("Cache-Control", "no-store").status(503).json({ ready: false, apiVersion: API_VERSION, version: process.env.K_REVISION || "local", firestore: "unavailable", requiredConfigReady: false }); }
 });
 
-const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), firstVisitAt: toIso(snapshot.data().firstVisitAt), lastVisitAt: toIso(snapshot.data().lastVisitAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt), finalizedAt: toIso(snapshot.data().finalizedAt), voidedAt: toIso(snapshot.data().voidedAt), openedAt: toIso(snapshot.data().openedAt), closedAt: toIso(snapshot.data().closedAt) });
+const cleanDoc = snapshot => ({ id: snapshot.id, ...snapshot.data(), startAt: toIso(snapshot.data().startAt), endAt: toIso(snapshot.data().endAt), createdAt: toIso(snapshot.data().createdAt), updatedAt: toIso(snapshot.data().updatedAt), firstVisitAt: toIso(snapshot.data().firstVisitAt), lastVisitAt: toIso(snapshot.data().lastVisitAt), lastBookingAt: toIso(snapshot.data().lastBookingAt), paidAt: toIso(snapshot.data().paidAt), refundedAt: toIso(snapshot.data().refundedAt), finalizedAt: toIso(snapshot.data().finalizedAt), voidedAt: toIso(snapshot.data().voidedAt), openedAt: toIso(snapshot.data().openedAt), closedAt: toIso(snapshot.data().closedAt), checkInAt: toIso(snapshot.data().checkInAt), checkOutAt: toIso(snapshot.data().checkOutAt), dueAt: toIso(snapshot.data().dueAt), readAt: toIso(snapshot.data().readAt), completedAt: toIso(snapshot.data().completedAt) });
 const toIso = value => value?.toDate ? value.toDate().toISOString() : value || null;
 const hash = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
 const bookingCode = branchCode => `MZ-${String(branchCode || "BR").replace(/[^A-Z0-9]/g, "").slice(0, 3) || "BR"}-${businessDateParts().dateKey.replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
@@ -83,9 +82,67 @@ function postWorkerMonthlyRevenue(transaction, { workerId, branchId, dateKey, am
   }, { merge: true });
 }
 
+function postServiceMonthlyTargets(transaction, { items, branchId, dateKey, direction = 1, now }) {
+  const month = String(dateKey || "").slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month) || !/^[a-z0-9-]{2,40}$/.test(String(branchId || ""))) return [];
+  const entries = serviceTargetEntries(items);
+  for (const entry of entries) {
+    const id = serviceTargetDocumentId({ month, branchId, kind: entry.kind, itemId: entry.itemId });
+    transaction.set(db.doc(`serviceTargets/${id}`), {
+      month,
+      branchId,
+      itemId: entry.itemId,
+      kind: entry.kind,
+      nameAr: entry.nameAr,
+      nameEn: entry.nameEn,
+      achievedCount: FieldValue.increment(entry.count * (direction < 0 ? -1 : 1)),
+      updatedAt: now
+    }, { merge: true });
+  }
+  return entries;
+}
+
 function normalizeDrinkOptions(value) {
   const options = (Array.isArray(value) ? value : [value]).flatMap(item => String(item || "").split(/[،,]/));
   return [...new Set(options.map(item => sanitizeText(item, 40)).filter(Boolean))].slice(0, 12);
+}
+
+function normalizeChoiceGroups(value) {
+  let groups = value;
+  if (typeof groups === "string") {
+    try { groups = JSON.parse(groups); }
+    catch { throw new HttpsError("invalid-argument", "صيغة اختيارات الباقة غير صحيحة"); }
+  }
+  if (!Array.isArray(groups)) return [];
+  const seenGroups = new Set();
+  return groups.slice(0, 10).map(group => {
+    const id = sanitizeText(group?.id, 40).toLowerCase();
+    if (!/^[a-z0-9-]{2,40}$/.test(id) || seenGroups.has(id)) throw new HttpsError("invalid-argument", "معرّف اختيار الباقة مكرر أو غير صالح");
+    seenGroups.add(id);
+    const seenOptions = new Set();
+    const options = (Array.isArray(group?.options) ? group.options : []).slice(0, 12).map(entry => {
+      const optionId = sanitizeText(entry?.id, 40).toLowerCase();
+      const labelAr = sanitizeText(entry?.labelAr, 80);
+      const serviceId = sanitizeText(entry?.serviceId, 100);
+      if (!/^[a-z0-9-]{1,40}$/.test(optionId) || seenOptions.has(optionId) || !labelAr || !serviceId) throw new HttpsError("invalid-argument", "أحد بدائل الباقة غير صالح");
+      seenOptions.add(optionId);
+      return { id: optionId, labelAr, labelEn: sanitizeText(entry?.labelEn || labelAr, 80), serviceId };
+    });
+    if (options.length < 2) throw new HttpsError("invalid-argument", "كل مجموعة بدائل يجب أن تحتوي اختيارين على الأقل");
+    return { id, labelAr: sanitizeText(group?.labelAr || id, 80), labelEn: sanitizeText(group?.labelEn || group?.labelAr || id, 80), required: group?.required !== false, minSelections: 1, maxSelections: 1, options };
+  });
+}
+
+async function validatePackageReferences(record) {
+  const branchIds = Array.isArray(record.branchIds) ? record.branchIds : [];
+  if (branchIds.some(id => !/^[a-z0-9-]{2,40}$/.test(String(id)))) throw new HttpsError("invalid-argument", "نطاق فروع الباقة غير صحيح");
+  if (!sanitizeText(record.nameAr, 100) || !Number.isFinite(Number(record.price)) || Number(record.price) < 0 || !Number.isFinite(Number(record.duration)) || Number(record.duration) <= 0) throw new HttpsError("invalid-argument", "اسم وسعر ومدة الباقة بيانات مطلوبة");
+  if (Number(record.originalPrice || record.price) < Number(record.price)) throw new HttpsError("invalid-argument", "السعر قبل الخصم يجب ألا يقل عن السعر الحالي");
+  const ids = [...new Set([...(Array.isArray(record.includedServiceIds) ? record.includedServiceIds : []), ...(Array.isArray(record.choiceGroups) ? record.choiceGroups.flatMap(group => group.options || []).map(option => option.serviceId) : [])].map(value => sanitizeText(value, 100)).filter(Boolean))];
+  if (!ids.length) return;
+  const snapshots = await db.getAll(...ids.map(id => db.doc(`services/${id}`)));
+  const missing = snapshots.filter(snapshot => !snapshot.exists || snapshot.data()?.active === false).map(snapshot => snapshot.id);
+  if (missing.length) throw new HttpsError("failed-precondition", `خدمات الباقة غير متاحة: ${missing.join(", ")}`);
 }
 
 function requestFingerprint(request, extra = "") {
@@ -127,7 +184,8 @@ function permissionsFor(request) {
   const role = requireRole(request);
   if (role === "admin") return new Set(ALL_PERMISSIONS);
   const claimed = Array.isArray(request.auth?.token?.permissions) ? request.auth.token.permissions : ROLE_DEFAULT_PERMISSIONS[role] || [];
-  return new Set(claimed.filter(value => ALL_PERMISSIONS.includes(value)));
+  const permitted = role === "worker" ? ["attendance", "tasks"] : ALL_PERMISSIONS;
+  return new Set(claimed.filter(value => permitted.includes(value)));
 }
 
 function hasPermission(request, permission) { return permissionsFor(request).has(permission); }
@@ -152,7 +210,7 @@ function itemInAllowedBranch(item, allowedBranches) {
   if (item.branchId) return item.branchId === "all" || allowedBranches.includes(String(item.branchId).toLowerCase());
   if (item.lastBranchId) return allowedBranches.includes(String(item.lastBranchId).toLowerCase());
   if (Array.isArray(item.branchIds) && item.branchIds.length) return item.branchIds.some(value => allowedBranches.includes(String(value).toLowerCase()));
-  return true;
+  return false;
 }
 
 function invalidateCatalogCache() {
@@ -174,6 +232,36 @@ function requirePermission(request, permission) {
   const role = requireRole(request);
   if (role !== "admin" && !permissionsFor(request).has(permission)) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   return role;
+}
+
+function claimedStaffId(request) {
+  return sanitizeText(request.auth?.token?.staffId, 100);
+}
+
+async function linkedStaffId(request) {
+  const claimed = claimedStaffId(request);
+  if (claimed) return claimed;
+  const profile = await db.doc(`users/${request.auth.uid}`).get();
+  return sanitizeText(profile.data()?.staffId, 100);
+}
+
+async function sendWorkerPush(staffId, { title, body, type, entityId }) {
+  const users = await db.collection("users").where("staffId", "==", staffId).limit(5).get();
+  const tokenSnapshots = await Promise.all(users.docs.map(user => db.collection("pushTokens").where("uid", "==", user.id).limit(20).get()));
+  const tokens = [...new Set(tokenSnapshots.flatMap(snapshot => snapshot.docs.map(document => document.data()?.token).filter(Boolean)))];
+  if (!tokens.length) return { attempted: 0, sent: 0 };
+  const response = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    webpush: { fcmOptions: { link: "/admin/" }, notification: { icon: "/assets/el-mezaen-logo.jpeg", badge: "/assets/el-mezaen-logo.jpeg", tag: `${type}_${entityId}`, renotify: true } },
+    data: { type, entityId: String(entityId || ""), staffId }
+  });
+  const deletes = [];
+  response.responses.forEach((result, index) => {
+    if (!result.success && ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(result.error?.code)) deletes.push(db.doc(`pushTokens/${hash(tokens[index])}`).delete());
+  });
+  await Promise.all(deletes);
+  return { attempted: tokens.length, sent: response.successCount };
 }
 
 function requireRecentAdmin(request) {
@@ -252,11 +340,12 @@ async function readBranch(value) {
 
 async function loadCatalog() {
   const [results, drinksSnapshot, publicSettings] = await Promise.all([
-    Promise.all(PUBLIC_COLLECTIONS.map(name => db.collection(name).where("active", "==", true).limit(500).get())),
+    Promise.all(PUBLIC_COLLECTIONS.map(name => name === "reviews" ? db.collection(name).where("active", "==", true).orderBy("createdAt", "desc").limit(3).get() : db.collection(name).where("active", "==", true).limit(500).get())),
     db.collection("drinks").limit(200).get(),
     readSettings()
   ]);
-  const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.map(cleanDoc).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
+  const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.map(cleanDoc).filter(item => item.catalogVisible !== false).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
+  payload.reviews = (payload.reviews || []).map(item => ({ id: item.id, name: sanitizeText(item.name, 60), rating: Math.max(1, Math.min(5, Number(item.rating || 5))), comment: sanitizeText(item.comment, 500), featured: item.featured === true, verified: item.verified === true, adminReply: sanitizeText(item.adminReply, 500), createdAt: item.createdAt }));
   payload.drinks = drinksSnapshot.docs.flatMap(snapshot => {
     const item = snapshot.data();
     const price = Number(item.price || 0);
@@ -283,6 +372,23 @@ export const getCatalog = onCall(catalogOptions, async () => {
   return await catalogLoadPromise;
 });
 
+export const getPublishedReviews = onCall(publicOptions, async request => {
+  await enforceRateLimit(request, "published-reviews", 120, 10 * 60 * 1000);
+  const pageSize = Math.max(6, Math.min(24, Math.floor(Number(request.data?.pageSize || 12))));
+  const cursorId = sanitizeText(request.data?.cursor || "", 100);
+  if (cursorId && !/^[A-Za-z0-9_-]{1,100}$/.test(cursorId)) throw new HttpsError("invalid-argument", "مؤشر الصفحة غير صحيح");
+  let query = db.collection("reviews").where("active", "==", true).orderBy("createdAt", "desc");
+  if (cursorId) {
+    const cursor = await db.doc(`reviews/${cursorId}`).get();
+    if (!cursor.exists || cursor.data()?.active !== true) throw new HttpsError("invalid-argument", "مؤشر الصفحة غير صحيح");
+    query = query.startAfter(cursor);
+  }
+  const snapshot = await query.limit(pageSize + 1).get();
+  const documents = snapshot.docs.slice(0, pageSize);
+  const items = documents.map(cleanDoc).map(item => ({ id: item.id, name: sanitizeText(item.name, 60), rating: Math.max(1, Math.min(5, Number(item.rating || 5))), comment: sanitizeText(item.comment, 500), featured: item.featured === true, verified: item.verified === true, adminReply: sanitizeText(item.adminReply, 500), createdAt: item.createdAt }));
+  return { items, nextCursor: snapshot.size > pageSize ? documents.at(-1)?.id || null : null, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+});
+
 async function fetchPricedItems(lines, branchId = "") {
   const refs = lines.map(line => {
     const collection = line.kind === "package" ? "packages" : line.kind === "offer" ? "offers" : "services";
@@ -295,7 +401,21 @@ async function fetchPricedItems(lines, branchId = "") {
     const data = item.data();
     return [[item.id, { ...data, id: item.id, kind: requestedKind === "product" ? "product" : requestedKind }]];
   }));
-  return priceItems(lines, map, new Date(), branchId);
+  const priced = priceItems(lines, map, new Date(), branchId);
+  const linkedServiceIds = [...new Set(priced.filter(item => ["package", "offer"].includes(item.kind)).flatMap(item => item.serviceIds || []))];
+  if (linkedServiceIds.length > 120) throw new Error("TOO_MANY_LINKED_SERVICES");
+  const linkedSnapshots = [];
+  for (let index = 0; index < linkedServiceIds.length; index += 100) {
+    const chunk = linkedServiceIds.slice(index, index + 100);
+    linkedSnapshots.push(...await db.getAll(...chunk.map(id => db.doc(`services/${id}`))));
+  }
+  const unavailable = linkedSnapshots.filter(snapshot => {
+    if (!snapshot.exists || snapshot.data()?.active === false || snapshot.data()?.catalogVisible === false) return true;
+    const serviceBranches = snapshot.data()?.branchIds;
+    return Boolean(branchId && Array.isArray(serviceBranches) && serviceBranches.length && !serviceBranches.includes(branchId));
+  }).map(snapshot => snapshot.id);
+  if (unavailable.length) throw new Error(`PACKAGE_SERVICE_UNAVAILABLE:${unavailable.join(",")}`);
+  return priced;
 }
 
 function priceDrinkSnapshots(snapshots, lines, branchId) {
@@ -348,7 +468,13 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
-  const rawLines = Array.isArray(data.items) ? data.items.slice(0, 30).map(line => ({ id: sanitizeText(line?.id, 100), kind: sanitizeText(line?.kind, 20), qty: Math.max(1, Math.min(20, Math.floor(Number(line?.qty || 1)))), option: sanitizeText(line?.option, 40) })) : [];
+  const rawLines = Array.isArray(data.items) ? data.items.slice(0, 30).map(line => ({
+    id: sanitizeText(line?.id, 100),
+    kind: sanitizeText(line?.kind, 20),
+    qty: Math.max(1, Math.min(20, Math.floor(Number(line?.qty || 1)))),
+    option: sanitizeText(line?.option, 40),
+    choices: line?.choices && typeof line.choices === "object" && !Array.isArray(line.choices) ? Object.fromEntries(Object.entries(line.choices).slice(0, 10).map(([key, value]) => [sanitizeText(key, 40).toLowerCase(), sanitizeText(value, 40).toLowerCase()])) : {}
+  })) : [];
   if (!rawLines.length || rawLines.some(line => !line.id || !["service", "package", "offer", "product", "inventory", "drink"].includes(line.kind))) throw new HttpsError("invalid-argument", "عناصر الحجز غير صحيحة");
   if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
   const catalogLines = rawLines.filter(line => !["inventory", "drink"].includes(line.kind));
@@ -375,17 +501,17 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
     if (requestedStaffId === "any") {
       const maxCandidates = Math.max(1, Math.min(21, Math.floor(450 / Math.ceil(Math.max(5, duration) / 5))));
       const snapshot = await db.collection("staff").where("active", "==", true).limit(50).get();
-      candidates = snapshot.docs.map(cleanDoc).filter(member => member.available !== false && (!Array.isArray(member.branchIds) || !member.branchIds.length || member.branchIds.includes(branchId))).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)).slice(0, maxCandidates);
+      candidates = snapshot.docs.map(cleanDoc).filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.includes(branchId)).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)).slice(0, maxCandidates);
     } else {
       const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
-      if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)].filter(member => !Array.isArray(member.branchIds) || !member.branchIds.length || member.branchIds.includes(branchId));
+      if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)].filter(member => Array.isArray(member.branchIds) && member.branchIds.includes(branchId));
     }
     const leaveSnapshot = await db.collection("workerLeaves").where("dateKey", "==", data.bookingDate).where("active", "==", true).limit(100).get();
     const leaves = leaveSnapshot.docs.map(cleanDoc).filter(item => !item.branchId || item.branchId === "all" || item.branchId === branchId);
     const day = new Date(`${data.bookingDate}T12:00:00Z`).getUTCDay();
     const appointmentStart = minutes(data.bookingTime);
     const appointmentEnd = appointmentStart + duration;
-    const requestedServiceIds = appointmentItems.map(item => item.id);
+    const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
     candidates = candidates.filter(member => {
       if (Array.isArray(member.workDays) && !member.workDays.map(Number).includes(day)) return false;
       if (Array.isArray(member.serviceIds) && member.serviceIds.length && !requestedServiceIds.every(id => member.serviceIds.includes(id))) return false;
@@ -552,7 +678,7 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
   ]);
   if (!staffSnapshot.exists || staffSnapshot.data().active === false || staffSnapshot.data().available === false) throw new HttpsError("failed-precondition", "العامل غير متاح");
   const staff = cleanDoc(staffSnapshot);
-  if (Array.isArray(staff.branchIds) && staff.branchIds.length && !staff.branchIds.includes(current.branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع");
+  if (!Array.isArray(staff.branchIds) || !staff.branchIds.includes(current.branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع أو يحتاج تحديد فرعه من الإدارة");
   if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) throw new HttpsError("failed-precondition", "الفرع مغلق في اليوم المختار");
   const duration = Math.max(5, Number(current.duration || (current.items || []).reduce((sum, item) => sum + Number(item.duration || 0), 0)));
   const day = new Date(`${date}T12:00:00Z`).getUTCDay();
@@ -562,9 +688,12 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
   try { validateAppointment({ date, time, duration, openingTime: combinedSettings.openingTime, closingTime: combinedSettings.closingTime }); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   if (Array.isArray(staff.workDays) && !staff.workDays.map(Number).includes(day)) throw new HttpsError("failed-precondition", "العامل خارج أيام عمله");
+  const requestedServiceIds = [...new Set((current.items || []).filter(item => item.staffRequired !== false).flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" && item.id ? [item.id] : []))];
+  if (Array.isArray(staff.serviceIds) && staff.serviceIds.length && !requestedServiceIds.every(serviceId => staff.serviceIds.includes(serviceId))) throw new HttpsError("failed-precondition", "العامل غير مخصص لكل خدمات هذا الحجز");
   if (start < minutes(staff.shiftStart || combinedSettings.openingTime) || end > minutes(staff.shiftEnd || combinedSettings.closingTime)) throw new HttpsError("failed-precondition", "الموعد خارج شيفت العامل");
   const onLeave = leaveSnapshot.docs.map(cleanDoc).some(leave => leave.staffId === staffId && (!leave.branchId || leave.branchId === "all" || leave.branchId === current.branchId) && start < minutes(leave.endTime || "23:59") && end > minutes(leave.startTime || "00:00"));
   if (onLeave) throw new HttpsError("failed-precondition", "العامل في إجازة أو غير متاح في هذا الوقت");
+  if ((staff.breaks || []).some(value => { const [from, to] = String(value).split("-"); return from && to && start < minutes(to) && end > minutes(from); })) throw new HttpsError("failed-precondition", "الموعد يتعارض مع راحة العامل");
   const newKeys = createSlotKeys(staffId, date, time, duration, 5, current.branchId);
   const oldKeys = current.lockIds || [];
   const guardRef = db.doc(`rescheduleGuards/${hash(`${request.auth.uid}|${id}|${requestId}`)}`);
@@ -699,9 +828,11 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const access = permissionsFor(request);
   if (!["dashboard", "bookings", "revenue", "expenses", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية لوحة المتابعة");
   const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
-  const canRevenue = access.has("dashboard") || access.has("revenue");
-  const canExpenses = access.has("dashboard") || access.has("expenses");
+  const canDailyRevenue = access.has("dashboard") || access.has("revenue") || access.has("pos");
+  const canRevenue = access.has("revenue");
+  const canExpenses = access.has("expenses");
   const allowedBranches = branchesFor(request);
+  const dashboardBranchIds = allowedBranches.length ? allowedBranches : ["talkha", "mashaya"];
   const today = businessDateParts().dateKey;
   const month = today.slice(0, 7);
   const nextMonth = nextMonthKey(month);
@@ -719,20 +850,29 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
     canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "cancelled")) : zero,
     canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "no_show")) : zero,
     canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).where("bookingDate", ">=", today)) : zero,
-    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
+    canDailyRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
     canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
     canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero
   ]);
-  const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday] = await Promise.all([
-    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
+  const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday, branchSnapshots, branchMonthRevenue] = await Promise.all([
+    canDailyRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
     hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("status", "==", "OPEN")) : zero,
     hasPermission(request, "pos") ? sumCashShifts(allowedBranches, today) : zero,
     hasPermission(request, "inventory") ? Promise.all(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500)).map(query => query.get())) : [],
-    canBookings ? countNewCustomers(allowedBranches, today) : 0
+    canBookings ? countNewCustomers(allowedBranches, today) : 0,
+    canRevenue ? Promise.all(dashboardBranchIds.map(branchId => db.doc(`branches/${branchId}`).get())) : [],
+    canRevenue ? Promise.all(dashboardBranchIds.map(branchId => aggregateScoped("revenueLedger", [branchId], query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }))) : []
   ]);
+  const monthlyTargetByBranch = Object.fromEntries(branchSnapshots.flatMap((snapshot, index) => {
+    if (!snapshot.exists || snapshot.data().active === false) return [];
+    const target = Math.max(0, Number(snapshot.data().monthlyRevenueTarget || 0));
+    const achieved = Math.max(0, Number(branchMonthRevenue[index]?.amount || 0));
+    return [[dashboardBranchIds[index], { target, achieved, remaining: Math.max(0, target - achieved), progressPercent: target ? Math.min(100, Math.round(achieved / target * 100)) : 0 }]];
+  }));
+  const monthlyRevenueTarget = Object.values(monthlyTargetByBranch).reduce((sum, item) => sum + item.target, 0);
   const inventoryItems = inventorySnapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc));
   const lowStockCount = inventoryItems.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length;
   return {
@@ -760,6 +900,8 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
       otherPaymentsToday: revenueToday.amount - cashToday.amount,
       expectedCash: calculateExpectedCash(cashTotals),
       monthRevenue: revenueMonth.amount,
+      monthlyRevenueTarget,
+      monthlyTargetByBranch,
       totalRevenue: revenueTotal.amount,
       todayExpenses: expenseToday.amount,
       monthExpenses: expenseMonth.amount,
@@ -841,14 +983,22 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.id;
   delete payload.createdAt;
   delete payload.updatedAt;
-  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
+  ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "monthlyRevenueTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent", "latitude", "longitude", "attendanceRadiusMeters"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
   ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "cashDrawerEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
-  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(",").map(item => item.trim()).filter(Boolean); });
+  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds", "includedItemsAr", "includedItemsEn", "actions", "keywords"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(/[\n،,]/).map(item => item.trim()).filter(Boolean); });
+  if (["services", "packages", "offers", "staff", "content", "faqs"].includes(collection)) {
+    payload.branchIds = [...new Set((Array.isArray(payload.branchIds) ? payload.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => ["talkha", "mashaya"].includes(value)))];
+    if (!payload.branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا السجل");
+  }
+  if ("choiceGroups" in payload) payload.choiceGroups = normalizeChoiceGroups(payload.choiceGroups);
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
   ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
   if (collection === "coupons") payload.code = sanitizeText(payload.code || raw.id, 30).toUpperCase();
   if (collection === "branches") {
     payload.code = sanitizeText(payload.code, 3).toUpperCase();
+    if (("latitude" in payload && (!Number.isFinite(payload.latitude) || payload.latitude < -90 || payload.latitude > 90)) || ("longitude" in payload && (!Number.isFinite(payload.longitude) || payload.longitude < -180 || payload.longitude > 180))) throw new HttpsError("invalid-argument", "إحداثيات الفرع غير صحيحة");
+    if ("attendanceRadiusMeters" in payload && (payload.attendanceRadiusMeters < 25 || payload.attendanceRadiusMeters > 1000)) throw new HttpsError("invalid-argument", "نطاق الحضور يجب أن يكون بين 25 و1000 متر");
+    if ("monthlyRevenueTarget" in payload && payload.monthlyRevenueTarget < 0) throw new HttpsError("invalid-argument", "هدف مبيعات الفرع لا يمكن أن يكون سالبًا");
   }
   if (collection === "inventoryItems") {
     if ("category" in payload) payload.category = INVENTORY_CATEGORIES.includes(payload.category) ? payload.category : "product";
@@ -875,6 +1025,15 @@ function normalizeAdminPayload(collection, raw) {
       payload.active = payload.status === "published";
     } else if ("active" in payload) payload.status = payload.active ? "published" : "pending";
   }
+  if (collection === "faqs") {
+    payload.questionAr = sanitizeText(payload.questionAr, 180);
+    payload.questionEn = sanitizeText(payload.questionEn || payload.questionAr, 180);
+    payload.answerAr = sanitizeText(payload.answerAr, 1000);
+    payload.answerEn = sanitizeText(payload.answerEn || payload.answerAr, 1000);
+    payload.actions = (Array.isArray(payload.actions) ? payload.actions : []).map(value => sanitizeText(value, 20)).filter(value => ["book", "services", "hair", "branch", "whatsapp", "manage"].includes(value));
+    payload.keywords = (Array.isArray(payload.keywords) ? payload.keywords : []).map(value => sanitizeText(value, 40)).filter(Boolean).slice(0, 20);
+    if (!payload.questionAr || !payload.answerAr) throw new HttpsError("invalid-argument", "السؤال والإجابة مطلوبان");
+  }
   if (collection === "workerLeaves") {
     payload.staffId = sanitizeText(payload.staffId, 100);
     payload.branchId = sanitizeText(payload.branchId || "all", 40).toLowerCase();
@@ -891,6 +1050,7 @@ function normalizeAdminPayload(collection, raw) {
 
 export const adminUpsert = onCall(adminOptions, async request => {
   const collection = sanitizeText(request.data?.collection, 40);
+  if (collection === "branches") requireRole(request, ["admin"]);
   const raw = request.data?.data || {};
   validatePayloadSize(raw);
   requirePermission(request, collection === "content" ? contentPermission(raw.type) : COLLECTION_PERMISSIONS[collection] || "settings");
@@ -919,6 +1079,7 @@ export const adminUpsert = onCall(adminOptions, async request => {
   const before = await ref.get();
   if (request.auth.token.role !== "admin" && before.exists && !itemInAllowedBranch(before.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   const payload = normalizeAdminPayload(collection, raw);
+  if (collection === "packages") await validatePackageReferences({ ...(before.exists ? before.data() : {}), ...payload });
   await ref.set({ ...payload, updatedAt: FieldValue.serverTimestamp(), ...(before.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
   await db.collection("activityLogs").add({ action: before.exists ? "update" : "create", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) await markCatalogChanged();
@@ -933,7 +1094,7 @@ export const adminDelete = onCall(adminOptions, async request => {
   const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
   const id = sanitizeText(request.data?.id, 100);
-  if (!ADMIN_COLLECTIONS.includes(collection) || collection === "settings" || !id) throw new HttpsError("invalid-argument", "طلب حذف غير صالح");
+  if (!ADMIN_COLLECTIONS.includes(collection) || ["settings", "branches"].includes(collection) || !id) throw new HttpsError("invalid-argument", "طلب حذف غير صالح");
   const target = await db.collection(collection).doc(id).get();
   if (role !== "admin" && target.exists && !itemInAllowedBranch(target.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   if (collection === "content") {
@@ -1014,6 +1175,271 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
       pendingReviews: access.has("reviews") ? reviews.filter(item => item.active !== true).length : 0
     }
   };
+});
+
+export const getServiceTargetsDashboard = onCall(adminOptions, async request => {
+  requirePermission(request, "payroll");
+  const month = sanitizeText(request.data?.month || businessDateParts().month, 7);
+  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (branchId !== "all" && !/^[a-z0-9-]{2,40}$/.test(branchId))) throw new HttpsError("invalid-argument", "الشهر أو الفرع غير صحيح");
+  if (branchId !== "all") requireBranchAccess(request, branchId);
+  const allowedBranches = branchesFor(request);
+  const snapshot = await db.collection("serviceTargets").where("month", "==", month).limit(500).get();
+  const targets = snapshot.docs.map(cleanDoc)
+    .filter(item => (branchId === "all" || item.branchId === branchId) && itemInAllowedBranch(item, allowedBranches) && Number(item.targetCount || 0) > 0)
+    .map(item => ({ ...item, ...calculateServiceTargetProgress(item.targetCount, item.achievedCount) }))
+    .sort((a, b) => String(a.branchId || "").localeCompare(String(b.branchId || "")) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  return { month, branchId, targets, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+});
+
+export const upsertServiceTarget = onCall(adminOptions, async request => {
+  requireRole(request, ["admin"]);
+  const month = sanitizeText(request.data?.month, 7);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  const kind = sanitizeText(request.data?.kind, 20).toLowerCase();
+  const itemId = sanitizeText(request.data?.itemId, 100);
+  const targetCount = Math.floor(Number(request.data?.targetCount));
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^[a-z0-9-]{2,40}$/.test(branchId) || !["service", "package", "offer"].includes(kind) || !/^[A-Za-z0-9_-]{1,100}$/.test(itemId) || !Number.isInteger(targetCount) || targetCount < 0 || targetCount > 1_000_000) throw new HttpsError("invalid-argument", "بيانات تارجت الخدمة غير صحيحة");
+  const collection = kind === "package" ? "packages" : kind === "offer" ? "offers" : "services";
+  const [branch, itemSnapshot] = await Promise.all([readBranch(branchId), db.doc(`${collection}/${itemId}`).get()]);
+  if (!itemSnapshot.exists || itemSnapshot.data()?.active === false) throw new HttpsError("not-found", "الخدمة أو الباقة غير موجودة");
+  const item = itemSnapshot.data();
+  if (Array.isArray(item.branchIds) && item.branchIds.length && !item.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "العنصر غير متاح في هذا الفرع");
+  const id = serviceTargetDocumentId({ month, branchId, kind, itemId });
+  const ref = db.doc(`serviceTargets/${id}`);
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async transaction => {
+    const existing = await transaction.get(ref);
+    transaction.set(ref, {
+      month,
+      branchId,
+      itemId,
+      kind,
+      nameAr: sanitizeText(item.nameAr, 120),
+      nameEn: sanitizeText(item.nameEn || item.nameAr, 120),
+      targetCount,
+      achievedCount: Math.max(0, Number(existing.data()?.achievedCount || 0)),
+      active: targetCount > 0,
+      createdAt: existing.data()?.createdAt || now,
+      updatedAt: now,
+      updatedBy: request.auth.uid
+    }, { merge: true });
+    transaction.set(db.collection("activityLogs").doc(), { action: "upsert-service-target", targetType: "serviceTarget", targetId: id, branchId, month, itemId, kind, targetCount, actorUid: request.auth.uid, createdAt: now });
+  });
+  return { ok: true, id, ...calculateServiceTargetProgress(targetCount, 0) };
+});
+
+export const getAttendanceDashboard = onCall(adminOptions, async request => {
+  requireRole(request, ["admin", "manager", "cashier"]);
+  requirePermission(request, "attendance");
+  const dateKey = sanitizeText(request.data?.dateKey || businessDateParts().dateKey, 10);
+  const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || (requestedBranch !== "all" && !/^[a-z0-9-]{2,40}$/.test(requestedBranch))) throw new HttpsError("invalid-argument", "التاريخ أو الفرع غير صحيح");
+  if (requestedBranch !== "all") requireBranchAccess(request, requestedBranch);
+  const allowedBranches = branchesFor(request);
+  const branchIds = requestedBranch !== "all" ? [requestedBranch] : allowedBranches.length ? allowedBranches : ["talkha", "mashaya"];
+  const [attendanceSnapshots, taskSnapshots, staffSnapshot] = await Promise.all([
+    Promise.all(branchIds.map(branchId => db.collection("attendanceDays").where("branchId", "==", branchId).where("dateKey", "==", dateKey).limit(300).get())),
+    Promise.all(branchIds.map(branchId => db.collection("workerTasks").where("branchId", "==", branchId).limit(250).get())),
+    db.collection("staff").where("active", "==", true).limit(500).get()
+  ]);
+  const attendance = new Map(attendanceSnapshots.flatMap(snapshot => snapshot.docs).map(document => [document.id, cleanDoc(document)]));
+  const staff = staffSnapshot.docs.map(cleanDoc).filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.some(id => branchIds.includes(id)));
+  const rows = staff.map(member => {
+    const record = attendance.get(`${dateKey}_${member.id}`);
+    return { staffId: member.id, nameAr: member.nameAr || member.id, imageUrl: member.imageUrl || "", branchIds: member.branchIds, status: record?.status || "ABSENT", attendance: record || null };
+  }).sort((a, b) => Number(Boolean(b.attendance)) - Number(Boolean(a.attendance)) || String(a.nameAr).localeCompare(String(b.nameAr), "ar"));
+  const tasks = taskSnapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc)).filter(item => !["DONE", "CANCELLED"].includes(item.status)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 200);
+  return { dateKey, branchId: requestedBranch, rows, tasks, presentCount: rows.filter(item => item.status === "PRESENT").length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+});
+
+export const recordWorkerAttendance = onCall(adminOptions, async request => {
+  requireRole(request, ["worker"]);
+  requirePermission(request, "attendance");
+  await enforceRateLimit(request, "worker_attendance", 20, 15 * 60 * 1000, request.auth.uid);
+  const action = sanitizeText(request.data?.action || "checkIn", 20);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  if (!["checkIn", "checkOut"].includes(action) || !/^[a-z0-9-]{2,40}$/.test(branchId)) throw new HttpsError("invalid-argument", "طلب الحضور غير صالح");
+  requireBranchAccess(request, branchId);
+  const staffId = await linkedStaffId(request);
+  if (!staffId) throw new HttpsError("failed-precondition", "حساب العامل غير مرتبط بسجل فريق العمل");
+  const [staffSnapshot, branchSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.doc(`branches/${branchId}`).get()]);
+  if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !staffSnapshot.data().branchIds.includes(branchId)) throw new HttpsError("permission-denied", "العامل غير تابع لهذا الفرع");
+  if (!branchSnapshot.exists || branchSnapshot.data()?.active === false) throw new HttpsError("failed-precondition", "الفرع غير متاح");
+  const branch = branchSnapshot.data();
+  let evidence;
+  try {
+    evidence = validateAttendanceLocation({
+      branchLatitude: branch.latitude,
+      branchLongitude: branch.longitude,
+      latitude: request.data?.latitude,
+      longitude: request.data?.longitude,
+      accuracy: request.data?.accuracy,
+      radiusMeters: branch.attendanceRadiusMeters || 100
+    });
+  } catch (error) {
+    const messages = { INVALID_COORDINATES: "إحداثيات الموقع غير صحيحة", LOCATION_ACCURACY_TOO_LOW: "دقة GPS غير كافية؛ افتح الموقع وحاول في مكان مكشوف", INVALID_ATTENDANCE_RADIUS: "نطاق حضور الفرع غير مضبوط", OUTSIDE_BRANCH_GEOFENCE: "أنت خارج نطاق الفرع" };
+    throw new HttpsError("failed-precondition", messages[error.message] || "تعذر التحقق من موقع الحضور");
+  }
+  const { dateKey, time } = businessDateParts();
+  const ref = db.doc(`attendanceDays/${dateKey}_${staffId}`);
+  const now = FieldValue.serverTimestamp();
+  const result = await db.runTransaction(async transaction => {
+    const current = await transaction.get(ref);
+    if (action === "checkIn") {
+      if (current.exists) {
+        if (current.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "تم تسجيل حضورك اليوم في فرع آخر");
+        return { idempotent: true, status: current.data()?.status || "PRESENT" };
+      }
+      transaction.create(ref, {
+        staffId, staffNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), userId: request.auth.uid, branchId, dateKey, checkInTime: time, checkInAt: now, status: "PRESENT",
+        locationEvidence: { ...evidence, latitude: Number(Number(request.data?.latitude).toFixed(5)), longitude: Number(Number(request.data?.longitude).toFixed(5)) },
+        createdAt: now, updatedAt: now
+      });
+      transaction.set(db.collection("activityLogs").doc(), { action: "worker-check-in", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, distanceMeters: evidence.distanceMeters, createdAt: now });
+      return { idempotent: false, status: "PRESENT" };
+    }
+    if (!current.exists) throw new HttpsError("failed-precondition", "سجل الحضور غير موجود");
+    if (current.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "فرع الانصراف لا يطابق فرع الحضور");
+    if (current.data()?.status === "CHECKED_OUT") return { idempotent: true, status: "CHECKED_OUT" };
+    transaction.update(ref, { status: "CHECKED_OUT", checkOutTime: time, checkOutAt: now, checkOutEvidence: evidence, updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "worker-check-out", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, createdAt: now });
+    return { idempotent: false, status: "CHECKED_OUT" };
+  });
+  return { ok: true, dateKey, branchId, ...evidence, ...result };
+});
+
+export const getWorkerWorkspace = onCall(adminOptions, async request => {
+  requireRole(request, ["worker"]);
+  const staffId = await linkedStaffId(request);
+  if (!staffId) throw new HttpsError("failed-precondition", "حساب العامل غير مرتبط بسجل فريق العمل");
+  const { dateKey, month } = businessDateParts();
+  const [staffSnapshot, attendanceSnapshot, totalSnapshot, bookingsSnapshot, tasksSnapshot, notificationsSnapshot] = await Promise.all([
+    db.doc(`staff/${staffId}`).get(),
+    db.doc(`attendanceDays/${dateKey}_${staffId}`).get(),
+    db.doc(`workerMonthlyTotals/${month}_${staffId}`).get(),
+    db.collection("bookings").where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60).get(),
+    db.collection("workerTasks").where("assigneeStaffId", "==", staffId).orderBy("createdAt", "desc").limit(80).get(),
+    db.collection("workerNotifications").where("staffId", "==", staffId).orderBy("createdAt", "desc").limit(30).get()
+  ]);
+  if (!staffSnapshot.exists || staffSnapshot.data()?.active === false) throw new HttpsError("permission-denied", "حساب العامل غير فعال");
+  const staff = cleanDoc(staffSnapshot);
+  const allowedBranches = branchesFor(request);
+  if (!Array.isArray(staff.branchIds) || !staff.branchIds.some(id => allowedBranches.includes(id))) throw new HttpsError("permission-denied", "فروع الحساب لا تطابق سجل العامل");
+  const revenue = Number(totalSnapshot.data()?.revenue || 0);
+  const target = Math.max(0, Number(staff.monthlyTarget || 0));
+  return {
+    staff,
+    attendance: attendanceSnapshot.exists ? cleanDoc(attendanceSnapshot) : null,
+    bookings: bookingsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && !["cancelled", "rejected"].includes(item.status)),
+    tasks: tasksSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)),
+    notifications: notificationsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)),
+    target: { month, target, achieved: revenue, remaining: Math.max(0, target - revenue), progressPercent: target ? Math.min(100, Math.round(revenue / target * 100)) : 0 },
+    dateKey,
+    _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION }
+  };
+});
+
+export const updateWorkerProfilePhoto = onCall(adminOptions, async request => {
+  requireRole(request, ["worker"]);
+  const staffId = await linkedStaffId(request);
+  const imageUrl = sanitizeText(request.data?.imageUrl, 1200);
+  if (!staffId || !imageUrl) throw new HttpsError("invalid-argument", "صورة العامل غير صحيحة");
+  let decoded = "";
+  try { decoded = decodeURIComponent(new URL(imageUrl).pathname); } catch { throw new HttpsError("invalid-argument", "رابط الصورة غير صحيح"); }
+  if (!decoded.includes(`/public/staff/${staffId}/`) && !decoded.includes(`/o/public/staff/${staffId}/`)) throw new HttpsError("permission-denied", "الصورة ليست ضمن مجلد العامل");
+  const ref = db.doc(`staff/${staffId}`);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || snapshot.data()?.active === false) throw new HttpsError("not-found", "العامل غير موجود");
+  await ref.set({ imageUrl, updatedAt: FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+  await markCatalogChanged();
+  return { ok: true, imageUrl };
+});
+
+export const createWorkerTask = onCall(adminOptions, async request => {
+  requirePermission(request, "tasks");
+  requireRole(request, ["admin", "manager", "cashier"]);
+  await enforceRateLimit(request, "create_worker_task", 100, 15 * 60 * 1000, request.auth.uid);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  const assigneeStaffId = sanitizeText(request.data?.staffId, 100);
+  const title = sanitizeText(request.data?.title, 120);
+  const details = sanitizeText(request.data?.details, 600);
+  const priority = sanitizeText(request.data?.priority || "normal", 20).toLowerCase();
+  const bookingId = sanitizeText(request.data?.bookingId, 100);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!branchId || !assigneeStaffId || !title || !["low", "normal", "high", "urgent"].includes(priority) || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "بيانات المهمة غير مكتملة");
+  requireBranchAccess(request, branchId);
+  const dueDate = request.data?.dueAt ? new Date(request.data.dueAt) : null;
+  if (dueDate && !Number.isFinite(dueDate.getTime())) throw new HttpsError("invalid-argument", "موعد المهمة غير صحيح");
+  const [staffSnapshot, bookingSnapshot] = await Promise.all([db.doc(`staff/${assigneeStaffId}`).get(), bookingId ? db.doc(`bookings/${bookingId}`).get() : Promise.resolve(null)]);
+  if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !staffSnapshot.data().branchIds.includes(branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع");
+  if (bookingId && (!bookingSnapshot?.exists || bookingSnapshot.data()?.branchId !== branchId)) throw new HttpsError("failed-precondition", "الحجز غير موجود في هذا الفرع");
+  const taskId = hash(`${request.auth.uid}|${idempotencyKey}`);
+  const ref = db.doc(`workerTasks/${taskId}`);
+  const now = FieldValue.serverTimestamp();
+  let created = false;
+  await db.runTransaction(async transaction => {
+    const current = await transaction.get(ref);
+    if (current.exists) return;
+    created = true;
+    transaction.create(ref, { branchId, assigneeStaffId, assigneeNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), title, details, priority, bookingId: bookingId || null, dueAt: dueDate ? Timestamp.fromDate(dueDate) : null, status: "NEW", createdBy: request.auth.uid, createdByName: sanitizeText(request.auth.token.name || request.auth.token.email, 100), createdAt: now, updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "create-worker-task", collection: "workerTasks", entityId: taskId, staffId: assigneeStaffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
+  });
+  if (created) {
+    await db.doc(`workerNotifications/task_${taskId}`).set({ staffId: assigneeStaffId, branchId, type: "task", entityId: taskId, title: "مهمة جديدة", body: title, read: false, createdAt: FieldValue.serverTimestamp() });
+    await sendWorkerPush(assigneeStaffId, { title: "مهمة جديدة من مزين مصر", body: title, type: "worker_task", entityId: taskId });
+  }
+  return { ok: true, taskId, idempotent: !created };
+});
+
+export const updateWorkerTask = onCall(adminOptions, async request => {
+  const role = requireRole(request);
+  const taskId = sanitizeText(request.data?.taskId, 100);
+  const status = sanitizeText(request.data?.status, 30).toUpperCase();
+  if (!taskId || !["SEEN", "IN_PROGRESS", "DONE", "CANCELLED"].includes(status)) throw new HttpsError("invalid-argument", "حالة المهمة غير صحيحة");
+  const ref = db.doc(`workerTasks/${taskId}`);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError("not-found", "المهمة غير موجودة");
+  const task = snapshot.data();
+  requireBranchAccess(request, task.branchId);
+  if (role === "worker") {
+    const staffId = await linkedStaffId(request);
+    if (!staffId || task.assigneeStaffId !== staffId || status === "CANCELLED") throw new HttpsError("permission-denied", "لا يمكنك تعديل هذه المهمة");
+  } else requirePermission(request, "tasks");
+  if (task.status === status) return { ok: true, idempotent: true, status };
+  const now = FieldValue.serverTimestamp();
+  await ref.set({ status, ...(status === "SEEN" ? { readAt: now } : {}), ...(status === "DONE" ? { completedAt: now } : {}), updatedAt: now, updatedBy: request.auth.uid }, { merge: true });
+  await db.collection("activityLogs").add({ action: "update-worker-task", collection: "workerTasks", entityId: taskId, staffId: task.assigneeStaffId, branchId: task.branchId, status, userId: request.auth.uid, createdAt: now });
+  return { ok: true, idempotent: false, status };
+});
+
+export const notifyWorker = onCall(adminOptions, async request => {
+  requireRole(request, ["admin", "manager", "cashier"]);
+  if (!hasPermission(request, "tasks") && !hasPermission(request, "bookings")) throw new HttpsError("permission-denied", "لا تملك صلاحية تنبيه العامل");
+  await enforceRateLimit(request, "notify_worker", 120, 15 * 60 * 1000, request.auth.uid);
+  const staffId = sanitizeText(request.data?.staffId, 100);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  const bookingId = sanitizeText(request.data?.bookingId, 100);
+  const message = sanitizeText(request.data?.message || "عندك ميعاد الآن", 240);
+  const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
+  if (!staffId || !branchId || !message || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "طلب التنبيه غير صحيح");
+  requireBranchAccess(request, branchId);
+  const [staffSnapshot, bookingSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), bookingId ? db.doc(`bookings/${bookingId}`).get() : Promise.resolve(null)]);
+  if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !staffSnapshot.data().branchIds.includes(branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع");
+  if (bookingId && (!bookingSnapshot?.exists || bookingSnapshot.data()?.branchId !== branchId || bookingSnapshot.data()?.staffId !== staffId)) throw new HttpsError("failed-precondition", "الحجز غير مرتبط بهذا العامل");
+  const notificationId = hash(`${request.auth.uid}|${idempotencyKey}`);
+  const ref = db.doc(`workerNotifications/${notificationId}`);
+  let created = false;
+  await db.runTransaction(async transaction => {
+    const current = await transaction.get(ref);
+    if (current.exists) return;
+    created = true;
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, { staffId, staffNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), branchId, bookingId: bookingId || null, type: "alert", entityId: bookingId || notificationId, title: `تنبيه ${sanitizeText(staffSnapshot.data()?.nameAr, 80)}`, body: message, read: false, createdBy: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { action: "notify-worker", collection: "workerNotifications", entityId: notificationId, staffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
+  });
+  const delivery = created ? await sendWorkerPush(staffId, { title: `تنبيه ${sanitizeText(staffSnapshot.data()?.nameAr, 80)}`, body: message, type: "worker_alert", entityId: bookingId || notificationId }) : { attempted: 0, sent: 0 };
+  return { ok: true, notificationId, idempotent: !created, delivery };
 });
 
 function cashAmount(value, label = "المبلغ") {
@@ -1352,7 +1778,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
   const workers = new Map(staffSnapshots.map(snapshot => [snapshot.id, cleanDoc(snapshot)]));
   for (const workerId of requestedWorkerIds) {
     const worker = workers.get(workerId);
-    if (!worker || worker.active === false || (Array.isArray(worker.branchIds) && worker.branchIds.length && !worker.branchIds.includes(branch.id))) throw new HttpsError("failed-precondition", "أحد العمال غير متاح في الفرع المختار");
+    if (!worker || worker.active === false || !Array.isArray(worker.branchIds) || !worker.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "أحد العمال غير متاح في الفرع المختار أو يحتاج تحديد فرعه من الإدارة");
   }
   const method = sanitizeText(request.data?.paymentMethod || "cash", 30);
   if (!["cash", "vodafone_cash", "instapay", "other"].includes(method)) throw new HttpsError("invalid-argument", "طريقة الدفع غير صحيحة");
@@ -1422,7 +1848,8 @@ export const createPosOrder = onCall(adminOptions, async request => {
     if(requestedPoints>Number(customerSnapshot.data()?.pointsBalance||0)||requestedCashback>Number(customerSnapshot.data()?.cashbackBalance||0)||redemptionValue>maxRedemption||redemptionValue<Math.max(0,Number(settings.minimumRedemption||0)))throw new HttpsError("failed-precondition","قيمة استبدال المحفظة غير مسموحة");
     const total=Math.max(0,beforeWalletTotal-redemptionValue);const revenueBreakdown=calculateRevenueBreakdown(publicItems,total);
     const redemption=(requestedPoints||requestedCashback)?{points:requestedPoints,cashback:requestedCashback,value:redemptionValue}:null;
-    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), finalizedAt: now, finalizedBy: request.auth.uid, createdAt: now, updatedAt: now, paidAt: paid ? now : null };
+    const targetEntries = serviceTargetEntries(publicItems);
+    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, finalizedBy: request.auth.uid, createdAt: now, updatedAt: now, paidAt: paid ? now : null };
     if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
     transaction.create(bookingRef, bookingRecord);
     transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
@@ -1430,6 +1857,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
     const workerItems=publicItems.filter(item=>item.workerId&&item.workerId!=="none");const workerSubtotal=workerItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);workerItems.forEach(item=>workerRevenue.set(item.workerId,(workerRevenue.get(item.workerId)||0)+(paid&&workerSubtotal?Number(item.lineTotal||0)/workerSubtotal*Number(revenueBreakdown.services||0):0)));
     workerRevenue.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(amount) } : {}), updatedAt: now }));
     if (paid) workerRevenue.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: branch.id, dateKey, amount, now }));
+    if (paid && targetEntries.length) postServiceMonthlyTargets(transaction, { items: publicItems, branchId: branch.id, dateKey, now });
     if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, workerBreakdown: Object.fromEntries(workerRevenue), type: "payment", paymentMethod: method, staffId: primaryWorkerId, itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
     if (cashShiftRef && cashShift) {
       const nextShift = { ...cashShift.data(), cashSales: Number(cashShift.data().cashSales || 0) + total };
@@ -1644,6 +2072,7 @@ async function deleteUserAccountPermanently(uid, request) {
   const tokenSnapshots = await db.collection("pushTokens").where("uid", "==", uid).limit(500).get();
   const batch = db.batch();
   batch.delete(userRef);
+  if (user.staffId) batch.set(db.doc(`staff/${sanitizeText(user.staffId, 100)}`), { userUid: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   tokenSnapshots.docs.forEach(snapshot => batch.delete(snapshot.ref));
   batch.set(db.collection("activityLogs").doc(), { action: "secure-delete-user", collection: "users", entityId: uid, deletedUserEmail: sanitizeText(user.email, 200), deletedUserName: sanitizeText(user.name, 80), deletedUserRole: sanitizeText(user.role, 30), userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   await batch.commit();
@@ -1728,9 +2157,11 @@ export const updateBooking = onCall(adminOptions, async request => {
           transaction.create(db.doc(`cashMovements/sale_${id}`), { type: "CASH_SALE", amount: transition.ledgerAmount, bookingId: id, receiptNumber: booking.receiptNumber || booking.code || id, branchId: booking.branchId || "talkha", shiftId: cashShiftRef.id, businessDate: dateKey, actorUid: request.auth.uid, createdAt: now });
         }
       }
+      const targetEntries = !booking.serviceTargetsPosted ? serviceTargetEntries(booking.items || []) : [];
+      if (targetEntries.length) postServiceMonthlyTargets(transaction, { items: booking.items || [], branchId: booking.branchId || "talkha", dateKey, now });
       (booking.lockIds || []).forEach(lockId => transaction.delete(db.doc(`appointmentLocks/${lockId}`)));
       if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
-      transaction.update(ref, { status: "completed", orderState: "PAID", paymentStatus: "paid", paymentMethod: transition?.method || booking.paymentMethod || "cash", financialPosted: true, rewardPosted: true, cashPosted: Boolean(cashShiftRef) || Boolean(booking.cashPosted), finalizedAt: booking.finalizedAt || now, finalizedBy: booking.finalizedBy || request.auth.uid, paidAt: booking.paidAt || now, updatedAt: now });
+      transaction.update(ref, { status: "completed", orderState: "PAID", paymentStatus: "paid", paymentMethod: transition?.method || booking.paymentMethod || "cash", financialPosted: true, rewardPosted: true, cashPosted: Boolean(cashShiftRef) || Boolean(booking.cashPosted), serviceTargetsPosted: Boolean(booking.serviceTargetsPosted) || targetEntries.length > 0, serviceTargetsDateKey: targetEntries.length ? dateKey : booking.serviceTargetsDateKey || null, finalizedAt: booking.finalizedAt || now, finalizedBy: booking.finalizedBy || request.auth.uid, paidAt: booking.paidAt || now, updatedAt: now });
       if (booking.phoneHash && booking.status !== "completed") transaction.update(db.doc(`customers/${booking.phoneHash}`), { completedVisits: FieldValue.increment(1), lastVisitAt: now, updatedAt: now });
       transaction.set(db.collection("activityLogs").doc(), { action: "checkout-booking", collection: "bookings", entityId: id, branchId: booking.branchId || "talkha", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
       return { ok: true, status: "completed", paymentStatus: "paid", idempotent: alreadyPaid || ledgerSnapshot?.exists || false };
@@ -1777,7 +2208,10 @@ export const updateBooking = onCall(adminOptions, async request => {
       if (action === "completed" && booking.paymentStatus === "paid" && booking.phoneHash) {
         await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now });
       }
-      transaction.update(ref, { status: action, ...(["rejected", "cancelled", "no_show"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), updatedAt: now });
+      const targetEntries = action === "completed" && booking.paymentStatus === "paid" && !booking.serviceTargetsPosted ? serviceTargetEntries(booking.items || []) : [];
+      const targetDateKey = businessDateParts().dateKey;
+      if (targetEntries.length) postServiceMonthlyTargets(transaction, { items: booking.items || [], branchId: booking.branchId || "talkha", dateKey: targetDateKey, now });
+      transaction.update(ref, { status: action, ...(["rejected", "cancelled", "no_show"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), ...(targetEntries.length ? { serviceTargetsPosted: true, serviceTargetsDateKey: targetDateKey } : {}), updatedAt: now });
       if (booking.phoneHash) transaction.set(db.doc(`customers/${booking.phoneHash}`), {
         ...(action === "completed" ? { completedVisits: FieldValue.increment(1), lastVisitAt: now } : {}),
         ...(action === "cancelled" ? { cancellationCount: FieldValue.increment(1) } : {}),
@@ -1820,8 +2254,15 @@ export const updateBooking = onCall(adminOptions, async request => {
     if (booking.phoneHash && ((action === "markPaid" && booking.status === "completed") || action === "refund")) {
       await applyRewards(transaction, { booking: { ...booking, code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now, reverse: action === "refund" });
     }
+    const targetDateKey = action === "refund" ? sanitizeText(booking.serviceTargetsDateKey || booking.bookingDate || dateKey, 10) : dateKey;
+    const targetEntries = action === "markPaid" && booking.status === "completed" && !booking.serviceTargetsPosted
+      ? serviceTargetEntries(booking.items || [])
+      : action === "refund" && booking.serviceTargetsPosted
+        ? serviceTargetEntries(booking.items || [])
+        : [];
+    if (targetEntries.length) postServiceMonthlyTargets(transaction, { items: booking.items || [], branchId: booking.branchId || "talkha", dateKey: targetDateKey, direction: action === "refund" ? -1 : 1, now });
     transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, reason: action === "refund" ? reason : null, requestId: action === "refund" ? idempotencyKey : null, createdAt: now, createdBy: request.auth.uid });
-    transaction.update(ref, { paymentStatus: transition.status, orderState: action === "refund" ? "REFUNDED" : "PAID", financialPosted: action !== "refund", paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, refundReason: action === "refund" ? reason : null, refundedBy: action === "refund" ? request.auth.uid : null, inventoryReleased: refundableInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
+    transaction.update(ref, { paymentStatus: transition.status, orderState: action === "refund" ? "REFUNDED" : "PAID", financialPosted: action !== "refund", paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, refundReason: action === "refund" ? reason : null, refundedBy: action === "refund" ? request.auth.uid : null, serviceTargetsPosted: action === "refund" ? false : Boolean(booking.serviceTargetsPosted) || targetEntries.length > 0, serviceTargetsDateKey: action === "refund" ? booking.serviceTargetsDateKey || null : targetEntries.length ? targetDateKey : booking.serviceTargetsDateKey || null, inventoryReleased: refundableInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
     refundableSnapshots.forEach((inventory, index) => {
       if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(refundableInventory[index].qty || 1))), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${id}_${refundableInventory[index].id}_refund`), { inventoryItemId: refundableInventory[index].id, branchId: booking.branchId, bookingId: id, quantity: Math.max(1, Number(refundableInventory[index].qty || 1)), type: "refund-reversal", dateKey, reason, createdAt: now, createdBy: request.auth.uid });
@@ -2152,7 +2593,17 @@ export const registerPushToken = onCall(adminOptions, async request => {
   requireRole(request);
   const token = sanitizeText(request.data?.token, 4096);
   if (!token) throw new HttpsError("invalid-argument", "Token required");
-  await db.doc(`pushTokens/${hash(token)}`).set({ token, uid: request.auth.uid, role: request.auth.token.role, branchIds: branchesFor(request), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.doc(`pushTokens/${hash(token)}`).set({ token, uid: request.auth.uid, role: request.auth.token.role, staffId: claimedStaffId(request) || null, branchIds: branchesFor(request), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true };
+});
+
+export const unregisterPushToken = onCall(adminOptions, async request => {
+  requireRole(request);
+  const token = sanitizeText(request.data?.token, 4096);
+  if (!token) throw new HttpsError("invalid-argument", "Token required");
+  const ref = db.doc(`pushTokens/${hash(token)}`);
+  const snapshot = await ref.get();
+  if (snapshot.exists && snapshot.data()?.uid === request.auth.uid) await ref.delete();
   return { ok: true };
 });
 
@@ -2160,20 +2611,30 @@ export const setUserRole = onCall(adminOptions, async request => {
   requireRole(request, ["admin"]);
   const uid = sanitizeText(request.data?.uid, 128);
   const role = sanitizeText(request.data?.role, 30);
+  const staffId = sanitizeText(request.data?.staffId, 100);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
-  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
-  if (!uid || !["manager", "cashier"].includes(role)) throw new HttpsError("invalid-argument", "يمكن تعديل الحساب إلى مدير أو كاشير فقط");
+  const rolePermissionValues = role === "worker" ? ROLE_DEFAULT_PERMISSIONS.worker : ALL_PERMISSIONS;
+  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
+  if (!uid || !["manager", "cashier", "worker"].includes(role)) throw new HttpsError("invalid-argument", "نوع الحساب غير صالح");
   if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "لا يمكنك تعديل صلاحيات حسابك الحالي");
   if (!branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا الحساب");
   const userRef = db.doc(`users/${uid}`);
   const beforeSnapshot = await userRef.get();
   if (!beforeSnapshot.exists || beforeSnapshot.data()?.role === "admin") throw new HttpsError("failed-precondition", "لا يمكن تعديل حساب الأدمن من هذه الشاشة");
   const before = beforeSnapshot.data();
+  if (role === "worker") {
+    if (!staffId) throw new HttpsError("invalid-argument", "اربط حساب العامل بعضو فريق");
+    const [staffSnapshot, linkedUsers] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("users").where("staffId", "==", staffId).limit(3).get()]);
+    if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !branchIds.every(id => staffSnapshot.data().branchIds.includes(id))) throw new HttpsError("failed-precondition", "العامل غير موجود أو فروعه لا تطابق صلاحيات الحساب");
+    if (linkedUsers.docs.some(document => document.id !== uid)) throw new HttpsError("already-exists", "هذا العامل مرتبط بحساب آخر بالفعل");
+  }
   const { getAuth } = await import("firebase-admin/auth");
-  await getAuth().setCustomUserClaims(uid, { role, permissions, branchIds });
+  await getAuth().setCustomUserClaims(uid, { role, permissions, branchIds, ...(role === "worker" ? { staffId } : {}) });
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
-  batch.set(userRef, { role, permissions, branchIds, email: sanitizeText(request.data?.email, 200) || before.email || "", updatedAt: now }, { merge: true });
+  batch.set(userRef, { role, permissions, branchIds, staffId: role === "worker" ? staffId : FieldValue.delete(), email: sanitizeText(request.data?.email, 200) || before.email || "", updatedAt: now }, { merge: true });
+  if (role === "worker") batch.set(db.doc(`staff/${staffId}`), { userUid: uid, updatedAt: now }, { merge: true });
+  if (before.staffId && before.staffId !== staffId) batch.set(db.doc(`staff/${before.staffId}`), { userUid: FieldValue.delete(), updatedAt: now }, { merge: true });
   batch.set(db.collection("activityLogs").doc(), {
     action: "set-user-role", collection: "users", entityId: uid,
     targetUserId: uid, targetUserName: sanitizeText(before.name, 80), targetUserEmail: sanitizeText(before.email || request.data?.email, 200),
@@ -2192,9 +2653,18 @@ export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concu
   const email = sanitizeText(request.data?.email, 200).toLowerCase();
   const password = String(request.data?.password || "");
   const role = sanitizeText(request.data?.role, 30);
+  const staffId = sanitizeText(request.data?.staffId, 100);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
-  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => ALL_PERMISSIONS.includes(value) && value !== "users"))];
-  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "cashier"].includes(role)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد فرعًا واحدًا على الأقل وباسورد 8 أحرف على الأقل");
+  const rolePermissionValues = role === "worker" ? ROLE_DEFAULT_PERMISSIONS.worker : ALL_PERMISSIONS;
+  const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
+  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "cashier", "worker"].includes(role) || (role === "worker" && !staffId)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد الفرع والعامل وباسورد 8 أحرف على الأقل");
+  let staffSnapshot = null;
+  if (role === "worker") {
+    const [candidate, linkedUsers] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("users").where("staffId", "==", staffId).limit(1).get()]);
+    if (!candidate.exists || candidate.data()?.active === false || !Array.isArray(candidate.data()?.branchIds) || !branchIds.every(id => candidate.data().branchIds.includes(id))) throw new HttpsError("failed-precondition", "العامل غير موجود أو فروعه لا تطابق الحساب");
+    if (!linkedUsers.empty) throw new HttpsError("already-exists", "هذا العامل مرتبط بحساب آخر بالفعل");
+    staffSnapshot = candidate;
+  }
   const { getAuth } = await import("firebase-admin/auth");
   let user;
   try { user = await getAuth().createUser({ email, password, displayName: name, disabled: false }); }
@@ -2204,14 +2674,21 @@ export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concu
     throw new HttpsError(error.code === "auth/email-already-exists" ? "already-exists" : "failed-precondition", messages[error.code] || "تعذر إنشاء الحساب داخل Firebase Authentication");
   }
   try {
-    await getAuth().setCustomUserClaims(user.uid, { role, permissions, branchIds });
-    await db.doc(`users/${user.uid}`).set({ name, email, role, permissions, branchIds, active: true, createdBy: request.auth.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    await getAuth().setCustomUserClaims(user.uid, { role, permissions, branchIds, ...(role === "worker" ? { staffId } : {}) });
+    const batch = db.batch();
+    const now = FieldValue.serverTimestamp();
+    batch.set(db.doc(`users/${user.uid}`), { name, email, role, permissions, branchIds, staffId: role === "worker" ? staffId : null, active: true, mustChangePassword: true, createdBy: request.auth.uid, createdAt: now, updatedAt: now });
+    if (role === "worker" && staffSnapshot) batch.set(staffSnapshot.ref, { userUid: user.uid, updatedAt: now }, { merge: true });
+    batch.set(db.collection("activityLogs").doc(), { action: "create-user-account", collection: "users", entityId: user.uid, targetUserName: name, targetUserEmail: email, afterRole: role, staffId: role === "worker" ? staffId : null, branchIds, userId: request.auth.uid, createdAt: now });
+    await batch.commit();
   } catch (error) {
     await getAuth().deleteUser(user.uid).catch(() => {});
     console.error("createAdminUser permissions failed", { code: error.code, message: error.message });
     throw new HttpsError("internal", "تعذر حفظ صلاحيات الحساب؛ لم يتم إنشاء الحساب");
   }
-  return { ok: true, uid: user.uid };
+  let activationLink = "";
+  try { activationLink = await getAuth().generatePasswordResetLink(email); } catch {}
+  return { ok: true, uid: user.uid, activationLink };
 });
 
 export const notifyAdminsOnBooking = onDocumentCreated({ region, document: "bookings/{bookingId}" }, async event => {

@@ -3,7 +3,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-ch
 import { browserLocalPersistence, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
-import { getMessaging, getToken, isSupported } from "firebase/messaging";
+import { deleteToken, getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const configured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
@@ -52,10 +52,22 @@ export async function currentRole(user) {
 
 export async function currentAccess(user) {
   const token = await user.getIdTokenResult(true);
-  return { role: token.claims.role || null, permissions: Array.isArray(token.claims.permissions) ? token.claims.permissions : [], branchIds: Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [] };
+  return { role: token.claims.role || null, staffId: token.claims.staffId || null, permissions: Array.isArray(token.claims.permissions) ? token.claims.permissions : [], branchIds: Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [] };
 }
 
-export async function logout() { if (auth) await signOut(auth); }
+export async function logout() {
+  if (!auth) return;
+  try {
+    if (configured && Notification.permission === "granted" && await isSupported()) {
+      const messaging = getMessaging(app);
+      const registration = await navigator.serviceWorker.getRegistration("/sw.js") || await navigator.serviceWorker.ready;
+      const token = await getToken(messaging, { vapidKey: globalThis.__VAPID_KEY__, serviceWorkerRegistration: registration });
+      if (token) await Promise.race([call("unregisterPushToken", { token }), new Promise(resolve => setTimeout(resolve, 3000))]);
+      await deleteToken(messaging);
+    }
+  } catch (error) { console.debug("Push token logout cleanup was deferred", error?.message || error); }
+  await signOut(auth);
+}
 
 async function call(name, data = {}) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
@@ -100,6 +112,8 @@ async function readCall(name, data = {}) {
 export const getDashboard = () => readCall("getAdminDashboard");
 export const getCashierSnapshot = () => readCall("getCashierSnapshot");
 export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
+export const getServiceTargetsDashboard = (month, branchId = "all") => readCall("getServiceTargetsDashboard", { month, branchId });
+export const upsertServiceTarget = payload => call("upsertServiceTarget", payload);
 export const getCollection = (collection, limit = 100, cursor = "") => readCall("getAdminCollection", { collection, limit, cursor });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
@@ -126,8 +140,15 @@ export const updateWhatsappConsent = (customerId, optedIn) => call("updateWhatsa
 export const recordExpense = payload => call("recordExpense", payload);
 export const updateExpense = payload => call("updateExpense", payload);
 export const recordPayrollPayment = payload => call("recordPayrollPayment", payload);
-export const changeUserRole = (uid, email, role, permissions = [], branchIds = []) => call("setUserRole", { uid, email, role, permissions, branchIds });
+export const changeUserRole = (uid, email, role, permissions = [], branchIds = [], staffId = "") => call("setUserRole", { uid, email, role, permissions, branchIds, staffId });
 export const createUserAccount = payload => call("createAdminUser", payload);
+export const getAttendanceDashboard = (dateKey, branchId = "all") => readCall("getAttendanceDashboard", { dateKey, branchId });
+export const recordWorkerAttendance = payload => call("recordWorkerAttendance", payload);
+export const getWorkerWorkspace = () => readCall("getWorkerWorkspace");
+export const createWorkerTask = payload => call("createWorkerTask", payload);
+export const updateWorkerTask = (taskId, status) => call("updateWorkerTask", { taskId, status });
+export const notifyWorker = payload => call("notifyWorker", payload);
+export const updateWorkerProfilePhoto = imageUrl => call("updateWorkerProfilePhoto", { imageUrl });
 
 export async function verifyAdminPassword(password) {
   const user = auth?.currentUser;

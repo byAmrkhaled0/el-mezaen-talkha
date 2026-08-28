@@ -5,6 +5,9 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-ch
 import { browserLocalPersistence, getAuth, onAuthStateChanged, RecaptchaVerifier, setPersistence, signInWithPhoneNumber, signOut } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import QRCode from "qrcode";
+import { bindSafeBack } from "./navigation.js";
+
+bindSafeBack();
 
 const config=globalThis.__FIREBASE_CONFIG__||{};const configured=Boolean(config.projectId&&!String(config.projectId).includes("YOUR_"));
 const $=selector=>document.querySelector(selector);let confirmation=null;let portalData=null;let auth;let functions;

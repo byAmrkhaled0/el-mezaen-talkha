@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks";
 
 const base = (process.argv[2] || process.env.PERFORMANCE_BASE_URL || "http://127.0.0.1:4173").replace(/\/$/, "");
-const routes = ["/", "/admin/", "/account/", "/services/"];
+const routes = ["/", "/admin/", "/account/", "/services/", "/packages/", "/reviews/"];
 const rounds = Math.max(3, Math.min(20, Number(process.env.PERFORMANCE_ROUNDS || 8)));
 const results = [];
 
