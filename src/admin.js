@@ -2115,6 +2115,14 @@ async function requestAdminPush(button) {
   finally { pushSyncing = false; syncPushButtons(); }
 }
 
+async function handlePushButton(button) {
+  if (!(Notification.permission === "granted" && pushRegistrationReady)) await requestAdminPush(button);
+  if (Notification.permission === "granted" && pushRegistrationReady) {
+    renderAdminAlerts();
+    if (!$("#adminAlertsDialog").open) $("#adminAlertsDialog").showModal();
+  }
+}
+
 function goBackInAdmin() {
   if (Math.max(0, Number(history.state?.adminDepth || 0)) > 0) return history.back();
   if (state.section !== "workspaceHome") return showWorkspaceHome({ historyMode: "replace" });
@@ -2262,7 +2270,7 @@ document.addEventListener("keydown", event => {
 $("#adminTheme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
 $("#mobileThemeToggle")?.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
 $("#logoutButton").addEventListener("click", async () => { await logout(); location.replace("/login/"); });
-$("#pushButton").addEventListener("click", event => requestAdminPush(event.currentTarget));
+$("#pushButton").addEventListener("click", event => handlePushButton(event.currentTarget));
 $("#mobilePushButton")?.addEventListener("click", event => requestAdminPush(event.currentTarget));
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
@@ -2272,7 +2280,6 @@ $("#accessRole").addEventListener("change", event => { renderAccessPermissionPic
 $("#accessForm").addEventListener("submit", submitAccessEdit);
 $("#customerDrawerClose").addEventListener("click", () => $("#customerDrawer").close());
 $("#receiptDrawerClose")?.addEventListener("click", () => $("#receiptDrawer").close());
-$("#adminAlertsButton")?.addEventListener("click", () => { renderAdminAlerts(); if (!$("#adminAlertsDialog").open) $("#adminAlertsDialog").showModal(); });
 $("#adminAlertsClose")?.addEventListener("click", () => $("#adminAlertsDialog").close());
 $("#testLocalNotification")?.addEventListener("click", event => withButtonBusy(event.currentTarget, () => testLocalNotification(event.currentTarget)));
 $("#dashboardPagePrev")?.addEventListener("click", () => { dashboardPage = Math.max(1, dashboardPage - 1); renderRecentOperations(); });

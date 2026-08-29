@@ -75,16 +75,18 @@ export async function getCatalog() {
   try {
     const remote = await callFunction("getCatalog", {}, 15000) || {};
     const fallback = localCatalog();
+    const fallbackStaff = new Map(fallback.staff.map(item => [item.id, item]));
+    const fallbackContent = new Map(fallback.content.map(item => [item.id, item]));
     const catalog = {
       ...remote,
       branches: remote.branches?.length ? remote.branches : fallback.branches,
       categories: remote.categories?.length ? remote.categories : fallback.categories,
       services: remote.services?.length ? remote.services : fallback.services,
       packages: remote.packages?.length ? remote.packages : fallback.packages,
-      staff: remote.staff?.length ? remote.staff : fallback.staff,
+      staff: remote.staff?.length ? remote.staff.map(item => ({ ...item, imageUrl: item.imageUrl || fallbackStaff.get(item.id)?.imageUrl || "" })) : fallback.staff,
       offers: Array.isArray(remote.offers) ? remote.offers : fallback.offers,
       drinks: Array.isArray(remote.drinks) ? remote.drinks : [],
-      content: remote.content?.length ? remote.content : fallback.content,
+      content: remote.content?.length ? remote.content.map(item => ({ ...item, imageUrl: item.imageUrl || fallbackContent.get(item.id)?.imageUrl || "" })) : fallback.content,
       faqs: remote.faqs?.length ? remote.faqs : fallback.faqs,
       reviews: Array.isArray(remote.reviews) ? remote.reviews : [],
       translations: Array.isArray(remote.translations) ? remote.translations : [],

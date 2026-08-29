@@ -49,7 +49,7 @@ const settings = () => state.catalog.settings || {};
 const currentBranch = () => state.catalog.branches.find(item => item.id === state.branchId && item.active !== false) || null;
 const availableAtBranch = item => !state.branchId || !Array.isArray(item?.branchIds) || !item.branchIds.length || item.branchIds.includes(state.branchId);
 const explicitlyAvailableAtBranch = item => Boolean(state.branchId && Array.isArray(item?.branchIds) && item.branchIds.includes(state.branchId));
-const publicItemAvailableAtBranch = item => Boolean(Array.isArray(item?.branchIds) && item.branchIds.length && (!state.branchId || item.branchIds.includes(state.branchId)));
+const publicItemAvailableAtBranch = item => !state.branchId || Boolean(Array.isArray(item?.branchIds) && item.branchIds.includes(state.branchId));
 const branchName = branch => localized(branch) || (state.lang === "ar" ? branch?.nameAr : branch?.nameEn) || "";
 const branchAddress = branch => state.lang === "ar" ? branch?.addressAr : branch?.addressEn || branch?.addressAr;
 const phoneHref = value => {

@@ -229,6 +229,11 @@
     {
       "collectionGroup": "revenueLedger",
       "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "revenueLedger",
+      "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
     },
     {
@@ -255,6 +260,11 @@
       "collectionGroup": "expenses",
       "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "dateKey", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "branchId", "order": "ASCENDING" }, { "fieldPath": "amount", "order": "ASCENDING" }]
     },
     {
       "collectionGroup": "expenses",
