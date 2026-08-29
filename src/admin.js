@@ -502,6 +502,7 @@ async function submitUserAccount(event) {
 async function loadDashboard(silent = false) {
   $("#dashboard")?.setAttribute("aria-busy", "true");
   $(".mobile-monthly-target")?.setAttribute("aria-busy", "true");
+  $(".desktop-monthly-target")?.setAttribute("aria-busy", "true");
   if (!state.loadedAt.dashboard) setDashboardMetricsUnavailable();
   $("#dashboardDataError").hidden = true;
   try {
@@ -515,16 +516,13 @@ async function loadDashboard(silent = false) {
   } catch (error) {
     setDashboardMetricsUnavailable(error.message || "تعذر تحميل لوحة الإدارة");
     if (!silent) toast(error.message || "تعذر تحميل لوحة الإدارة", true);
-  } finally { $("#dashboard")?.removeAttribute("aria-busy"); $(".mobile-monthly-target")?.removeAttribute("aria-busy"); }
+  } finally { $("#dashboard")?.removeAttribute("aria-busy"); $(".mobile-monthly-target")?.removeAttribute("aria-busy"); $(".desktop-monthly-target")?.removeAttribute("aria-busy"); }
 }
 
 function setDashboardMetricsUnavailable(message = "") {
   ["statTodayRevenue", "statTodayReceipts", "statTodayCash", "statUnpaid", "statAverageTicket", "statTodayExpenses", "statTodayNet"].forEach(id => { const element = $("#" + id); if (element) element.textContent = "—"; });
-  ["dashboardMonthTargetPercent", "dashboardMonthTargetTotal", "dashboardMonthTargetAchieved", "dashboardMonthTargetRemaining"].forEach(id => { const element = $("#" + id); if (element) element.textContent = "—"; });
-  if ($("#dashboardMonthTargetProgress")) {
-    $("#dashboardMonthTargetProgress").value = 0;
-    $("#dashboardMonthTargetProgress").textContent = "0%";
-  }
+  ["dashboardMonthTargetPercent", "dashboardMonthTargetTotal", "dashboardMonthTargetAchieved", "dashboardMonthTargetRemaining", "desktopMonthTargetPercent", "desktopMonthTargetTotal", "desktopMonthTargetAchieved", "desktopMonthTargetRemaining"].forEach(id => { const element = $("#" + id); if (element) element.textContent = "—"; });
+  ["dashboardMonthTargetProgress", "desktopMonthTargetProgress"].forEach(id => { const progress = $("#" + id); if (progress) { progress.value = 0; progress.textContent = "0%"; } });
   const errorState = $("#dashboardDataError");
   if (!errorState) return;
   errorState.hidden = !message;
@@ -692,31 +690,34 @@ function renderRecentOperations() {
 }
 
 function syncDashboardTargetBranchOptions() {
-  const select = $("#dashboardTargetBranch");
-  if (!select) return;
   const allowed = state.branchIds.length ? state.branchIds : ["talkha", "mashaya"];
-  const current = select.value;
-  select.innerHTML = `${allowed.length > 1 ? '<option value="all">جميع الفروع</option>' : ""}${allowed.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(branchLabel(id))}</option>`).join("")}`;
-  select.value = [...select.options].some(option => option.value === current) ? current : allowed.length > 1 ? "all" : allowed[0];
+  [$("#dashboardTargetBranch"), $("#desktopTargetBranch")].filter(Boolean).forEach(select => {
+    const current = select.value;
+    select.innerHTML = `${allowed.length > 1 ? '<option value="all">جميع الفروع</option>' : ""}${allowed.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(branchLabel(id))}</option>`).join("")}`;
+    select.value = [...select.options].some(option => option.value === current) ? current : allowed.length > 1 ? "all" : allowed[0];
+  });
 }
 
 function renderMonthlyRevenueTarget(stats = {}) {
   syncDashboardTargetBranchOptions();
-  const selected = $("#dashboardTargetBranch")?.value || "all";
   const byBranch = stats.monthlyTargetByBranch && typeof stats.monthlyTargetByBranch === "object" ? stats.monthlyTargetByBranch : {};
-  const branchSummary = selected === "all" ? null : byBranch[selected];
   const combinedAchieved = Object.values(byBranch).reduce((sum, item) => sum + Math.max(0, Number(item?.achieved || 0)), 0);
-  const monthlyTarget = Math.max(0, Number(selected === "all" ? stats.monthlyRevenueTarget : branchSummary?.target || 0));
-  const monthAchieved = Math.max(0, Number(selected === "all" ? combinedAchieved : branchSummary?.achieved || 0));
-  const summaryAvailable = selected === "all" || Boolean(branchSummary);
-  const monthRemaining = monthlyTarget ? Math.max(0, monthlyTarget - monthAchieved) : 0;
-  const targetPercent = monthlyTarget ? Math.min(100, Math.round(monthAchieved / monthlyTarget * 100)) : 0;
-  $("#dashboardMonthTargetPercent").textContent = summaryAvailable && monthlyTarget ? `${targetPercent}%` : "—";
-  $("#dashboardMonthTargetProgress").value = summaryAvailable ? targetPercent : 0;
-  $("#dashboardMonthTargetProgress").textContent = `${summaryAvailable ? targetPercent : 0}%`;
-  $("#dashboardMonthTargetTotal").textContent = summaryAvailable && monthlyTarget ? money(monthlyTarget) : "غير محدد";
-  $("#dashboardMonthTargetAchieved").textContent = summaryAvailable ? money(monthAchieved) : "—";
-  $("#dashboardMonthTargetRemaining").textContent = summaryAvailable && monthlyTarget ? money(monthRemaining) : "—";
+  [{ select: $("#dashboardTargetBranch"), prefix: "dashboardMonthTarget" }, { select: $("#desktopTargetBranch"), prefix: "desktopMonthTarget" }].forEach(({ select, prefix }) => {
+    if (!select) return;
+    const selected = select.value || "all";
+    const branchSummary = selected === "all" ? null : byBranch[selected];
+    const monthlyTarget = Math.max(0, Number(selected === "all" ? stats.monthlyRevenueTarget : branchSummary?.target || 0));
+    const monthAchieved = Math.max(0, Number(selected === "all" ? combinedAchieved : branchSummary?.achieved || 0));
+    const summaryAvailable = selected === "all" || Boolean(branchSummary);
+    const monthRemaining = monthlyTarget ? Math.max(0, monthlyTarget - monthAchieved) : 0;
+    const targetPercent = monthlyTarget ? Math.min(100, Math.round(monthAchieved / monthlyTarget * 100)) : 0;
+    $("#" + prefix + "Percent").textContent = summaryAvailable && monthlyTarget ? `${targetPercent}%` : "—";
+    $("#" + prefix + "Progress").value = summaryAvailable ? targetPercent : 0;
+    $("#" + prefix + "Progress").textContent = `${summaryAvailable ? targetPercent : 0}%`;
+    $("#" + prefix + "Total").textContent = summaryAvailable && monthlyTarget ? money(monthlyTarget) : "غير محدد";
+    $("#" + prefix + "Achieved").textContent = summaryAvailable ? money(monthAchieved) : "—";
+    $("#" + prefix + "Remaining").textContent = summaryAvailable && monthlyTarget ? money(monthRemaining) : "—";
+  });
 }
 
 function renderDashboard() {
@@ -2016,15 +2017,33 @@ function detectNewBookings(items) {
   if (fresh) notifyNewBooking(fresh);
 }
 
+let adminNotificationAudio;
+function playAdminNotificationSound() {
+  try {
+    adminNotificationAudio ||= new AudioContext();
+    if (adminNotificationAudio.state === "suspended") void adminNotificationAudio.resume();
+    [0, .13].forEach((delay, index) => {
+      const oscillator = adminNotificationAudio.createOscillator();
+      const gain = adminNotificationAudio.createGain();
+      const startsAt = adminNotificationAudio.currentTime + delay;
+      oscillator.frequency.value = index ? 1046 : 784;
+      gain.gain.setValueAtTime(.0001, startsAt);
+      gain.gain.exponentialRampToValueAtTime(.075, startsAt + .015);
+      gain.gain.exponentialRampToValueAtTime(.0001, startsAt + .12);
+      oscillator.connect(gain).connect(adminNotificationAudio.destination);
+      oscillator.start(startsAt);
+      oscillator.stop(startsAt + .13);
+    });
+  } catch {}
+}
+document.addEventListener("pointerdown", () => {
+  try { adminNotificationAudio ||= new AudioContext(); if (adminNotificationAudio.state === "suspended") void adminNotificationAudio.resume(); } catch {}
+}, { once: true, passive: true });
+
 function notifyNewBooking(item = {}) {
   toast(`حجز جديد: ${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${item.code || ""}`);
   if (Notification.permission === "granted") new Notification("حجز جديد وصل الآن", { body: `${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${branchLabel(item.branchId)}`, icon: "/assets/el-mezaen-logo.jpeg", tag: item.id || item.code || "booking" });
-  try {
-    const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.frequency.value = 880; gain.gain.value = .07; oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + .16);
-  } catch {}
+  playAdminNotificationSound();
 }
 
 let pushRegistrationReady = false;
@@ -2046,7 +2065,8 @@ function renderAdminAlerts() {
   const health = $("#pushHealth");
   if (health) {
     const permission = "Notification" in window ? Notification.permission : "unsupported";
-    health.innerHTML = `<b>${permission === "granted" && pushRegistrationReady ? "الجهاز مربوط بالإشعارات" : permission === "granted" ? "الإذن متاح ويحتاج إعادة ربط" : permission === "denied" ? "الإشعارات محظورة" : permission === "default" ? "الإشعارات لم تُفعّل بعد" : "المتصفح لا يدعم الإشعارات"}</b><span>${permission === "granted" ? "يمكنك تنفيذ اختبار محلي للتأكد من ظهور الإشعار." : "استخدم زر تفعيل الإشعارات في الهيدر."}</span>`;
+    health.hidden = permission === "granted" && pushRegistrationReady;
+    health.innerHTML = health.hidden ? "" : `<b>${permission === "granted" ? "الإذن متاح ويحتاج إعادة ربط" : permission === "denied" ? "الإشعارات محظورة" : permission === "default" ? "الإشعارات لم تُفعّل بعد" : "المتصفح لا يدعم الإشعارات"}</b><span>${permission === "denied" ? "اسمح بالإشعارات من إعدادات المتصفح." : "استخدم أيقونة الجرس في الهيدر."}</span>`;
   }
 }
 function syncPushButtons() {
@@ -2077,6 +2097,7 @@ async function testLocalNotification(button) {
   if (Notification.permission !== "granted") await requestAdminPush(button);
   if (Notification.permission !== "granted") return;
   new Notification("اختبار إشعارات مزين مصر", { body: "هذا الجهاز جاهز لاستقبال تنبيهات لوحة الإدارة.", icon: "/assets/icon-192.png", tag: "admin-notification-test" });
+  playAdminNotificationSound();
   toast("تم إرسال إشعار اختبار محلي لهذا الجهاز");
 }
 
@@ -2204,7 +2225,7 @@ document.addEventListener("change", event => {
   if (["serviceTargetKind", "serviceTargetBranch"].includes(event.target.id)) refreshServiceTargetItems();
   if (["serviceTargetBranchFilter", "serviceTargetItemFilter"].includes(event.target.id)) renderServiceTargets();
   if (event.target.id === "taskBranch") renderAdminTasks();
-  if (event.target.id === "dashboardBranchFilter") { dashboardPage = 1; const targetBranch = $("#dashboardTargetBranch"); if (targetBranch && [...targetBranch.options].some(option => option.value === event.target.value)) targetBranch.value = event.target.value; void loadDashboard(); }
+  if (event.target.id === "dashboardBranchFilter") { dashboardPage = 1; [$("#dashboardTargetBranch"), $("#desktopTargetBranch")].filter(Boolean).forEach(targetBranch => { if ([...targetBranch.options].some(option => option.value === event.target.value)) targetBranch.value = event.target.value; }); void loadDashboard(); }
   if (["dashboardOperationFilter", "dashboardPaymentMethodFilter", "dashboardDateFilter", "dashboardStaffFilter", "dashboardPageSize"].includes(event.target.id)) { dashboardPage = 1; renderRecentOperations(); }
 });
 
@@ -2297,6 +2318,11 @@ $("#clearExpenseFilters").addEventListener("click", () => { $("#expenseFrom").va
 $("#refreshPayroll").addEventListener("click", () => loadBusiness());
 $("#payrollMonth").addEventListener("change", () => loadBusiness());
 $("#dashboardTargetBranch")?.addEventListener("change", () => renderMonthlyRevenueTarget(state.dashboard.stats || {}));
+$("#desktopTargetBranch")?.addEventListener("change", event => {
+  const dashboardBranch = $("#dashboardBranchFilter");
+  if (dashboardBranch) dashboardBranch.value = event.target.value;
+  void loadDashboard();
+});
 $("#serviceTargetForm")?.addEventListener("submit", submitServiceTarget);
 $("#exportPayroll").addEventListener("click", () => exportCsv(`el-mezaen-payroll-${state.business.month}.csv`, ["العامل", "الإيراد", "التارجت", "الأساسي", "نسبة الزيادة", "الزيادة", "الراتب", "الحالة"], (state.business.payroll || []).map(item => [item.nameAr, item.revenue, item.monthlyTarget, item.baseSalary, item.targetBonusPercent, item.bonus, item.payment?.netSalary ?? item.netSalary, item.payment ? "تم الصرف" : "لم يصرف"])));
 $("#accountRole").addEventListener("change", event => { renderPermissionPicker(event.target.value); syncWorkerAccountFields(event.target.value); });

@@ -49,6 +49,7 @@ const settings = () => state.catalog.settings || {};
 const currentBranch = () => state.catalog.branches.find(item => item.id === state.branchId && item.active !== false) || null;
 const availableAtBranch = item => !state.branchId || !Array.isArray(item?.branchIds) || !item.branchIds.length || item.branchIds.includes(state.branchId);
 const explicitlyAvailableAtBranch = item => Boolean(state.branchId && Array.isArray(item?.branchIds) && item.branchIds.includes(state.branchId));
+const publicItemAvailableAtBranch = item => Boolean(Array.isArray(item?.branchIds) && item.branchIds.length && (!state.branchId || item.branchIds.includes(state.branchId)));
 const branchName = branch => localized(branch) || (state.lang === "ar" ? branch?.nameAr : branch?.nameEn) || "";
 const branchAddress = branch => state.lang === "ar" ? branch?.addressAr : branch?.addressEn || branch?.addressAr;
 const phoneHref = value => {
@@ -268,7 +269,7 @@ function renderServices() {
 }
 
 function renderTeam() {
-  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
+  $("#teamGrid").innerHTML = state.catalog.staff.filter(item => publicItemAvailableAtBranch(item) && item.active !== false).slice(0, 6).map(item => `<article class="team-card reveal">
     ${item.imageUrl ? `<img class="team-photo" src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${state.lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeAttr(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${state.lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}
     <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
     <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
@@ -276,19 +277,19 @@ function renderTeam() {
 }
 
 function renderContent() {
-  const results = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "result" && item.imageUrl);
+  const results = state.catalog.content.filter(item => publicItemAvailableAtBranch(item) && item.active !== false && item.type === "result" && item.imageUrl);
   $("#results").hidden = results.length === 0;
   $("#resultsGrid").innerHTML = results.slice(0, 3).map(item => `<a class="result-card reveal" href="/results/"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" width="1080" height="1080"><span>${escapeHtml(localized(item, "title"))}</span><small>${escapeHtml(contentBranchLabel(item))}</small></a>`).join("");
-  const celebrities = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "celebrity");
+  const celebrities = state.catalog.content.filter(item => publicItemAvailableAtBranch(item) && item.active !== false && item.type === "celebrity" && item.imageUrl);
   $("#celebrityGrid").innerHTML = celebrities.map(item => `<article class="content-card reveal"><img src="${escapeAttr(item.imageUrl)}" alt="${escapeAttr(localized(item, "title"))}" loading="lazy" decoding="async" sizes="(max-width:560px) 88vw, 32vw" width="640" height="480"><h3>${escapeHtml(localized(item, "title"))}</h3></article>`).join("");
-  const gallery = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "gallery");
+  const gallery = state.catalog.content.filter(item => publicItemAvailableAtBranch(item) && item.active !== false && item.type === "gallery");
   const galleryItems = gallery.length ? gallery : [
     { imageUrl: "/assets/hero-barbershop-cyan.webp", titleAr: "من أعمال مزين مصر", titleEn: "El Mezaen Egypt Work" },
     { imageUrl: "/assets/celebrity-1.webp", titleAr: "صورة من معرض مزين مصر", titleEn: "El Mezaen Egypt Gallery" },
     { imageUrl: "/assets/celebrity-2.webp", titleAr: "لحظة مميزة في مزين مصر", titleEn: "A Special El Mezaen Moment" }
   ];
   $("#galleryGrid").innerHTML = galleryItems.slice(0, 8).map(renderGalleryMedia).join("");
-  const news = state.catalog.content.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false && item.type === "news");
+  const news = state.catalog.content.filter(item => publicItemAvailableAtBranch(item) && item.active !== false && item.type === "news");
   $("#newsSection").hidden = news.length === 0;
   $("#newsGrid").innerHTML = news.map(item => { const link = safeWebUrl(item.linkUrl); return `<article class="content-card news-card reveal">${renderNewsMedia(item)}<div class="news-card-body"><span class="content-branch-badge">${escapeHtml(contentBranchLabel(item))}</span><h3>${escapeHtml(localized(item, "title"))}</h3><p>${escapeHtml(localized(item, "body"))}</p>${link ? `<a class="btn btn-ghost" href="${escapeAttr(link)}" target="_blank" rel="noopener">${state.lang === "ar" ? "اقرأ المزيد" : "Read more"}</a>` : ""}</div></article>`; }).join("");
 }
@@ -894,11 +895,21 @@ function syncScrollControls() {
 window.addEventListener("scroll", () => { if (!scrollFrame) scrollFrame = requestAnimationFrame(syncScrollControls); }, { passive: true });
 scrollTopButton.addEventListener("click", () => window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
 syncScrollControls();
-$("#menuToggle").addEventListener("click", () => {
+$("#menuToggle").addEventListener("click", event => {
+  event.stopPropagation();
   const open = $("#navLinks").classList.toggle("open");
   $("#menuToggle").setAttribute("aria-expanded", String(open));
 });
-$("#navLinks").addEventListener("click", () => { $("#navLinks").classList.remove("open"); $("#menuToggle").setAttribute("aria-expanded", "false"); });
+$("#navLinks").addEventListener("click", event => {
+  if (!event.target.closest("a")) return;
+  $("#navLinks").classList.remove("open");
+  $("#menuToggle").setAttribute("aria-expanded", "false");
+});
+document.addEventListener("click", event => {
+  if (event.target.closest("#navLinks, #menuToggle")) return;
+  $("#navLinks").classList.remove("open");
+  $("#menuToggle").setAttribute("aria-expanded", "false");
+});
 $("#nextStep").addEventListener("click", nextStep);
 $("#prevStep").addEventListener("click", () => goToStep(state.step - 1));
 $("#applyCoupon").addEventListener("click", applyCouponCode);

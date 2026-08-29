@@ -146,8 +146,9 @@ test("workers without an explicit branch are rejected by booking and POS server 
 
 test("public staff and content require explicit branch scope while legacy services stay compatible", () => {
   assert.match(app, /explicitlyAvailableAtBranch/);
-  assert.match(app, /catalog\.staff\.filter\(item => explicitlyAvailableAtBranch/);
-  assert.match(app, /catalog\.content\.filter\(item => explicitlyAvailableAtBranch/);
+  assert.match(app, /const publicItemAvailableAtBranch = item => Boolean\(Array\.isArray\(item\?\.branchIds\)/);
+  assert.match(app, /catalog\.staff\.filter\(item => publicItemAvailableAtBranch/);
+  assert.match(app, /catalog\.content\.filter\(item => publicItemAvailableAtBranch/);
   assert.match(app, /const availableAtBranch = item/);
 });
 
