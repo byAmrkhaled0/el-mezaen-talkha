@@ -1,7 +1,10 @@
+import { safeMediaUrl } from "./media.js";
 import "./styles.css";
 import { getLang } from "./i18n.js";
 import { getCatalog } from "./firebase-client.js";
 import { bindSafeBack } from "./navigation.js";
+import { availableAtBranch as itemAvailableAtBranch, hasBranchScope } from "./branch-availability.js";
+import { activeBranch, publicSubset, reconcileBranchCart } from "./public-branch.js";
 
 const $ = selector => document.querySelector(selector);
 const page = document.body.dataset.page;
@@ -9,11 +12,10 @@ let lang = getLang();
 let catalog = { branches: [], services: [], packages: [], staff: [], categories: [] };
 let category = "all";
 let branchId = localStorage.getItem("mz-branch") || "";
-let packageBranch = "all";
 const localized = (item, key = "name") => item?.[`${key}${lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
-const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
+const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML.replaceAll('"', "&quot;").replaceAll("'", "&#39;"); };
 const money = value => new Intl.NumberFormat(lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
-const availableAtBranch = item => !branchId || !item.branchIds?.length || item.branchIds.includes(branchId);
+const availableAtBranch = item => itemAvailableAtBranch(item, branchId);
 const staffAvailableAtBranch = item => Boolean(branchId && Array.isArray(item.branchIds) && item.branchIds.includes(branchId));
 const dedupeCatalogCards = items => {
   const seen = new Set();
@@ -43,27 +45,47 @@ bindSafeBack();
 
 function addCart(id) {
   const item = [...(catalog.services || []), ...(catalog.packages || [])].find(value => value.id === id);
-  if (branchId && item?.branchIds?.length && !item.branchIds.includes(branchId)) {
-    $("#pageToast").textContent = lang === "ar" ? "اختر فرع الباقة أولًا" : "Choose the package branch first";
+  if (!item || item.active === false || item.catalogVisible === false || ["expired", "stopped"].includes(item.status) || (item.startAt && (Number.isNaN(Date.parse(item.startAt)) || new Date(item.startAt).getTime() > Date.now())) || (item.endAt && (Number.isNaN(Date.parse(item.endAt)) || new Date(item.endAt).getTime() < Date.now()))) return;
+  let autoSelectedBranch = null;
+  if (!branchId && Array.isArray(item.branchIds) && item.branchIds.length === 1) {
+    autoSelectedBranch = (catalog.branches || []).find(branch => branch.id === item.branchIds[0] && branch.active !== false) || null;
+    if (!autoSelectedBranch) {
+      $("#pageToast").textContent = lang === "ar" ? "الفرع الخاص بهذا العنصر غير متاح حاليًا" : "The branch for this item is currently unavailable";
+      $("#pageToast").classList.add("show"); setTimeout(() => $("#pageToast").classList.remove("show"), 1800);
+      return;
+    }
+    branchId = autoSelectedBranch.id;
+    localStorage.setItem("mz-branch", branchId);
+    document.querySelector(".brand small").textContent = localized(autoSelectedBranch);
+  }
+  if (!hasBranchScope(item) || (branchId && !itemAvailableAtBranch(item, branchId))) {
+    $("#pageToast").textContent = lang === "ar" ? "العنصر غير متاح في الفرع المختار" : "Unavailable at this branch";
     $("#pageToast").classList.add("show"); setTimeout(() => $("#pageToast").classList.remove("show"), 1800);
     return;
   }
-  const cart = JSON.parse(localStorage.getItem("mz-cart") || "[]");
-  if (!cart.some(item => item.id === id)) cart.push({ id, qty: 1 });
+  let cart;
+  try { const saved = JSON.parse(localStorage.getItem("mz-cart") || "[]"); cart = Array.isArray(saved) ? saved : []; }
+  catch { cart = []; }
+  if (autoSelectedBranch) {
+    const index = new Map([...catalog.services, ...catalog.packages, ...(catalog.drinks || []).map(value => ({ ...value, kind: "drink" }))].map(value => [value.id, value]));
+    cart = cart.filter(line => { const existing = index.get(line.id); return itemAvailableAtBranch(existing, branchId, existing?.kind === "drink"); });
+  }
+  if (!cart.some(line => line.id === id)) cart.push({ id, qty: 1 });
   localStorage.setItem("mz-cart", JSON.stringify(cart));
-  $("#pageToast").textContent = lang === "ar" ? "تمت الإضافة للسلة" : "Added to cart";
+    if (autoSelectedBranch) render();
+  $("#pageToast").textContent = autoSelectedBranch ? (lang === "ar" ? `تم اختيار ${localized(autoSelectedBranch)} وإضافة العنصر للسلة` : `${localized(autoSelectedBranch)} selected and item added`) : (lang === "ar" ? "تمت الإضافة للسلة" : "Added to cart");
   $("#pageToast").classList.add("show"); setTimeout(() => $("#pageToast").classList.remove("show"), 1800);
 }
 
 function renderPackages() {
   const query = $("#catalogSearch").value.trim().toLowerCase();
-  const items = (catalog.packages || []).filter(item => item.active !== false && item.status !== "expired" && (packageBranch === "all" || item.branchIds?.includes(packageBranch)) && (!query || `${item.nameAr || ""} ${item.nameEn || ""}`.toLowerCase().includes(query)));
-  $("#catalogFilters").innerHTML = `<button class="filter-chip ${packageBranch === "all" ? "active" : ""}" type="button" data-package-branch="all">${lang === "ar" ? "كل الفروع" : "All branches"}</button>` + (catalog.branches || []).filter(item => item.active !== false).map(item => `<button class="filter-chip ${packageBranch === item.id ? "active" : ""}" type="button" data-package-branch="${escapeHtml(item.id)}">${escapeHtml(localized(item))}</button>`).join("");
+  const items = publicSubset(catalog.packages, branchId, { dated: true }).filter(item => !query || `${item.nameAr || ""} ${item.nameEn || ""}`.toLowerCase().includes(query));
+  $("#catalogFilters").innerHTML = "";
   $("#catalogGrid").innerHTML = items.map(item => {
     const oldPrice = Number(item.originalPrice || item.oldPrice || item.price || 0);
     const included = lang === "ar" ? item.includedItemsAr : item.includedItemsEn || item.includedItemsAr;
     const branch = (catalog.branches || []).find(value => item.branchIds?.length === 1 && value.id === item.branchIds[0]);
-    return `<article class="package-card"><div class="package-cover"><img src="${escapeHtml(item.imageUrl || "/assets/package-premium.webp")}" alt="${escapeHtml(localized(item))}" loading="lazy" decoding="async" width="640" height="640"><span>${lang === "ar" ? "باقة" : "Package"}</span></div>${branch ? `<span class="package-branch"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>${lang === "ar" ? "متاح في " : "Available at "}${escapeHtml(localized(branch))}</span>` : ""}<h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p><div class="price-row package-price"><div>${oldPrice > Number(item.price || 0) ? `<del class="old-price">${money(oldPrice)}</del>` : ""}<strong class="price">${money(item.price)}</strong></div></div><details class="package-inline-details"><summary>${lang === "ar" ? "تفاصيل الباقة" : "Package details"}</summary>${Array.isArray(included) && included.length ? `<ul class="package-services">${included.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}${(item.choiceGroups || []).map(group => `<p class="package-choice-summary"><b>${escapeHtml(lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)}:</b> ${(group.options || []).map(option => escapeHtml(lang === "ar" ? option.labelAr : option.labelEn || option.labelAr)).join(" / ")}</p>`).join("")}${localized(item, "terms") ? `<p class="package-terms">${escapeHtml(localized(item, "terms"))}</p>` : ""}</details><button class="btn btn-primary" type="button" data-add="${escapeHtml(item.id)}">${lang === "ar" ? "إضافة للسلة" : "Add to cart"}</button></article>`;
+    return `<article class="package-card"><div class="package-cover">${item.imageUrl ? `<img src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(localized(item))}" loading="lazy" decoding="async" width="640" height="640">` : `<div class="package-media-placeholder"><img src="/assets/el-mezaen-mark-v2.webp" alt="" loading="lazy" width="90" height="106"></div>`}<span>${lang === "ar" ? "باقة" : "Package"}</span></div>${branch ? `<span class="package-branch"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>${lang === "ar" ? "متاح في " : "Available at "}${escapeHtml(localized(branch))}</span>` : ""}<h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p><div class="price-row package-price"><div>${oldPrice > Number(item.price || 0) ? `<del class="old-price">${money(oldPrice)}</del>` : ""}<strong class="price">${money(item.price)}</strong></div></div><details class="package-inline-details"><summary>${lang === "ar" ? "تفاصيل الباقة" : "Package details"}</summary>${Array.isArray(included) && included.length ? `<ul class="package-services">${included.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}${(item.choiceGroups || []).map(group => `<p class="package-choice-summary"><b>${escapeHtml(lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)}:</b> ${(group.options || []).map(option => escapeHtml(lang === "ar" ? option.labelAr : option.labelEn || option.labelAr)).join(" / ")}</p>`).join("")}${localized(item, "terms") ? `<p class="package-terms">${escapeHtml(localized(item, "terms"))}</p>` : ""}</details><button class="btn btn-primary" type="button" data-add="${escapeHtml(item.id)}">${lang === "ar" ? "إضافة للسلة" : "Add to cart"}</button></article>`;
   }).join("") || `<div class="empty-state">${lang === "ar" ? "لا توجد باقات مطابقة" : "No matching packages"}</div>`;
   $("#resultCount").textContent = `${items.length} ${lang === "ar" ? "باقة" : "packages"}`;
 }
@@ -71,21 +93,86 @@ function renderPackages() {
 function renderServices() {
   const query = $("#catalogSearch").value.trim().toLowerCase();
   const categories = new Map(catalog.categories.map(item => [item.id, localized(item)]));
-  const items = dedupeCatalogCards(catalog.services.filter(item => availableAtBranch(item) && item.active !== false && (category === "all" || item.categoryId === category) && (!query || `${item.nameAr} ${item.nameEn}`.toLowerCase().includes(query))));
-  $("#catalogFilters").innerHTML = `<button class="filter-chip ${category === "all" ? "active" : ""}" data-category="all">${lang === "ar" ? "الكل" : "All"}</button>` + catalog.categories.filter(cat => cat.active !== false && catalog.services.some(item => item.active !== false && item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${category === cat.id ? "active" : ""}" data-category="${cat.id}">${escapeHtml(localized(cat))}</button>`).join("");
+  const branchItems = publicSubset(catalog.services, branchId);
+  const items = dedupeCatalogCards(branchItems.filter(item => (category === "all" || item.categoryId === category) && (!query || `${item.nameAr} ${item.nameEn}`.toLowerCase().includes(query))));
+  $("#catalogFilters").innerHTML = `<button class="filter-chip ${category === "all" ? "active" : ""}" data-category="all">${lang === "ar" ? "الكل" : "All"}</button>` + catalog.categories.filter(cat => cat.active !== false && branchItems.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${category === cat.id ? "active" : ""}" data-category="${escapeHtml(cat.id)}">${escapeHtml(localized(cat))}</button>`).join("");
   $("#catalogGrid").innerHTML = items.map(item => `<article class="service-card compact-service"><span class="service-icon" data-service-icon="${escapeHtml(item.categoryId || "hair")}">${serviceIconSvg(item.categoryId)}</span><div class="service-meta"><span>${escapeHtml(categories.get(item.categoryId) || "")}</span><span>${clockIcon} ${item.duration} ${lang === "ar" ? "دقيقة" : "min"}</span></div><h3>${escapeHtml(localized(item))}</h3><div class="price-row"><div>${item.startsFrom ? `<small>${lang === "ar" ? "يبدأ من" : "From"}</small>` : ""}<strong class="price">${money(item.price)}</strong></div></div><button class="btn btn-primary" data-add="${escapeHtml(item.id)}">${lang === "ar" ? "إضافة للسلة" : "Add to cart"}</button></article>`).join("") || `<div class="empty-state">${lang === "ar" ? "لا توجد نتائج" : "No results"}</div>`;
   $("#resultCount").textContent = `${items.length} ${lang === "ar" ? "خدمة ومنتج" : "services and products"}`;
 }
 
 function renderTeam() {
   const query = $("#catalogSearch").value.trim().toLowerCase();
-  const items = catalog.staff.filter(item => staffAvailableAtBranch(item) && item.active !== false && (!query || `${item.nameAr} ${item.nameEn} ${item.specialtyAr} ${item.specialtyEn}`.toLowerCase().includes(query)));
-  $("#catalogGrid").innerHTML = items.map(item => `<article class="team-card team-page-card">${item.imageUrl ? `<img class="team-photo" src="${item.imageUrl}" alt="${escapeHtml(localized(item))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeHtml(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}<h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p><p class="team-bio">${escapeHtml(localized(item, "bio"))}</p><span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? (lang === "ar" ? "غير متاح" : "Unavailable") : (lang === "ar" ? "متاح للحجز" : "Available")}</span><a class="btn btn-ghost" href="/#services">${lang === "ar" ? "احجز مع هذا العضو" : "Book this member"}</a></article>`).join("");
+  const items = publicSubset(catalog.staff, branchId).filter(item => (!query || `${item.nameAr} ${item.nameEn} ${item.specialtyAr} ${item.specialtyEn}`.toLowerCase().includes(query)));
+  $("#catalogGrid").innerHTML = items.map(item => `<article class="team-card team-page-card">${item.imageUrl ? `<img class="team-photo" src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(localized(item))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeHtml(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}<h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p><p class="team-bio">${escapeHtml(localized(item, "bio"))}</p><span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? (lang === "ar" ? "غير متاح" : "Unavailable") : (lang === "ar" ? "متاح للحجز" : "Available")}</span>${item.available === false ? "" : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeHtml(item.id)}">${lang === "ar" ? "احجز مع هذا العضو" : "Book this member"}</button>`}</article>`).join("") || `<div class="empty-state">${lang === "ar" ? "لا يوجد فريق متاح في هذا الفرع" : "No team available at this branch"}</div>`;
   $("#resultCount").textContent = `${items.length} ${lang === "ar" ? "عضو فريق" : "team members"}`;
 }
 
-function render() { page === "services" ? renderServices() : page === "packages" ? renderPackages() : renderTeam(); }
-document.addEventListener("click", event => { const filter = event.target.closest("[data-category]"); if (filter) { category = filter.dataset.category; render(); } const packageFilter = event.target.closest("[data-package-branch]"); if (packageFilter) { packageBranch = packageFilter.dataset.packageBranch; if (packageBranch !== "all") { branchId = packageBranch; localStorage.setItem("mz-branch", branchId); } render(); } const add = event.target.closest("[data-add]"); if (add) addCart(add.dataset.add); });
+function render() {
+  document.querySelectorAll("[data-current-branch]").forEach(el => { el.textContent = localized(activeBranch(catalog, branchId)) || "اختر الفرع"; });
+  if (!activeBranch(catalog, branchId)) {
+    $("#catalogGrid").innerHTML = '<div class="empty-state"><strong>اختار فرعك لعرض المتاح ليك</strong><p>الخدمات والأسعار والفريق بتظهر حسب الفرع.</p><button class="btn btn-primary" type="button" data-open-catalog-branch>اختيار الفرع</button></div>';
+    $("#catalogFilters")?.replaceChildren();
+    $("#resultCount").textContent = "";
+    return;
+  }
+  page === "services" ? renderServices() : page === "packages" ? renderPackages() : renderTeam();
+}
+
+const branchDialog = document.createElement("dialog");
+branchDialog.id = "catalogBranchDialog";
+branchDialog.className = "catalog-branch-dialog";
+branchDialog.innerHTML = '<div class="catalog-branch-shell"><header><div><small>EL MEZAEN</small><h2>اختار فرعك</h2></div><button type="button" data-close-catalog-branch aria-label="إغلاق">×</button></header><p>هتشوف الخدمات والباقات والفريق المتاحين في الفرع اللي تختاره.</p><div class="catalog-branch-options"></div></div>';
+document.body.append(branchDialog);
+const headerBranch = document.createElement("button");
+headerBranch.type = "button";
+headerBranch.className = "branch-switch catalog-branch-switch";
+headerBranch.dataset.openCatalogBranch = "";
+headerBranch.innerHTML = '<span aria-hidden="true">⌖</span><b data-current-branch>اختر الفرع</b>';
+$(".nav-actions").prepend(headerBranch);
+const heroBranch = document.createElement("button");
+heroBranch.type = "button";
+heroBranch.className = "selected-branch-pill";
+heroBranch.dataset.openCatalogBranch = "";
+heroBranch.innerHTML = 'الفرع المختار: <strong data-current-branch>اختر الفرع</strong> <span aria-hidden="true">‹</span>';
+$(".catalog-hero").insertBefore(heroBranch, $(".catalog-hero h1"));
+const bookLink = document.createElement("a");
+bookLink.className = "btn btn-primary catalog-book-link";
+bookLink.href = "/#services";
+bookLink.textContent = "احجز الآن";
+$(".nav-actions").append(bookLink);
+function openBranchDialog() {
+  branchDialog.querySelector(".catalog-branch-options").innerHTML = catalog.branches.filter(item => item.active !== false).map(item => `<button type="button" data-set-branch="${escapeHtml(item.id)}"><strong>${escapeHtml(localized(item))}</strong><span>${escapeHtml(lang === "ar" ? item.addressAr : item.addressEn || item.addressAr)}</span><small>${escapeHtml(item.openingTime || "—")} – ${escapeHtml(item.closingTime || "—")} · ${escapeHtml(item.phone || "")}</small></button>`).join("") || '<p>تعذر تحميل الفروع. أعد المحاولة.</p>';
+  if (!branchDialog.open) branchDialog.showModal();
+}
+function setBranch(id) {
+  if (!activeBranch(catalog, id)) return;
+  let cart = [];
+  try { cart = JSON.parse(localStorage.getItem("mz-cart") || "[]"); } catch {}
+  const { kept, removed } = reconcileBranchCart(cart, catalog, id);
+  if (branchId && branchId !== id && removed && !confirm(`تغيير الفرع سيحذف ${removed} من العناصر غير المتاحة هنا. هل تريد المتابعة؟`)) return;
+  branchId = id;
+  localStorage.setItem("mz-branch", id);
+  if (removed) { localStorage.setItem("mz-cart", JSON.stringify(kept)); $("#pageToast").textContent = "تم حذف العناصر غير المتاحة في الفرع الجديد"; $("#pageToast").classList.add("show"); setTimeout(() => $("#pageToast").classList.remove("show"), 2500); }
+  document.querySelector(".brand small").textContent = localized(activeBranch(catalog, id));
+  category = "all";
+  branchDialog.close();
+  render();
+}
+document.addEventListener("click", event => {
+  const filter = event.target.closest("[data-category]");
+  if (filter) { category = filter.dataset.category; render(); }
+  if (event.target.closest("[data-open-catalog-branch]")) openBranchDialog();
+  if (event.target.closest("[data-close-catalog-branch]")) branchDialog.close();
+  const branchButton = event.target.closest("[data-set-branch]");
+  if (branchButton) setBranch(branchButton.dataset.setBranch);
+  const staffButton = event.target.closest("[data-book-staff]");
+  if (staffButton && activeBranch(catalog, branchId)) {
+    sessionStorage.setItem("mz-staff-booking", JSON.stringify({ branchId, staffId: staffButton.dataset.bookStaff }));
+    location.href = "/#services";
+  }
+  const add = event.target.closest("[data-add]");
+  if (add) addCart(add.dataset.add);
+});
 $("#catalogSearch").addEventListener("input", render);
 $("#themeToggle").addEventListener("click", () => { const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = theme; localStorage.setItem("mz-theme", theme); $("#themeToggle").innerHTML = themeIcon(theme); });
 $("#langToggle").addEventListener("click", () => { lang = lang === "ar" ? "en" : "ar"; localStorage.setItem("mz-lang", lang); document.documentElement.lang = lang; document.documentElement.dir = lang === "ar" ? "rtl" : "ltr"; location.reload(); });
@@ -98,7 +185,15 @@ if (lang === "en") {
   $(".catalog-hero .section-kicker").textContent = copy[0]; $(".catalog-hero h1").textContent = copy[1]; $(".catalog-hero p").textContent = copy[2]; $("#catalogSearch").placeholder = copy[3];
   document.querySelector('.nav-actions a').textContent = "Back & Book";
 }
-catalog = await getCatalog();
-const selectedBranch = catalog.branches?.find(item => item.id === branchId && item.active !== false);
-if (selectedBranch) document.querySelector(".brand small").textContent = localized(selectedBranch);
-render();
+try {
+  catalog = await getCatalog();
+  const selectedBranch = activeBranch(catalog, branchId);
+  if (!selectedBranch) { branchId = ""; localStorage.removeItem("mz-branch"); }
+  if (selectedBranch) document.querySelector(".brand small").textContent = localized(selectedBranch);
+  render();
+  if (!selectedBranch) openBranchDialog();
+} catch (error) {
+  console.debug("Catalog loading failed", error?.message || error);
+  $("#catalogGrid").innerHTML = '<div class="empty-state"><strong>تعذر تحميل البيانات حاليًا</strong><p>تحقق من الاتصال ثم أعد المحاولة.</p><button class="btn btn-primary" type="button" data-retry-page>إعادة المحاولة</button></div>';
+  document.addEventListener("click", event => { if (event.target.closest("[data-retry-page]")) location.reload(); }, { once: true });
+}

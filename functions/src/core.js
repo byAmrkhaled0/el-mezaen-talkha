@@ -2,6 +2,7 @@ export function normalizePhone(value) {
   let phone = String(value || "").replace(/[^\d+]/g, "");
   if (phone.startsWith("+20")) phone = `0${phone.slice(3)}`;
   else if (phone.startsWith("20") && phone.length === 12) phone = `0${phone.slice(2)}`;
+  else if (/^1[0125]\d{8}$/.test(phone)) phone = `0${phone}`;
   if (!/^01[0125]\d{8}$/.test(phone)) throw new Error("INVALID_PHONE");
   return phone;
 }
@@ -96,7 +97,8 @@ export function createSlotKeys(staffId, date, time, duration, step = 5, branchId
   const start = minutes(time);
   const safeDuration = Math.max(step, Number(duration || 0));
   const keys = [];
-  for (let cursor = start; cursor < start + safeDuration; cursor += step) {
+  // Align arbitrary requested minutes to the same buckets as neighboring bookings.
+  for (let cursor = Math.floor(start / step) * step; cursor < start + safeDuration; cursor += step) {
     const prefix = branchId ? `${branchId}_` : "";
     keys.push(`${prefix}${staffId}_${date}_${String(Math.floor(cursor / 60)).padStart(2, "0")}${String(cursor % 60).padStart(2, "0")}`);
   }
@@ -135,7 +137,7 @@ export function priceItems(lines, docsById, now = new Date(), branchId = "") {
     seen.add(id);
     const source = docsById.get(id);
     if (!source || source.active === false || source.catalogVisible === false) throw new Error("ITEM_UNAVAILABLE");
-    if (branchId && Array.isArray(source.branchIds) && source.branchIds.length && !source.branchIds.includes(branchId)) throw new Error("ITEM_UNAVAILABLE_AT_BRANCH");
+    if (branchId && (!Array.isArray(source.branchIds) || !source.branchIds.includes(branchId))) throw new Error("ITEM_UNAVAILABLE_AT_BRANCH");
     const kind = line.kind === "product" ? "product" : line.kind;
     if (source.kind !== kind && !(source.kind === "service" && kind === "product" && source.type === "product")) throw new Error("INVALID_ITEM_TYPE");
     if (source.status === "expired" || source.status === "stopped") throw new Error("ITEM_UNAVAILABLE");
@@ -216,7 +218,7 @@ export function calculateCoupon(coupon, pricedItems, { now = new Date(), usageCo
 }
 
 export function validateAppointment({ date, time, duration, openingTime, closingTime, now = new Date() }) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("INVALID_DATE");
+  if (!isValidDateKey(date)) throw new Error("INVALID_DATE");
   minutes(time);
   const cairoParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
   const today = `${cairoParts.year}-${cairoParts.month}-${cairoParts.day}`;
@@ -227,8 +229,44 @@ export function validateAppointment({ date, time, duration, openingTime, closing
   return { date, time, timeZone: "Africa/Cairo" };
 }
 
+export function staffCanServeInterval(member, { branchId = "", day, start, end, openingTime = "11:00", closingTime = "23:00", serviceIds = [], leaves = [] } = {}) {
+  if (!member || member.active === false || member.available === false) return false;
+  if (branchId && (!Array.isArray(member.branchIds) || !member.branchIds.includes(branchId))) return false;
+  if (Array.isArray(member.workDays) && !member.workDays.map(Number).includes(Number(day))) return false;
+  if (Array.isArray(member.serviceIds) && member.serviceIds.length && !serviceIds.every(id => member.serviceIds.includes(id))) return false;
+  if (start < minutes(member.shiftStart || openingTime) || end > minutes(member.shiftEnd || closingTime)) return false;
+  if ((leaves || []).some(leave => leave.staffId === member.id && (!leave.branchId || leave.branchId === "all" || leave.branchId === branchId) && start < minutes(leave.endTime || "23:59") && end > minutes(leave.startTime || "00:00"))) return false;
+  return !(member.breaks || []).some(value => {
+    const [from, to] = String(value).split("-");
+    return from && to && start < minutes(to) && end > minutes(from);
+  });
+}
+
+export function buildAvailableSlots({ staff = [], date, duration, openingTime = "11:00", closingTime = "23:00", slotMinutes = 15, branchId = "", serviceIds = [], leaves = [], lockedIds = [], now = new Date() } = {}) {
+  if (!isValidDateKey(date)) throw new Error("INVALID_DATE");
+  const safeDuration = Math.max(5, Number(duration || 0));
+  const step = Math.max(5, Math.min(120, Math.floor(Number(slotMinutes || 15))));
+  const opening = minutes(openingTime);
+  const closing = minutes(closingTime);
+  if (closing <= opening) throw new Error("INVALID_WORKING_HOURS");
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const locks = lockedIds instanceof Set ? lockedIds : new Set(Array.isArray(lockedIds) ? lockedIds : []);
+  const cairoParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  const today = `${cairoParts.year}-${cairoParts.month}-${cairoParts.day}`;
+  const nowMinutes = Number(cairoParts.hour) * 60 + Number(cairoParts.minute);
+  const result = [];
+  for (let cursor = opening; cursor + safeDuration <= closing; cursor += step) {
+    if (date < today || (date === today && cursor <= nowMinutes)) continue;
+    const time = `${String(Math.floor(cursor / 60)).padStart(2, "0")}:${String(cursor % 60).padStart(2, "0")}`;
+    const end = cursor + safeDuration;
+    const available = staff.some(member => staffCanServeInterval(member, { branchId, day, start: cursor, end, openingTime, closingTime, serviceIds, leaves }) && createSlotKeys(member.id, date, time, safeDuration, 5, branchId).every(key => !locks.has(key)));
+    if (available) result.push(time);
+  }
+  return result;
+}
+
 export function paymentTransition(booking, action, method = "cash") {
-  const allowedMethods = ["cash", "vodafone_cash", "instapay", "other"];
+  const allowedMethods = ["cash", "card", "vodafone_cash", "instapay", "other"];
   if (!allowedMethods.includes(method)) throw new Error("INVALID_PAYMENT_METHOD");
   if (action === "markPaid") {
     if (booking.paymentStatus === "paid") return { changed: false, status: "paid", ledgerAmount: 0 };
@@ -296,4 +334,15 @@ export function calculateServiceTargetProgress(targetCount = 0, achievedCount = 
 
 export function calculateExpectedCash({ openingCash = 0, cashSales = 0, cashIn = 0, cashOut = 0, cashRefunds = 0 } = {}) {
   return Math.round((Number(openingCash || 0) + Number(cashSales || 0) + Number(cashIn || 0) - Number(cashOut || 0) - Number(cashRefunds || 0)) * 100) / 100;
+}
+
+export function branchMonthlyTargetSummary(branch, month, achieved = 0) {
+  const configured = branch?.monthlyRevenueTargets?.[month];
+  const target = Math.max(0, Number(configured?.targetAmount ?? branch?.monthlyRevenueTarget ?? 0));
+  const actual = Math.max(0, Number(achieved || 0));
+  return { target, achieved: actual, remaining: Math.max(0, target - actual), progressPercent: target ? Math.min(100, Math.round(actual / target * 100)) : 0 };
+}
+
+export function sumBranchMonthlyTargets(byBranch, branchIds) {
+  return branchIds.reduce((sum, id) => sum + Math.max(0, Number(byBranch[id]?.target || 0)), 0);
 }

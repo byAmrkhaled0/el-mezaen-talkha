@@ -1,5 +1,6 @@
 @import "@fontsource/tajawal/400.css";@import "@fontsource/tajawal/700.css";:root{font-family:"Tajawal",sans-serif;color:#edf7ff;background:#06111f;--card:#0b1c2e;--line:#1e3a52;--cyan:#35d7e8;--muted:#9bb0c1}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{scroll-behavior:smooth}
 body{margin:0;min-height:100dvh;background:radial-gradient(circle at 80% -10%,#123c55 0,transparent 32%),#06111f}
 .account-header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px max(16px,calc((100% - 1100px)/2));background:#071a2cee;border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
@@ -34,7 +35,12 @@ input,select{width:100%;min-height:46px;border:1px solid var(--line);border-radi
 .member-progress i{height:8px;display:block;margin-top:7px;overflow:hidden;border-radius:99px;background:#06111f}
 .member-progress i span{height:100%;display:block;border-radius:inherit;background:linear-gradient(90deg,var(--cyan),#75e6a8);transition:width .5s ease}
 .list{display:grid;gap:8px}
-.message{min-height:24px;color:#ffba58!important}
+.message{min-height:24px;color:#ffba58}
+.booking-card{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.booking-card small{color:var(--muted)}
+.booking-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.booking-actions button{flex:1 1 110px}
+#reschedulePanel{scroll-margin-top:130px}
 @media(max-width:700px){.account-grid{grid-template-columns:1fr}
 .profile{grid-template-columns:1fr;text-align:center}
 .profile canvas{margin:auto}
@@ -54,3 +60,21 @@ html[data-theme="light"] input:focus,html[data-theme="light"] select:focus{borde
 html[data-theme="light"] .balances div,html[data-theme="light"] .list>div,html[data-theme="light"] #lastBooking{background:#f8fafc}
 html[data-theme="light"] .account-quick-actions a:first-child,html[data-theme="light"] button{color:#fff;background:#0b7285}
 .account-header>a{display:inline-flex;align-items:center;gap:6px}.account-header>a svg{fill:none;stroke:currentColor}
+.account-card:has(#whatsappMarketingConsent) label { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
+.account-card #whatsappMarketingConsent { width: 18px; min-width: 18px; height: 18px; margin: 2px 0 0; }
+
+/* V9 customer account: the existing phone and booking flows use the public palette. */
+:root{--account-gold:#d8ad5b;--account-accent:#82d5d8;--account-line:rgba(198,222,222,.17)}
+body{background:#07141e;color:#f6f5ef}
+.account-header{border-bottom:1px solid var(--account-line);background:#0c1e29}
+.account-header strong{font-family:Alexandria,Tajawal,sans-serif;letter-spacing:0}
+.account-main{width:min(1120px,calc(100% - 32px));padding-block:42px 92px}
+.account-card{border:1px solid var(--account-line);border-radius:20px;background:#112832;box-shadow:0 18px 48px rgba(0,0,0,.16)}
+.account-card h1,.account-card h2{font-family:Alexandria,Tajawal,sans-serif}
+.account-card button,.account-quick-actions a{min-height:44px;border-radius:11px}
+.account-card input:not([type=checkbox]),.account-card select{min-height:48px;border-radius:11px}
+.account-quick-actions{gap:10px}.account-quick-actions a{border:1px solid var(--account-line)}
+html[data-theme="light"] body{background:#f4f5f2;color:#17292d}
+html[data-theme="light"] .account-header{background:#fff;border-color:#dbe4e2}
+html[data-theme="light"] .account-card{background:#fff;border-color:#dbe4e2;box-shadow:0 12px 36px rgba(20,47,52,.08)}
+@media(max-width:560px){.account-main{width:calc(100% - 24px);padding-block:22px 88px}.account-card{border-radius:16px}.account-quick-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.account-quick-actions a{padding-inline:5px;text-align:center}}

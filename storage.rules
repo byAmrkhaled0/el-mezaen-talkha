@@ -2,7 +2,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function canManageMedia() {
-      return request.auth != null && (request.auth.token.role == 'admin' || (request.auth.token.role == 'manager' && request.auth.token.permissions is list && request.auth.token.permissions.hasAny(['gallery', 'results', 'hairMedia', 'celebrities', 'posts', 'settings'])));
+      return request.auth != null && request.auth.token.role == 'admin';
     }
     function isValidMedia() {
       return (
@@ -13,22 +13,71 @@ service firebase.storage {
           && request.resource.contentType.matches('video/(mp4|webm)'))
       );
     }
-    function isOwnWorkerPhoto(staffId) {
+    function contentGrant(type, branchId) {
+      return request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        (request.auth.token.role in ['manager', 'cashier']
+          && request.auth.token.permissions is list
+          && request.auth.token.branchIds is list
+          && request.auth.token.branchIds.hasAny([branchId])
+          && ((type == 'gallery' && request.auth.token.permissions.hasAny(['gallery']))
+            || (type == 'result' && request.auth.token.permissions.hasAny(['results']))
+            || (type == 'hair-system' && request.auth.token.permissions.hasAny(['hairMedia']))
+            || (type == 'celebrity' && request.auth.token.permissions.hasAny(['celebrities']))
+            || (type == 'news' && request.auth.token.permissions.hasAny(['posts'])))));
+    }
+    function isOwnWorkerPhoto(staffId, fileName) {
       return request.auth != null
         && request.auth.token.role == 'worker'
         && request.auth.token.staffId == staffId
+        && fileName.matches('[A-Za-z0-9._-]+\\.(jpg|jpeg|png|webp|avif)')
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
     }
     match /public/staff/{staffId}/{fileName} {
       allow read: if true;
-      allow create, update: if canManageMedia() || isOwnWorkerPhoto(staffId);
+      allow create, update: if (canManageMedia() && isValidMedia()) || isOwnWorkerPhoto(staffId, fileName);
       allow delete: if canManageMedia();
     }
-    match /public/{allPaths=**} {
+    match /public/offers/{branchId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)')
+        && request.auth != null
+        && (request.auth.token.role == 'admin'
+          || (request.auth.token.role in ['manager', 'cashier']
+            && request.auth.token.permissions is list
+            && request.auth.token.permissions.hasAny(['offers'])
+            && request.auth.token.branchIds is list
+            && request.auth.token.branchIds.hasAny([branchId])));
+      allow delete: if request.auth != null && (request.auth.token.role == 'admin'
+        || (request.auth.token.role in ['manager', 'cashier']
+          && request.auth.token.permissions is list
+          && request.auth.token.permissions.hasAny(['offers'])
+          && request.auth.token.branchIds is list
+          && request.auth.token.branchIds.hasAny([branchId])));
+    }
+    match /public/content/{type}/{branchId}/{fileName} {
+      allow read: if true;
+      allow create, update: if contentGrant(type, branchId) && isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+      allow delete: if contentGrant(type, branchId);
+    }
+    match /public/content/{type}/{branchId}/videos/{fileName} {
+      allow read: if true;
+      allow create, update: if contentGrant(type, branchId) && isValidMedia()
+        && request.resource.contentType.matches('video/(mp4|webm)');
+      allow delete: if contentGrant(type, branchId);
+    }
+    match /public/{fileName} {
       allow read: if true;
       allow create, update: if canManageMedia() && isValidMedia();
       allow delete: if canManageMedia();
+    }
+    match /public/{folder}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if folder != 'offers' && folder != 'content' && canManageMedia() && isValidMedia();
+      allow delete: if folder != 'offers' && folder != 'content' && canManageMedia();
     }
     match /{allPaths=**} { allow read, write: if false; }
   }
