@@ -12,12 +12,12 @@ test("admin target stays above the workspace chooser and supports all branch sco
   for (const value of ["all", "mashaya", "talkha"]) assert.match(html, new RegExp(`option value="${value}"`));
   assert.match(admin, /stats\.monthlyTargetByBranch/);
   assert.match(backend, /const monthlyTargetByBranch = Object\.fromEntries/);
-  assert.match(backend, /Object\.values\(monthlyTargetByBranch\)\.reduce/);
+  assert.match(backend, /sumBranchMonthlyTargets\(monthlyTargetByBranch, dashboardBranchIds\)/);
 });
 
 test("homepage uses the requested bounded packages, services and reviews", async () => {
   const [app, html] = await Promise.all([read("src/app.js"), read("index.html")]);
-  assert.match(app, /package-mashaya-friends-250[\s\S]*package-mashaya-silver-600[\s\S]*package-mashaya-450/);
+  assert.match(app, /publicSubset\(state\.catalog\.packages, state\.branchId, \{ now, dated: true \}\)[\s\S]*\.slice\(0, 3\)/);
   assert.match(app, /const visible =[\s\S]*\.slice\(0, 3\)/);
   assert.match(app, /function renderReviews\(\)[\s\S]*\.slice\(0, 3\)/);
   assert.match(html, /href="\/packages\/"[\s\S]*عرض كل الباقات/);

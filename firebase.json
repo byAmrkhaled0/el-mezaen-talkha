@@ -41,6 +41,9 @@
     ],
     "rewrites": [
       { "source": "/favicon.ico", "destination": "/assets/icon-192.png" },
+      { "source": "/account", "destination": "/account/index.html" },
+      { "source": "/login", "destination": "/login/index.html" },
+      { "source": "/booking", "destination": "/index.html" },
       { "source": "/admin/**", "destination": "/admin/index.html" },
       { "source": "/login/**", "destination": "/login/index.html" },
       { "source": "/account/**", "destination": "/account/index.html" },

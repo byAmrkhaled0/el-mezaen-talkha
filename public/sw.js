@@ -27,6 +27,7 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const request = event.request;
   if (request.method !== "GET") return;
+  if (["localhost", "127.0.0.1"].includes(new URL(request.url).hostname)) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.hostname.includes("googleapis.com") || url.hostname.includes("cloudfunctions.net")) return;
 

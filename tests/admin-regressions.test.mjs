@@ -72,7 +72,8 @@ test("package cards open complete details and add to cart before booking", async
   assert.match(app, /function openPackageDetails/);
   assert.match(app, /class="package-phone"/);
   assert.match(app, /متابعة الحجز/);
-  assert.doesNotMatch(app, /احجز الباقة/);
+  assert.match(app, /احجز الباقة/);
+  assert.match(app, /if \(added && \["offer", "package"\]\.includes\(add\.dataset\.kind\)\) void openBooking\(add\)/);
   assert.match(html, /class="package-grid" id="packageGrid"/);
   assert.doesNotMatch(html, /class="package-grid horizontal-cards"/);
   assert.match(css, /\.package-card\{height:auto;align-self:start\}/);
@@ -91,7 +92,8 @@ test("role portals, worker attendance and worker commands are server-authorized"
   }
   assert.match(core, /validateAttendanceLocation/);
   assert.match(backend, /requireRole\(request, \["worker"\]\)/);
-  assert.match(backend, /role === "worker" \? \["attendance", "tasks"\] : ALL_PERMISSIONS/);
+  assert.match(backend, /rolePermissionValues = ROLE_CAPABILITY_CEILINGS\[role\]/);
+  assert.match(await read("functions/src/authorization.js"), /worker: \["attendance", "tasks"\]/);
   assert.match(backend, /getAttendanceDashboard[\s\S]*?requireRole\(request, \["admin", "manager", "cashier"\]\)/);
   assert.match(admin, /navigator\.geolocation\.getCurrentPosition/);
   assert.match(admin, /rescheduleBooking\(\{ id: item\.id, date: item\.bookingDate, time: item\.bookingTime, staffId/);
@@ -116,11 +118,14 @@ test("assigning a booking to a worker revalidates services, shifts and breaks se
   assert.match(backend, /rescheduleGuards/);
 });
 
-test("dashboard keeps only the compact operational metrics and exposes accessible mobile actions", async () => {
+test("dashboard preserves financial metrics, adds booking KPIs, and exposes accessible mobile actions", async () => {
   const [html, admin, css] = await Promise.all([read("admin/index.html"), read("src/admin.js"), read("src/admin.css")]);
   const summary = html.match(/class="metric-grid cashier-metrics dashboard-summary-metrics">([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.equal((summary.match(/class="metric-card/g) || []).length, 7);
-  for (const id of ["statTodayRevenue", "statTodayReceipts", "statTodayCash", "statUnpaid", "statAverageTicket", "statTodayExpenses", "statTodayNet"]) assert.match(summary, new RegExp(`id="${id}"`));
+  assert.equal((summary.match(/class="metric-card/g) || []).length, 5);
+  const financial = html.match(/class="financial-summary-grid">([\s\S]*?)<\/div>/)?.[1] || "";
+  assert.equal((financial.match(/class="metric-card/g) || []).length, 5);
+  for (const id of ["statTodayRevenue", "statTodayBookings", "statCompletedToday", "statTodayCash", "statUnpaid"]) assert.match(summary, new RegExp(`id="${id}"`));
+  for (const id of ["statUpcomingBookings", "statTodayReceipts", "statAverageTicket", "statTodayExpenses", "statTodayNet"]) assert.match(financial, new RegExp(`id="${id}"`));
   assert.match(html, /id="dashboardMonthTargetProgress"/);
   assert.match(html, /class="mobile-admin-menu"/);
   assert.match(html, /data-open-receipts/);

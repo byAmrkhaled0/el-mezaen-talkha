@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
+const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML.replaceAll('"', "&quot;").replaceAll("'", "&#39;"); };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
 
 let state = { faqs: [], lang: "ar", branch: null };

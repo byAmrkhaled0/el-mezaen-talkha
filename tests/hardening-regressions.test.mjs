@@ -33,6 +33,14 @@ test("booking creation and reschedule use request guards and transactional slot 
   assert.match(backend, /workerLeaves/);
 });
 
+test("booking resolves catalog item type from Firestore and previews coupons using submitted lines", () => {
+  assert.match(backend, /data\.type === "product" \? "product" : "service"/);
+  assert.match(backend, /priceItems\(lines, map, new Date\(\), branchId\)/);
+  assert.match(backend, /const prices = await fetchPricedItems\(lines, branchId\)/);
+  assert.match(app, /bookingSubmitting = true/);
+  assert.match(app, /couponCode: state\.coupon\?\.code \|\| null/);
+});
+
 test("package pricing revalidates every linked service against Firestore and branch scope", () => {
   assert.match(backend, /const linkedServiceIds = \[\.\.\.new Set\(/);
   assert.match(backend, /PACKAGE_SERVICE_UNAVAILABLE/);
@@ -54,7 +62,7 @@ test("POS finalization is idempotent and separates read-only printing", () => {
   assert.match(backend, /cashPosted/);
   assert.match(backend, /rewardPosted/);
   assert.match(backend, /receiptNumber: code/);
-  assert.match(admin, /طباعة \/ نسخة/);
+  assert.match(admin, /طباعة الإيصال/);
   assert.match(admin, /resetPosDraft\(\)/);
   assert.match(admin, /data-pos-choice/);
   assert.match(admin, /اختر بديلًا واحدًا من كل مجموعة داخل الباقة/);
@@ -144,12 +152,11 @@ test("workers without an explicit branch are rejected by booking and POS server 
   assert.match(backend, /if \(Array\.isArray\(item\.branchIds\) && item\.branchIds\.length\)[^\n]+\n  return false;/);
 });
 
-test("public staff and content require explicit branch scope while legacy services stay compatible", () => {
+test("public staff, content, and bookable services require explicit branch scope", () => {
   assert.match(app, /explicitlyAvailableAtBranch/);
-  assert.match(app, /const publicItemAvailableAtBranch = item => !state\.branchId \|\| Boolean\(Array\.isArray\(item\?\.branchIds\)/);
-  assert.match(app, /catalog\.staff\.filter\(item => publicItemAvailableAtBranch/);
-  assert.match(app, /catalog\.content\.filter\(item => publicItemAvailableAtBranch/);
-  assert.match(app, /const availableAtBranch = item/);
+  assert.match(app, /publicSubset\(state\.catalog\.staff, state\.branchId\)/);
+  assert.match(app, /publicSubset\(state\.catalog\.content, state\.branchId\)/);
+  assert.match(app, /const availableAtBranch = \(item, allowGlobalDrink/);
 });
 
 test("daily dashboard, range calendar, leave, no-show, low-stock and Customer 360 are wired", () => {
@@ -164,7 +171,7 @@ test("daily dashboard, range calendar, leave, no-show, low-stock and Customer 36
   assert.match(html, /data-new="workerLeaves"/);
 });
 
-test("WhatsApp campaigns, signed webhook and controls use idempotency and a kill switch", () => {
+test("WhatsApp campaigns, signed webhook and controls use idempotency and a kill switch", async () => {
   assert.match(backend, /export const previewWhatsappCampaign/);
   assert.match(backend, /whatsappCampaignsEnabled/);
   assert.match(backend, /campaignGuards/);
@@ -174,7 +181,8 @@ test("WhatsApp campaigns, signed webhook and controls use idempotency and a kill
   assert.match(backend, /CANCELLED/);
   assert.match(backend, /export const whatsappWebhook/);
   assert.match(backend, /x-hub-signature-256/);
-  assert.match(backend, /timingSafeEqual/);
+  assert.match(backend, /verifyMetaSignature/);
+  assert.match(await readFile("functions/src/marketing.js", "utf8"), /timingSafeEqual/);
   assert.match(backend, /metaMessageId/);
 });
 

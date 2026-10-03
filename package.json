@@ -14,7 +14,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs",
     "test:functions": "npm --prefix functions test",
-    "test:rules": "npx firebase-tools emulators:exec --project el-mezaen-talkha --only firestore,storage \"node --test tests/firebase-rules.emulator.mjs\"",
+    "test:rules": "npx firebase-tools emulators:exec --project demo-el-mezaen-rules --only firestore,storage \"node --test tests/firebase-rules.emulator.mjs\"",
+    "test:gate:handlers": "npx firebase-tools emulators:exec --project demo-el-mezaen-gate --only auth,firestore \"node --test tests/v6-1-production-gate.emulator.mjs\"",
     "migration:catalog:dry": "npm --prefix functions run migration:catalog:dry",
     "migration:catalog:apply": "npm --prefix functions run migration:catalog:apply --"
   },
@@ -22,12 +23,17 @@
     "@fontsource/alexandria": "^5.2.8",
     "@fontsource/tajawal": "^5.2.7",
     "@zxing/browser": "^0.1.5",
-    "firebase": "^12.2.1",
+    "firebase": "12.19.0",
     "jsbarcode": "^3.12.1",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "vite": "^7.0.6"
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.14.5"
+    }
   }
 }

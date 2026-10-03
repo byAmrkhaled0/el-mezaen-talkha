@@ -13,6 +13,7 @@ document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
 
 document.querySelectorAll("[data-book-branch]").forEach(link => {
   link.addEventListener("click", () => {
-    localStorage.setItem("mz-branch", link.dataset.bookBranch);
+    // Let the homepage reconcile the cart against the loaded catalog first.
+    sessionStorage.setItem("mz-requested-branch", link.dataset.bookBranch);
   });
 });

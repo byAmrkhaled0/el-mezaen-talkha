@@ -1,8 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
-import { browserLocalPersistence, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { isAppCheckFailure, retryAuthenticatedCall } from "./admin-session.js";
+import { browserSessionPersistence, EmailAuthProvider, initializeAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, getStorage, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const configured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
@@ -10,6 +11,8 @@ let app;
 let auth;
 let functions;
 let storage;
+let appCheck;
+let appCheckReadiness;
 const FRONTEND_VERSION = "2.0.0";
 let messagingModulePromise;
 const loadMessaging = () => messagingModulePromise ||= import("firebase/messaging");
@@ -32,17 +35,37 @@ if (configured) {
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
     if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
+    appCheck = initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
-  auth = getAuth(app);
+  // Staff identity belongs to this tab. Customer auth is initialized separately
+  // in account.js and keeps its existing local persistence.
+  auth = initializeAuth(app, { persistence: browserSessionPersistence });
   functions = getFunctions(app, "europe-west1");
   storage = getStorage(app);
-  setPersistence(auth, browserLocalPersistence);
   if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+}
+
+const isLocalPreview = () => ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname);
+function appCheckError(error) {
+  const message = isLocalPreview()
+    ? "App Check غير مصرح لهذه البيئة المحلية. أضف Debug Token إلى Firebase Console ثم أعد المحاولة."
+    : "تعذر التحقق من حماية التطبيق. أعد المحاولة بعد قليل.";
+  return Object.assign(new Error(message, { cause: error }), { code: "app-check/unavailable" });
+}
+
+export async function ensureAdminAppCheckReady(forceRefresh = false) {
+  if (!appCheck) return;
+  if (forceRefresh) appCheckReadiness = null;
+  appCheckReadiness ||= getToken(appCheck, forceRefresh).then(result => {
+    if (!result?.token) throw new Error("App Check token unavailable");
+    return true;
+  }).catch(error => { appCheckReadiness = null; throw appCheckError(error); });
+  return appCheckReadiness;
 }
 
 export async function login(email, password) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
+  await setPersistence(auth, browserSessionPersistence);
   return signInWithEmailAndPassword(auth, email, password);
 }
 
@@ -58,7 +81,18 @@ export async function currentRole(user) {
 
 export async function currentAccess(user) {
   const token = await user.getIdTokenResult(true);
-  return { role: token.claims.role || null, staffId: token.claims.staffId || null, permissions: Array.isArray(token.claims.permissions) ? token.claims.permissions : [], branchIds: Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [] };
+  await ensureAdminAppCheckReady();
+  const role = token.claims.role || null;
+  let permissions = Array.isArray(token.claims.permissions) ? token.claims.permissions : [];
+  const branchIds = Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [];
+  if (role === "cashier" || role === "manager") {
+    let grants = [];
+    try {
+      grants = (await httpsCallable(functions, "getOwnMarketingGrants", { timeout: 15000 })({})).data.grants || [];
+    } catch { /* Optional marketing access fails closed; normal operations retain their claims. */ }
+    permissions = permissions.filter(value => (role === "cashier" && ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].includes(value)) || (role === "manager" && value === "campaigns") ? grants.includes(value) : true);
+  }
+  return { role, staffId: token.claims.staffId || null, permissions, branchIds };
 }
 
 export async function logout() {
@@ -80,15 +114,19 @@ async function call(name, data = {}) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
   if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت");
   try {
-    const result = await httpsCallable(functions, name, { timeout: 30000 })(data);
+    await ensureAdminAppCheckReady();
+    const invoke = httpsCallable(functions, name, { timeout: 30000 });
+    const result = await retryAuthenticatedCall(invoke, data, auth, signOut, () => ensureAdminAppCheckReady(true));
     assertBackendCompatibility(result.data);
     return result.data;
   } catch (error) {
+    if (isAppCheckFailure(error)) throw appCheckError(error);
     const code = String(error?.code || "").replace(/^functions\//, "");
     const original = String(error?.message || "");
     if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw new Error(original, { cause: error });
     const messages = {
-      unauthenticated: "انتهت جلسة الدخول؛ سجّل الدخول مرة أخرى",
+      unauthenticated: "تعذر التحقق من طلب الإدارة. جلسة الدخول محفوظة؛ أعد المحاولة.",
+      "unauthenticated-with-valid-auth": "تعذر التحقق من طلب الإدارة رغم صلاحية جلسة الدخول؛ أعد المحاولة أو تحقق من App Check.",
       "permission-denied": original.toLowerCase().includes("app check") ? "تعذر التحقق من حماية التطبيق؛ حدّث الصفحة ثم حاول مرة أخرى" : "لا تملك صلاحية تنفيذ هذه العملية",
       "invalid-argument": "راجع البيانات المدخلة ثم حاول مرة أخرى",
       "failed-precondition": "لا يمكن تنفيذ العملية بحالتها الحالية",
@@ -117,7 +155,10 @@ async function readCall(name, data = {}) {
 }
 
 export const getDashboard = (branchId = "all") => readCall("getAdminDashboard", { branchId });
-export const getCashierSnapshot = () => readCall("getCashierSnapshot");
+export const getOwnerMobileHistory = options => readCall("getOwnerMobileHistory", options);
+export const setBranchMonthlyTarget = payload => call("setBranchMonthlyTarget", payload);
+export const getCashierSnapshot = (branchId = "all") => readCall("getCashierSnapshot", { branchId });
+export const getPosOffers = branchId => readCall("getPosOffers", { branchId });
 export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
 export const getServiceTargetsDashboard = (month, branchId = "all") => readCall("getServiceTargetsDashboard", { month, branchId });
 export const upsertServiceTarget = payload => call("upsertServiceTarget", payload);
@@ -128,20 +169,28 @@ export const secureDeleteRecord = (kind, id, reason = "") => call("adminSecureDe
 export const changeBooking = (id, action, paymentMethod, reason = "", idempotencyKey = "") => call("updateBooking", { id, action, paymentMethod, reason, idempotencyKey });
 export const rescheduleBooking = payload => call("rescheduleBooking", payload);
 export const createPosOrder = payload => call("createPosOrder", payload);
-export const getBookingCalendar = (from, to) => readCall("getBookingCalendar", { from, to });
+export const previewPosCoupon = payload => readCall("validateCoupon", payload);
+export const getBookingCalendar = (from, to, branchId = "all") => readCall("getBookingCalendar", { from, to, branchId });
 export const getCustomer360 = customerId => readCall("getCustomer360", { customerId });
 export const rotateCustomerQr = payload => call("rotateCustomerQr", payload);
-export const getCashOperations = branchId => readCall("getCashOperations", { branchId });
+export const getCashOperations = (branchId, options = {}) => readCall("getCashOperations", { branchId, includeReports: options.includeReports === true });
 export const openCashShift = payload => call("openCashShift", payload);
 export const addCashMovement = payload => call("addCashMovement", payload);
 export const closeCashShift = payload => call("closeCashShift", payload);
 export const closeBusinessDay = payload => call("closeBusinessDay", payload);
+export const getBusinessReport = payload => readCall("getBusinessReport", payload);
+export const rebuildBusinessReport = payload => call("rebuildBusinessReport", payload);
+export const getAuditEvents = payload => readCall("getAuditEvents", payload);
 export const scanCustomerCode = code => call("scanCustomerCode", { code });
 export const findCustomerByPhone = phone => call("findCustomerByPhone", { phone });
 export const adjustCustomerWallet = payload => call("adjustCustomerWallet", payload);
 export const createWhatsappCampaign = payload => call("createWhatsappCampaign", payload);
 export const previewWhatsappCampaign = payload => readCall("previewWhatsappCampaign", payload);
 export const updateWhatsappCampaignState = (campaignId, action) => call("updateWhatsappCampaignState", { campaignId, action });
+export const getWhatsappCampaignRecipients = (campaignId, cursor) => readCall("getWhatsappCampaignRecipients", { campaignId, cursor });
+export const getWhatsappCampaignStats = campaignId => readCall("getWhatsappCampaignStats", { campaignId });
+export const getWhatsappCampaignOptions = () => readCall("getWhatsappCampaignOptions");
+export const checkWhatsappMarketingRecipient = (customerId, offerId = "") => readCall("checkWhatsappMarketingRecipient", { customerId, offerId });
 export const sendWhatsappReceipt = bookingId => call("sendWhatsappReceipt", { bookingId });
 export const updateWhatsappConsent = (customerId, optedIn) => call("updateWhatsappConsent", { customerId, optedIn, source: "admin" });
 export const recordExpense = payload => call("recordExpense", payload);
@@ -165,6 +214,15 @@ export async function verifyAdminPassword(password) {
   return true;
 }
 
+export async function changeOwnPassword(currentPassword, newPassword) {
+  const user = auth?.currentUser;
+  if (!user?.email || !currentPassword || !newPassword || newPassword.length < 8) throw new Error("كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل");
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+  await updatePassword(user, newPassword);
+  try { await call("recordPasswordChange"); } catch (error) { console.warn("Password change audit deferred", error?.message); }
+  return true;
+}
+
 async function optimizeImage(file) {
   if (!globalThis.createImageBitmap || !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type)) return file;
   const bitmap = await createImageBitmap(file);
@@ -182,13 +240,21 @@ async function optimizeImage(file) {
   return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp" });
 }
 
-export async function uploadImage(file, folder = "content") {
+async function uploadMediaWithProgress(target, file, metadata, onProgress) {
+  if (!onProgress) return uploadBytes(target, file, metadata);
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(target, file, metadata);
+    task.on("state_changed", snapshot => onProgress(Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100)), reject, () => resolve(task.snapshot));
+  });
+}
+
+export async function uploadImage(file, folder = "content", onProgress = null) {
   if (!file || !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error("اختر صورة JPG أو PNG أو WebP أو AVIF بحد أقصى 10MB قبل الضغط");
   const optimized = await optimizeImage(file);
   if (optimized.size >= 5 * 1024 * 1024) throw new Error("تعذر ضغط الصورة لأقل من 5MB؛ اختر صورة أصغر");
   const safeName = optimized.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/${crypto.randomUUID()}-${safeName}`);
-  await uploadBytes(target, optimized, { contentType: optimized.type, cacheControl: "public,max-age=31536000,immutable" });
+  await uploadMediaWithProgress(target, optimized, { contentType: optimized.type, cacheControl: "public,max-age=31536000,immutable" }, onProgress);
   return getDownloadURL(target);
 }
 
@@ -205,11 +271,11 @@ export async function validateVideoFile(file) {
   return true;
 }
 
-export async function uploadVideo(file, folder = "content") {
+export async function uploadVideo(file, folder = "content", onProgress = null) {
   await validateVideoFile(file);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const target = ref(storage, `public/${folder}/videos/${crypto.randomUUID()}-${safeName}`);
-  await uploadBytes(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" });
+  await uploadMediaWithProgress(target, file, { contentType: file.type, cacheControl: "public,max-age=31536000" }, onProgress);
   return getDownloadURL(target);
 }
 

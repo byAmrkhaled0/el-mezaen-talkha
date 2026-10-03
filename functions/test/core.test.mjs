@@ -1,11 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, distanceMeters, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, validateAppointment, validateAttendanceLocation } from "../src/core.js";
+import { buildAvailableSlots, calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, distanceMeters, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, staffCanServeInterval, validateAppointment, validateAttendanceLocation } from "../src/core.js";
 import { newMashayaPackages } from "../../src/package-definitions.js";
 
 test("normalizes Egyptian mobile numbers", () => {
+  for (const input of ["01012345678", "201012345678", "+201012345678", "1012345678"]) assert.equal(normalizePhone(input), "01012345678");
   assert.equal(normalizePhone("+20 109 300 8896"), "01093008896");
+  assert.equal(normalizePhone("201093008896"), "01093008896");
+  assert.equal(normalizePhone("1093008896"), "01093008896");
   assert.throws(() => normalizePhone("123"), /INVALID_PHONE/);
+});
+
+test("released appointment lock becomes available and a replacement lock blocks its new slot", () => {
+  const staff = [{ id: "s1", branchIds: ["talkha"], active: true, available: true, shiftStart: "11:00", shiftEnd: "12:00" }];
+  const common = { staff, date: "2027-01-05", duration: 30, openingTime: "11:00", closingTime: "12:00", slotMinutes: 30, branchId: "talkha", now: new Date("2027-01-04T10:00:00Z") };
+  const oldKeys = createSlotKeys("s1", common.date, "11:00", 30, 5, "talkha");
+  assert.deepEqual(buildAvailableSlots({ ...common, lockedIds: oldKeys }), ["11:30"]);
+  const newKeys = createSlotKeys("s1", common.date, "11:30", 30, 5, "talkha");
+  assert.deepEqual(buildAvailableSlots({ ...common, lockedIds: newKeys }), ["11:00"]);
+  assert.deepEqual(buildAvailableSlots({ ...common, lockedIds: [] }), ["11:00", "11:30"]);
 });
 
 test("requires a recent administrator authentication for destructive actions", () => {
@@ -108,6 +121,26 @@ test("applies coupon limits and item scope", () => {
 test("creates non-overlapping five-minute lock keys", () => {
   assert.deepEqual(createSlotKeys("staff-1", "2026-08-01", "11:00", 15), ["staff-1_2026-08-01_1100", "staff-1_2026-08-01_1105", "staff-1_2026-08-01_1110"]);
   assert.deepEqual(createSlotKeys("staff-1", "2026-08-01", "11:00", 10, 5, "talkha"), ["talkha_staff-1_2026-08-01_1100", "talkha_staff-1_2026-08-01_1105"]);
+  assert.deepEqual(createSlotKeys("staff-1", "2026-08-01", "11:02", 5, 5, "talkha"), ["talkha_staff-1_2026-08-01_1100", "talkha_staff-1_2026-08-01_1105"]);
+  assert.ok(createSlotKeys("staff-1", "2026-08-01", "11:04", 10, 5, "talkha").includes(createSlotKeys("staff-1", "2026-08-01", "11:10", 5, 5, "talkha")[0]));
+});
+
+test("availability respects shift, breaks, leave and existing appointment locks", () => {
+  const staff = [{ id: "staff-1", active: true, available: true, branchIds: ["talkha"], workDays: [0,1,2,3,4,5,6], serviceIds: ["hair-001"], shiftStart: "11:00", shiftEnd: "13:00", breaks: ["11:30-11:45"] }];
+  const leaves = [{ staffId: "staff-1", branchId: "talkha", startTime: "12:15", endTime: "13:00" }];
+  const lockedIds = createSlotKeys("staff-1", "2027-01-05", "11:00", 30, 5, "talkha");
+  assert.equal(staffCanServeInterval(staff[0], { branchId: "talkha", day: new Date("2027-01-05T12:00:00Z").getUTCDay(), start: 11 * 60 + 45, end: 12 * 60 + 15, openingTime: "11:00", closingTime: "13:00", serviceIds: ["hair-001"], leaves }), true);
+  assert.deepEqual(buildAvailableSlots({ staff, date: "2027-01-05", duration: 30, openingTime: "11:00", closingTime: "13:00", slotMinutes: 15, branchId: "talkha", serviceIds: ["hair-001"], leaves, lockedIds, now: new Date("2027-01-04T10:00:00Z") }), ["11:45"]);
+});
+
+test("any-staff availability keeps a slot when at least one eligible worker is free", () => {
+  const staff = [
+    { id: "staff-1", active: true, available: true, branchIds: ["talkha"], workDays: [0,1,2,3,4,5,6], serviceIds: [], shiftStart: "11:00", shiftEnd: "12:00", breaks: [] },
+    { id: "staff-2", active: true, available: true, branchIds: ["talkha"], workDays: [0,1,2,3,4,5,6], serviceIds: [], shiftStart: "11:00", shiftEnd: "12:00", breaks: [] }
+  ];
+  const lockedIds = createSlotKeys("staff-1", "2027-01-05", "11:00", 30, 5, "talkha");
+  assert.deepEqual(buildAvailableSlots({ staff, date: "2027-01-05", duration: 30, openingTime: "11:00", closingTime: "11:30", slotMinutes: 15, branchId: "talkha", lockedIds, now: new Date("2027-01-04T10:00:00Z") }), ["11:00"]);
+  assert.deepEqual(buildAvailableSlots({ staff: [staff[0]], date: "2027-01-05", duration: 30, openingTime: "11:00", closingTime: "11:30", slotMinutes: 15, branchId: "talkha", lockedIds, now: new Date("2027-01-04T10:00:00Z") }), []);
 });
 
 test("attendance geofence validates distance, accuracy and configurable radius", () => {
@@ -138,6 +171,7 @@ test("rejects an item that is unavailable at the selected branch", () => {
 
 test("validates future appointment and business hours", () => {
   assert.doesNotThrow(() => validateAppointment({ date: "2027-01-02", time: "11:00", duration: 60, openingTime: "11:00", closingTime: "23:00", now: new Date("2027-01-01T10:00:00") }));
+  assert.throws(() => validateAppointment({ date: "2027-02-30", time: "11:00", duration: 60, openingTime: "11:00", closingTime: "23:00", now: new Date("2027-01-01T10:00:00") }), /INVALID_DATE/);
   assert.throws(() => validateAppointment({ date: "2027-01-02", time: "22:30", duration: 60, openingTime: "11:00", closingTime: "23:00", now: new Date("2027-01-01T10:00:00") }), /OUTSIDE/);
 });
 
@@ -148,6 +182,7 @@ test("same-day validation follows Cairo even when UTC is still on the prior even
 test("payment is idempotent and refund is negative", () => {
   assert.equal(paymentTransition({ paymentStatus: "paid", total: 200 }, "markPaid").changed, false);
   assert.equal(paymentTransition({ paymentStatus: "unpaid", total: 200 }, "markPaid", "cash").ledgerAmount, 200);
+  assert.equal(paymentTransition({ paymentStatus: "unpaid", total: 200 }, "markPaid", "card").method, "card");
   assert.equal(paymentTransition({ paymentStatus: "paid", total: 200 }, "refund", "instapay").ledgerAmount, -200);
 });
 

@@ -2,7 +2,8 @@ import "./seo-page.js";
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { videoSource } from "./media.js";
+import { safeMediaUrl, videoSource } from "./media.js";
+import { publicSubset } from "./public-branch.js";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -10,9 +11,20 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "
 async function renderHairMedia() {
   if (!config.projectId || String(config.projectId).includes("YOUR_")) return;
   const app = initializeApp(config);
-  if (globalThis.__APP_CHECK_SITE_KEY__) initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
+  if (globalThis.__APP_CHECK_SITE_KEY__) {
+    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
+  }
   const result = await httpsCallable(getFunctions(app, "europe-west1"), "getCatalog", { timeout: 20000 })();
-  const items = (result.data?.content || []).filter(item => item.active !== false && item.type === "hair-system" && item.videoUrl);
+  const branchId = localStorage.getItem("mz-branch") || "";
+  const branch = (result.data?.branches || []).find(item => item.id === branchId && item.active !== false);
+  const contact = document.querySelector('.seo-hero .hero-actions a[href^="https://wa.me/"]');
+  if (contact && branch) {
+    contact.href = `https://wa.me/${String(branch.whatsapp || branch.phone || "").replace(/\D/g, "").replace(/^0/, "2")}`;
+    contact.textContent = `واتساب ${branch.nameAr}`;
+  }
+  if (contact && !branch) { contact.href = "/#choose-branch"; contact.textContent = "اختر الفرع للتواصل"; }
+  const items = publicSubset(result.data?.content, branch?.id).filter(item => item.type === "hair-system" && item.videoUrl);
   if (!items.length) return;
   document.querySelector("#hair-videos").hidden = false;
   document.querySelector("#hairMediaGrid").innerHTML = items.slice(0, 12).map(item => {

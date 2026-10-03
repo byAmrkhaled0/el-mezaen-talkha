@@ -1,14 +1,21 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
-import { AggregateField, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { AggregateField, FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 import { getFunctions as getAdminFunctions } from "firebase-admin/functions";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
-import { calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, validateAppointment, validateAttendanceLocation } from "./core.js";
+import { ALL_PERMISSIONS, ROLE_CAPABILITY_CEILINGS, ROLE_DEFAULT_PERMISSIONS, effectivePermissions, branchAllowed, allResourceBranchesAllowed } from "./authorization.js";
+import { branchMonthlyTargetSummary, buildAvailableSlots, calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, staffCanServeInterval, sumBranchMonthlyTargets, validateAppointment, validateAttendanceLocation } from "./core.js";
+import { addDays, cairoDateKey, periodDays, reportId, reportPeriod, rollupDaily, weekStart } from "./reporting.js";
+import { CAMPAIGN_STATES, campaignBranchAllowed, campaignComponents, campaignTemplate, eligibleRecipient, offerAtBranch, shouldApplyDeliveryStatus, verifyMetaSignature } from "./marketing.js";
+import { ownerRange } from "./owner-mobile.js";
+import { canonicalManagedStoragePath, isOwnManagedStaffPhoto } from "./managed-media.js";
+import { isCurrentAdmin, replaceClaimsAndRevoke } from "./privilege-change.js";
 
 initializeApp();
 const db = getFirestore();
@@ -30,12 +37,6 @@ const whatsappWebhookOptions = { region, cors: false, memory: "256MiB", maxInsta
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "faqs", "translations", "reviews"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "workerLeaves", "offers", "coupons", "content", "faqs", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
 const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
-const ALL_PERMISSIONS = ["dashboard", "pos", "bookings", "attendance", "tasks", "revenue", "expenses", "inventory", "drinks", "payroll", "services", "packages", "offers", "coupons", "staff", "customers", "rewards", "campaigns", "reviews", "schedule", "gallery", "results", "hairMedia", "celebrities", "posts", "faqs", "settings", "activity", "users"];
-const ROLE_DEFAULT_PERMISSIONS = {
-  manager: ALL_PERMISSIONS.filter(value => !["users", "activity"].includes(value)),
-  cashier: ["dashboard", "pos", "bookings", "attendance", "tasks", "customers"],
-  worker: ["attendance", "tasks"]
-};
 const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", workerLeaves: "schedule", offers: "offers", coupons: "coupons", content: "posts", faqs: "faqs", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll", cashShifts: "pos", cashMovements: "pos", dailyClosings: "revenue" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
@@ -143,6 +144,7 @@ async function validatePackageReferences(record) {
   const snapshots = await db.getAll(...ids.map(id => db.doc(`services/${id}`)));
   const missing = snapshots.filter(snapshot => !snapshot.exists || snapshot.data()?.active === false).map(snapshot => snapshot.id);
   if (missing.length) throw new HttpsError("failed-precondition", `خدمات الباقة غير متاحة: ${missing.join(", ")}`);
+  if (snapshots.some(snapshot => branchIds.some(branchId => !Array.isArray(snapshot.data()?.branchIds) || !snapshot.data().branchIds.includes(branchId)))) throw new HttpsError("failed-precondition", "خدمات الباقة لا تتاح في جميع فروعها");
 }
 
 function requestFingerprint(request, extra = "") {
@@ -182,14 +184,15 @@ function requireRole(request, roles = ADMIN_ROLES) {
 
 function permissionsFor(request) {
   const role = requireRole(request);
-  if (role === "admin") return new Set(ALL_PERMISSIONS);
-  const claimed = Array.isArray(request.auth?.token?.permissions) ? request.auth.token.permissions : ROLE_DEFAULT_PERMISSIONS[role] || [];
-  const permitted = role === "worker" ? ["attendance", "tasks"] : ALL_PERMISSIONS;
-  return new Set(claimed.filter(value => permitted.includes(value)));
+  return effectivePermissions(role, request.auth?.token?.permissions);
 }
 
 function hasPermission(request, permission) { return permissionsFor(request).has(permission); }
-function contentPermission(type) { return type === "gallery" ? "gallery" : type === "result" ? "results" : type === "hair-system" ? "hairMedia" : type === "celebrity" ? "celebrities" : "posts"; }
+const CONTENT_PERMISSIONS = { gallery: "gallery", result: "results", "hair-system": "hairMedia", celebrity: "celebrities", news: "posts" };
+function contentPermission(type) {
+  if (!Object.hasOwn(CONTENT_PERMISSIONS, type)) throw new HttpsError("invalid-argument", "نوع المحتوى غير صالح");
+  return CONTENT_PERMISSIONS[type];
+}
 function branchesFor(request) {
   const role = requireRole(request);
   if (role === "admin") return [];
@@ -198,13 +201,29 @@ function branchesFor(request) {
   return branches;
 }
 function canAccessBranch(request, branchId) {
-  if (request.auth?.token?.role === "admin") return true;
-  const allowed = branchesFor(request);
-  return Boolean(branchId && allowed.includes(String(branchId).toLowerCase()));
+  const role = requireRole(request);
+  return branchAllowed(role, branchesFor(request), String(branchId || "").toLowerCase());
 }
+function auditActor(request) { return { actorUid: request.auth?.uid || null, actorRole: request.auth?.token?.role || "customer", actorName: sanitizeText(request.auth?.token?.name, 80) || null }; }
 function requireBranchAccess(request, branchId) {
   if (!canAccessBranch(request, branchId)) throw new HttpsError("permission-denied", "هذا الحساب غير مصرح له بهذا الفرع");
 }
+async function requireMarketingGrant(request, capability) {
+  requirePermission(request, capability);
+  const role = request.auth.token.role;
+  if (role === "admin" || (role === "manager" && capability === "offers")) return;
+  const account = await db.doc(`users/${request.auth.uid}`).get();
+  if (!account.exists || account.data()?.role !== role || !Array.isArray(account.data()?.permissions) || !account.data().permissions.includes(capability)
+      || !Array.isArray(account.data()?.branchIds) || !branchesFor(request).every(id => account.data().branchIds.includes(id)))
+    throw new HttpsError("permission-denied", "صلاحية التسويق الاختيارية لم تُمنح لهذا الحساب");
+}
+export const getOwnMarketingGrants = onCall(adminOptions, async request => {
+  const role = requireRole(request, ["manager", "cashier"]);
+  const account = await db.doc(`users/${request.auth.uid}`).get();
+  if (!account.exists || account.data()?.role !== role || !Array.isArray(account.data()?.branchIds)
+      || !branchesFor(request).every(id => account.data().branchIds.includes(id))) return { grants: [] };
+  return { grants: ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].filter(value => account.data()?.permissions?.includes(value) && permissionsFor(request).has(value)) };
+});
 function itemInAllowedBranch(item, allowedBranches) {
   if (!allowedBranches.length) return true;
   if (item.branchId) return item.branchId === "all" || allowedBranches.includes(String(item.branchId).toLowerCase());
@@ -232,6 +251,18 @@ function requirePermission(request, permission) {
   const role = requireRole(request);
   if (role !== "admin" && !permissionsFor(request).has(permission)) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   return role;
+}
+
+async function requireLiveAdmin(request) {
+  requireRole(request, ["admin"]);
+  const { getAuth } = await import("firebase-admin/auth");
+  try {
+    if (!await isCurrentAdmin(getAuth(), request.auth.uid)) throw new HttpsError("permission-denied", "صلاحيات الحساب تغيرت؛ سجّل الدخول من جديد");
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error("Current admin authorization failed", { code: error.code });
+    throw new HttpsError("unavailable", "تعذر التحقق من صلاحيات الحساب الحالية");
+  }
 }
 
 function claimedStaffId(request) {
@@ -290,8 +321,8 @@ async function applyRewards(transaction, { booking, customerRef, settings, now, 
   const factor = reverse ? -1 : 1;
   const transactionRef = db.doc(`walletTransactions/${booking.code}_${reverse ? "reversal" : "earned"}`);
   transaction.set(customerRef, { pointsBalance: FieldValue.increment(points * factor - redeemPoints), cashbackBalance: FieldValue.increment(cashback * factor - redeemCashback), walletUpdatedAt: now }, { merge: true });
-  transaction.create(transactionRef, { customerId: customerRef.id, bookingId: booking.code, type: reverse ? "REFUND_REVERSAL" : "REWARDS_EARNED", points: points * factor, cashback: cashback * factor, createdAt: now });
-  if (!reverse && (redeemPoints || redeemCashback)) transaction.create(db.doc(`walletTransactions/${booking.code}_redeemed`), { customerId: customerRef.id, bookingId: booking.code, type: "WALLET_REDEEMED", points: -redeemPoints, cashback: -redeemCashback, redemptionValue: Number(redemption.value || 0), createdAt: now });
+  transaction.create(transactionRef, { customerId: customerRef.id, bookingId: booking.code, branchId: booking.branchId, type: reverse ? "REFUND_REVERSAL" : "REWARDS_EARNED", points: points * factor, cashback: cashback * factor, createdAt: now });
+  if (!reverse && (redeemPoints || redeemCashback)) transaction.create(db.doc(`walletTransactions/${booking.code}_redeemed`), { customerId: customerRef.id, bookingId: booking.code, branchId: booking.branchId, type: "WALLET_REDEEMED", points: -redeemPoints, cashback: -redeemCashback, redemptionValue: Number(redemption.value || 0), createdAt: now });
   if (reverse) transaction.update(guardRef, { reversed: true, reversedAt: now });
   else transaction.create(guardRef, { bookingId: booking.code, customerId: customerRef.id, points, cashback, redeemedPoints: redeemPoints, redeemedCashback: redeemCashback, redemptionValue: Number(redemption?.value || 0), reversed: false, createdAt: now });
 }
@@ -304,24 +335,11 @@ function validatePayloadSize(value, maxBytes = 32 * 1024) {
 }
 
 function managedStoragePath(value) {
-  try {
-    const url = new URL(String(value || ""));
-    if (url.hostname === "firebasestorage.googleapis.com") {
-      const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
-      if (!match || decodeURIComponent(match[1]) !== getStorage().bucket().name) return "";
-      return decodeURIComponent(match[2]);
-    }
-    if (url.hostname === "storage.googleapis.com") {
-      const parts = url.pathname.split("/").filter(Boolean);
-      if (parts.shift() !== getStorage().bucket().name) return "";
-      return decodeURIComponent(parts.join("/"));
-    }
-  } catch { return ""; }
-  return "";
+  return canonicalManagedStoragePath(value, getStorage().bucket().name);
 }
 
 async function deleteManagedMedia(record, except = new Set()) {
-  const paths = [...new Set([record?.imageUrl, record?.videoUrl].map(managedStoragePath).filter(path => path && !except.has(path)))];
+  const paths = [...new Set([record?.imageUrl, record?.videoUrl, record?.beforeImageUrl, record?.afterImageUrl].map(managedStoragePath).filter(path => path && !except.has(path)))];
   await Promise.all(paths.map(path => getStorage().bucket().file(path).delete({ ignoreNotFound: true }).catch(error => console.warn("Managed media cleanup failed", { path, code: error.code }))));
 }
 
@@ -389,6 +407,26 @@ export const getPublishedReviews = onCall(publicOptions, async request => {
   return { items, nextCursor: snapshot.size > pageSize ? documents.at(-1)?.id || null : null, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 });
 
+function bookingCatalogErrorMessage(error) {
+  const code = String(error?.message || "");
+  if (code.startsWith("PACKAGE_SERVICE_UNAVAILABLE:")) return "إحدى خدمات الباقة لم تعد متاحة في الفرع المختار";
+  const messages = {
+    INVALID_ITEMS: "عناصر الحجز غير صحيحة",
+    DUPLICATE_OR_INVALID_ITEM: "يوجد عنصر مكرر أو غير صحيح في الحجز",
+    ITEM_UNAVAILABLE: "إحدى الخدمات أو الباقات غير متاحة حاليًا",
+    ITEM_UNAVAILABLE_AT_BRANCH: "إحدى الخدمات أو الباقات غير متاحة في الفرع المختار",
+    INVALID_ITEM_TYPE: "نوع أحد عناصر الحجز غير صحيح",
+    ITEM_NOT_STARTED: "أحد العروض لم يبدأ بعد",
+    ITEM_EXPIRED: "أحد العروض انتهى",
+    INVALID_SERVER_PRICE: "تعذر التحقق من سعر أحد العناصر",
+    PACKAGE_CHOICE_REQUIRED: "اختر البديل المطلوب داخل الباقة",
+    INVALID_PACKAGE_CHOICE_GROUP: "اختيارات الباقة غير صحيحة",
+    UNEXPECTED_PACKAGE_CHOICES: "اختيارات الباقة غير متوقعة",
+    TOO_MANY_LINKED_SERVICES: "تعذر التحقق من الباقة حاليًا"
+  };
+  return messages[code] || "تعذر التحقق من الخدمات والباقات المختارة";
+}
+
 async function fetchPricedItems(lines, branchId = "") {
   const refs = lines.map(line => {
     const collection = line.kind === "package" ? "packages" : line.kind === "offer" ? "offers" : "services";
@@ -399,7 +437,8 @@ async function fetchPricedItems(lines, branchId = "") {
     if (!item.exists) return [];
     const requestedKind = lines[index].kind;
     const data = item.data();
-    return [[item.id, { ...data, id: item.id, kind: requestedKind === "product" ? "product" : requestedKind }]];
+    const actualKind = requestedKind === "package" ? "package" : requestedKind === "offer" ? "offer" : data.type === "product" ? "product" : "service";
+    return [[item.id, { ...data, id: item.id, kind: actualKind }]];
   }));
   const priced = priceItems(lines, map, new Date(), branchId);
   const linkedServiceIds = [...new Set(priced.filter(item => ["package", "offer"].includes(item.kind)).flatMap(item => item.serviceIds || []))];
@@ -412,10 +451,56 @@ async function fetchPricedItems(lines, branchId = "") {
   const unavailable = linkedSnapshots.filter(snapshot => {
     if (!snapshot.exists || snapshot.data()?.active === false || snapshot.data()?.catalogVisible === false) return true;
     const serviceBranches = snapshot.data()?.branchIds;
-    return Boolean(branchId && Array.isArray(serviceBranches) && serviceBranches.length && !serviceBranches.includes(branchId));
+    return Boolean(branchId && (!Array.isArray(serviceBranches) || !serviceBranches.includes(branchId)));
   }).map(snapshot => snapshot.id);
   if (unavailable.length) throw new Error(`PACKAGE_SERVICE_UNAVAILABLE:${unavailable.join(",")}`);
   return priced;
+}
+
+function normalizeBookingLines(value) {
+  return Array.isArray(value) ? value.slice(0, 30).map(line => ({
+    id: sanitizeText(line?.id, 100),
+    kind: sanitizeText(line?.kind, 20),
+    qty: Math.max(1, Math.min(20, Math.floor(Number(line?.qty || 1)))),
+    option: sanitizeText(line?.option, 40),
+    choices: line?.choices && typeof line.choices === "object" && !Array.isArray(line.choices) ? Object.fromEntries(Object.entries(line.choices).slice(0, 10).map(([key, item]) => [sanitizeText(key, 40).toLowerCase(), sanitizeText(item, 40).toLowerCase()])) : {}
+  })) : [];
+}
+
+function bookingCandidateLimit(duration) {
+  return Math.max(1, Math.min(21, Math.floor(450 / Math.ceil(Math.max(5, Number(duration || 0)) / 5))));
+}
+
+async function loadBookingCandidates(branchId, requestedStaffId, duration) {
+  if (requestedStaffId === "any") {
+    const snapshot = await db.collection("staff").where("branchIds", "array-contains", branchId).where("active", "==", true).limit(50).get();
+    return snapshot.docs.map(cleanDoc)
+      .filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.includes(branchId))
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+      .slice(0, bookingCandidateLimit(duration));
+  }
+  const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
+  if (!snapshot.exists || snapshot.data()?.active === false || snapshot.data()?.available === false) return [];
+  const member = cleanDoc(snapshot);
+  return Array.isArray(member.branchIds) && member.branchIds.includes(branchId) ? [member] : [];
+}
+async function loadActiveLeaves(dateKey, branchId) {
+  const snapshots = await Promise.all([branchId, "all"].map(id => db.collection("workerLeaves").where("branchId", "==", id).where("dateKey", "==", dateKey).where("active", "==", true).limit(100).get()));
+  return snapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc));
+}
+
+function activeBookingLockIds(snapshot, branchId) {
+  const locks = new Set();
+  snapshot.docs.forEach(document => {
+    const booking = document.data() || {};
+    if (Array.isArray(booking.lockIds) && booking.lockIds.length) {
+      booking.lockIds.forEach(id => locks.add(String(id)));
+      return;
+    }
+    if (!booking.staffId || booking.staffId === "none" || !booking.bookingDate || !booking.bookingTime) return;
+    createSlotKeys(booking.staffId, booking.bookingDate, booking.bookingTime, Math.max(5, Number(booking.duration || 0)), 5, branchId).forEach(id => locks.add(id));
+  });
+  return locks;
 }
 
 function priceDrinkSnapshots(snapshots, lines, branchId) {
@@ -435,21 +520,85 @@ function priceDrinkSnapshots(snapshots, lines, branchId) {
   });
 }
 
+export const getAvailableSlots = onCall(publicOptions, async request => {
+  const data = request.data || {};
+  const branch = await readBranch(data.branchId);
+  const branchId = branch.id;
+  const bookingDate = sanitizeText(data.bookingDate, 10);
+  const excludeBookingId = sanitizeText(data.excludeBookingId, 100);
+  if (excludeBookingId) {
+    const identity = authenticatedCustomer(request);
+    const original = await db.doc(`bookings/${excludeBookingId}`).get();
+    if (!original.exists || original.data().phoneHash !== identity.customerId || original.data().branchId !== branchId || !["pending", "confirmed"].includes(original.data().status)) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك لإعادة الجدولة");
+  }
+  if (!isValidDateKey(bookingDate)) throw new HttpsError("invalid-argument", "اختر تاريخًا صحيحًا");
+  const today = businessDateParts().dateKey;
+  const maxDateValue = new Date(`${today}T12:00:00Z`);
+  maxDateValue.setUTCDate(maxDateValue.getUTCDate() + 60);
+  const maxDate = businessDateParts(maxDateValue).dateKey;
+  if (bookingDate < today || bookingDate > maxDate) throw new HttpsError("failed-precondition", "التاريخ خارج فترة الحجز المتاحة");
+
+  const rawLines = normalizeBookingLines(data.items);
+  if (!rawLines.length || rawLines.some(line => !line.id || !["service", "package", "offer", "product"].includes(line.kind))) throw new HttpsError("invalid-argument", "عناصر الحجز غير صحيحة");
+  if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
+
+  let pricedItems = [];
+  try { pricedItems = await fetchPricedItems(rawLines, branchId); }
+  catch (error) { throw new HttpsError("failed-precondition", bookingCatalogErrorMessage(error)); }
+  const appointmentItems = pricedItems.filter(item => item.staffRequired);
+  if (!appointmentItems.length) return { slots: [], productOnly: true, duration: 0, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+
+  const duration = Math.max(5, appointmentItems.reduce((sum, item) => sum + Number(item.duration || 0), 0));
+  const requestedStaffId = sanitizeText(data.staffId || "any", 80);
+  const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
+  const [settings, branchHoliday, globalHoliday] = await Promise.all([
+    readSettings(),
+    db.doc(`holidays/${branchId}_${bookingDate}`).get(),
+    db.doc(`holidays/${bookingDate}`).get()
+  ]);
+  const combinedSettings = { ...settings, ...branch };
+  if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) return { slots: [], reason: "branch_closed", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+
+  const candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
+  if (!candidates.length) return { slots: [], reason: "staff_unavailable", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+
+  const [leaves, bookingSnapshot] = await Promise.all([
+    loadActiveLeaves(bookingDate, branchId),
+    db.collection("bookings").where("branchId", "==", branchId).where("bookingDate", "==", bookingDate).where("status", "in", ["pending", "confirmed", "arrived"]).limit(500).get()
+  ]);
+  if (bookingSnapshot.size >= 500) throw new HttpsError("resource-exhausted", "تعذر حساب المواعيد المتاحة بأمان لهذا اليوم");
+  const lockedIds = activeBookingLockIds({ docs: bookingSnapshot.docs.filter(item => item.id !== excludeBookingId) }, branchId);
+  const slots = buildAvailableSlots({
+    staff: candidates,
+    date: bookingDate,
+    duration,
+    openingTime: combinedSettings.openingTime,
+    closingTime: combinedSettings.closingTime,
+    slotMinutes: combinedSettings.slotMinutes,
+    branchId,
+    serviceIds: requestedServiceIds,
+    leaves,
+    lockedIds
+  });
+  const staffBySlot = excludeBookingId ? Object.fromEntries(slots.map(time => [time, []])) : undefined;
+  if (staffBySlot) for (const member of candidates) for (const time of buildAvailableSlots({ staff: [member], date: bookingDate, duration, openingTime: combinedSettings.openingTime, closingTime: combinedSettings.closingTime, slotMinutes: combinedSettings.slotMinutes, branchId, serviceIds: requestedServiceIds, leaves, lockedIds })) if (staffBySlot[time]) staffBySlot[time].push({ id: member.id, nameAr: member.nameAr || member.id });
+  return { slots, ...(staffBySlot ? { staffBySlot } : {}), reason: slots.length ? null : "no_slots", productOnly: false, duration, candidateCount: candidates.length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+});
+
 export const validateCoupon = onCall(publicOptions, async request => {
   await enforceRateLimit(request, "coupon", 30, 10 * 60 * 1000);
   const code = sanitizeText(request.data?.code, 30).toUpperCase();
   const phone = request.data?.phone ? normalizePhone(request.data.phone) : "01000000000";
   const itemIds = Array.isArray(request.data?.itemIds) ? request.data.itemIds.map(String).slice(0, 30) : [];
-  if (!code || !itemIds.length) return { valid: false };
+  const lines = Array.isArray(request.data?.items) ? request.data.items.slice(0, 30).map(item => ({ id: sanitizeText(item?.id, 100), kind: sanitizeText(item?.kind, 20), qty: Math.max(1, Math.min(20, Math.floor(Number(item?.qty || 1)))), choices: item?.choices || {} })) : itemIds.map(id => ({ id, kind: id.startsWith("package-") ? "package" : id.startsWith("offer-") ? "offer" : id.startsWith("product-") ? "product" : "service", qty: 1 }));
+  if (!code || !lines.length || lines.some(line => !line.id || !["service", "product", "package", "offer"].includes(line.kind))) return { valid: false };
   const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  if (!branchId) return { valid: false };
   const [couponSnap, usageSnap] = await Promise.all([db.doc(`coupons/${code}`).get(), db.doc(`couponUsage/${code}_${hash(phone)}`).get()]);
   if (!couponSnap.exists) return { valid: false };
   const coupon = couponSnap.data();
-  if (branchId && Array.isArray(coupon.branchIds) && coupon.branchIds.length && !coupon.branchIds.includes(branchId)) return { valid: false };
-  const prices = await fetchPricedItems(itemIds.map(id => {
-    const prefix = id.split("-")[0];
-    return { id, kind: prefix === "package" ? "package" : prefix === "offer" ? "offer" : prefix === "product" ? "product" : "service", qty: 1 };
-  }), branchId);
+  if (branchId && (!Array.isArray(coupon.branchIds) || !coupon.branchIds.includes(branchId))) return { valid: false };
+  const prices = await fetchPricedItems(lines, branchId);
   const result = calculateCoupon(coupon, prices, { usageCount: Number(coupon.usageCount || 0), phoneUsageCount: Number(usageSnap.data()?.count || 0) });
   return result.valid ? { valid: true, code, discountType: coupon.type, discountValue: coupon.value, discountAmount: result.discountAmount, discountPercent: result.discountPercent } : { valid: false };
 });
@@ -458,23 +607,23 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const data = request.data || {};
   const branch = await readBranch(data.branchId);
   const branchId = branch.id;
+  const identity = request.auth && !request.auth.token.role ? authenticatedCustomer(request) : null;
+  let suppliedPhone;
+  try { suppliedPhone = data.customer?.phone ? normalizePhone(data.customer.phone) : null; }
+  catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+  if (identity && suppliedPhone && suppliedPhone !== identity.phone) throw new HttpsError("invalid-argument", "رقم الحجز يجب أن يطابق رقم حسابك المسجل");
   const customer = {
     firstName: sanitizeText(data.customer?.firstName, 50),
     lastName: sanitizeText(data.customer?.lastName, 50),
-    phone: normalizePhone(data.customer?.phone),
+    phone: identity?.phone || suppliedPhone,
     note: sanitizeText(data.customer?.note, 500)
   };
+  if (!customer.phone) throw new HttpsError("invalid-argument", "رقم الهاتف مطلوب");
   await enforceBookingRateLimits(request, customer.phone);
   if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
-  const rawLines = Array.isArray(data.items) ? data.items.slice(0, 30).map(line => ({
-    id: sanitizeText(line?.id, 100),
-    kind: sanitizeText(line?.kind, 20),
-    qty: Math.max(1, Math.min(20, Math.floor(Number(line?.qty || 1)))),
-    option: sanitizeText(line?.option, 40),
-    choices: line?.choices && typeof line.choices === "object" && !Array.isArray(line.choices) ? Object.fromEntries(Object.entries(line.choices).slice(0, 10).map(([key, value]) => [sanitizeText(key, 40).toLowerCase(), sanitizeText(value, 40).toLowerCase()])) : {}
-  })) : [];
+  const rawLines = normalizeBookingLines(data.items);
   if (!rawLines.length || rawLines.some(line => !line.id || !["service", "package", "offer", "product", "inventory", "drink"].includes(line.kind))) throw new HttpsError("invalid-argument", "عناصر الحجز غير صحيحة");
   if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
   const catalogLines = rawLines.filter(line => !["inventory", "drink"].includes(line.kind));
@@ -483,11 +632,11 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   let pricedItems = [];
   if (catalogLines.length) {
     try { pricedItems = await fetchPricedItems(catalogLines, branchId); }
-    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    catch (error) { throw new HttpsError("failed-precondition", bookingCatalogErrorMessage(error)); }
   }
   const appointmentItems = pricedItems.filter(item => item.staffRequired);
-  const duration = appointmentItems.reduce((sum, item) => sum + item.duration, 0);
   const productOnly = appointmentItems.length === 0;
+  const duration = productOnly ? 0 : Math.max(5, appointmentItems.reduce((sum, item) => sum + Number(item.duration || 0), 0));
   const settings = { ...await readSettings(), ...branch };
   if (!productOnly) {
     try { validateAppointment({ date: data.bookingDate, time: data.bookingTime, duration, openingTime: settings.openingTime, closingTime: settings.closingTime }); }
@@ -498,31 +647,13 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const requestedStaffId = productOnly ? "none" : sanitizeText(data.staffId || "any", 80);
   let candidates = [];
   if (!productOnly) {
-    if (requestedStaffId === "any") {
-      const maxCandidates = Math.max(1, Math.min(21, Math.floor(450 / Math.ceil(Math.max(5, duration) / 5))));
-      const snapshot = await db.collection("staff").where("active", "==", true).limit(50).get();
-      candidates = snapshot.docs.map(cleanDoc).filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.includes(branchId)).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)).slice(0, maxCandidates);
-    } else {
-      const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
-      if (snapshot.exists && snapshot.data().active !== false && snapshot.data().available !== false) candidates = [cleanDoc(snapshot)].filter(member => Array.isArray(member.branchIds) && member.branchIds.includes(branchId));
-    }
-    const leaveSnapshot = await db.collection("workerLeaves").where("dateKey", "==", data.bookingDate).where("active", "==", true).limit(100).get();
-    const leaves = leaveSnapshot.docs.map(cleanDoc).filter(item => !item.branchId || item.branchId === "all" || item.branchId === branchId);
+    candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
+    const leaves = await loadActiveLeaves(data.bookingDate, branchId);
     const day = new Date(`${data.bookingDate}T12:00:00Z`).getUTCDay();
     const appointmentStart = minutes(data.bookingTime);
     const appointmentEnd = appointmentStart + duration;
     const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
-    candidates = candidates.filter(member => {
-      if (Array.isArray(member.workDays) && !member.workDays.map(Number).includes(day)) return false;
-      if (Array.isArray(member.serviceIds) && member.serviceIds.length && !requestedServiceIds.every(id => member.serviceIds.includes(id))) return false;
-      if (appointmentStart < minutes(member.shiftStart || settings.openingTime) || appointmentEnd > minutes(member.shiftEnd || settings.closingTime)) return false;
-      if (leaves.some(leave => leave.staffId === member.id && appointmentStart < minutes(leave.endTime || "23:59") && appointmentEnd > minutes(leave.startTime || "00:00"))) return false;
-      return !(member.breaks || []).some(value => {
-        const [from, to] = String(value).split("-");
-        if (!from || !to) return false;
-        return appointmentStart < minutes(to) && appointmentEnd > minutes(from);
-      });
-    });
+    candidates = candidates.filter(member => staffCanServeInterval(member, { branchId, day, start: appointmentStart, end: appointmentEnd, openingTime: settings.openingTime, closingTime: settings.closingTime, serviceIds: requestedServiceIds, leaves }));
     if (!candidates.length) throw new HttpsError("failed-precondition", "لا يوجد عضو فريق متاح");
   }
   const code = bookingCode(branch.code);
@@ -557,14 +688,17 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         }
         throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: existingId || null });
       }
+      if (!baseReads[4].exists) {
+        const legacy = await transaction.get(db.collection("customers").where("phone", "in", [customer.phone, `2${customer.phone}`, `+2${customer.phone}`, customer.phone.slice(1)]).limit(10));
+        if (legacy.docs.some(item => item.id !== customerRef.id)) throw new HttpsError("failed-precondition", "وجدنا سجل عميل قديم لهذا الرقم يحتاج مراجعة آمنة؛ تواصل مع الفرع لربط الحساب");
+      }
       let assigned = null;
       let assignedLockRefs = [];
       if (!productOnly) {
         for (const member of candidates) {
           const keys = createSlotKeys(member.id, data.bookingDate, data.bookingTime, duration, 5, branchId);
           const refs = keys.map(key => db.doc(`appointmentLocks/${key}`));
-          const locks = [];
-          for (const ref of refs) locks.push(await transaction.get(ref));
+          const locks = refs.length ? await transaction.getAll(...refs) : [];
           if (locks.every(lock => !lock.exists)) { assigned = member; assignedLockRefs = refs; break; }
         }
         if (!assigned) throw new Error("SLOT_UNAVAILABLE");
@@ -586,7 +720,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       const drinkItems = priceDrinkSnapshots(drinkSnapshots, drinkLines, branchId);
       const allPricedItems = [...pricedItems, ...inventoryItems, ...drinkItems];
       const couponData = baseReads[2]?.exists ? baseReads[2].data() : null;
-      const coupon = couponData && (!Array.isArray(couponData.branchIds) || !couponData.branchIds.length || couponData.branchIds.includes(branchId)) ? couponData : null;
+      const coupon = couponData && Array.isArray(couponData.branchIds) && couponData.branchIds.includes(branchId) ? couponData : null;
       const couponResult = calculateCoupon(coupon, pricedItems, { usageCount: Number(coupon?.usageCount || 0), phoneUsageCount: Number(baseReads[3]?.data()?.count || 0) });
       const subtotal = allPricedItems.reduce((sum, item) => sum + item.lineTotal, 0);
       const discount = couponResult.valid ? couponResult.discountAmount : 0;
@@ -631,9 +765,10 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         updatedAt: now
       };
       transaction.create(bookingRef, record);
+      transaction.set(db.collection("activityLogs").doc(), { action: "booking-created", actorUid: request.auth?.uid || null, actorRole: "customer", branchId, entityType: "booking", entityId: code, requestId: clientRequestId || null, createdAt: now });
       transaction.create(requestGuardRef, { bookingId: code, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
       transaction.create(duplicateRef, { bookingId: code, createdAt: now, expiresAt: productOnly ? Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) : businessDateExpiry(data.bookingDate, 2) });
-      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(baseReads[4].exists ? {} : { firstVisitAt: now, firstVisitDateKey: businessDateParts().dateKey, createdAt: now }) }, { merge: true });
+      transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, ...(identity ? { authUid: identity.uid } : {}), qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(baseReads[4].exists ? {} : { firstVisitAt: now, firstVisitDateKey: businessDateParts().dateKey, createdAt: now }) }, { merge: true });
       if (assigned?.id) transaction.update(db.doc(`staff/${assigned.id}`), { bookingCount: FieldValue.increment(1), updatedAt: now });
       assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now, expiresAt: businessDateExpiry(data.bookingDate, 7) }));
       inventoryItems.forEach(item => {
@@ -655,7 +790,8 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
 });
 
 export const rescheduleBooking = onCall(adminOptions, async request => {
-  requirePermission(request, "bookings");
+  const customerIdentity = request.auth && !request.auth.token.role ? authenticatedCustomer(request) : null;
+  if (!customerIdentity) requirePermission(request, "bookings");
   const id = sanitizeText(request.data?.id, 100);
   const date = sanitizeText(request.data?.date, 10);
   const time = sanitizeText(request.data?.time, 5);
@@ -666,7 +802,9 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
   const bookingSnapshot = await bookingRef.get();
   if (!bookingSnapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
   const current = bookingSnapshot.data();
-  requireBranchAccess(request, current.branchId);
+  if (customerIdentity) {
+    if (current.phoneHash !== customerIdentity.customerId) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك");
+  } else requireBranchAccess(request, current.branchId);
   if (!['pending', 'confirmed'].includes(current.status) || current.productOnly) throw new HttpsError("failed-precondition", "هذا الحجز لا يقبل إعادة الجدولة");
   const [branch, staffSnapshot, settings, leaveSnapshot, branchHoliday, globalHoliday] = await Promise.all([
     readBranch(current.branchId),
@@ -700,8 +838,9 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
   const duplicateRef = db.doc(`bookingGuards/${hash(`${current.branchId}|${current.phone}|${date}|${time}`)}`);
   return db.runTransaction(async transaction => {
     const [guard, latest, duplicate] = await transaction.getAll(guardRef, bookingRef, duplicateRef);
+    if (!latest.exists || (customerIdentity && latest.data().phoneHash !== customerIdentity.customerId)) throw new HttpsError("not-found", "الحجز غير موجود لحسابك");
     if (guard.exists) return { ok: true, idempotent: true, bookingId: id, bookingCode: latest.data()?.code || id, date: latest.data()?.bookingDate, time: latest.data()?.bookingTime, workerId: latest.data()?.staffId, workerNameAr: latest.data()?.staffNameAr };
-    if (!latest.exists || !['pending', 'confirmed'].includes(latest.data().status)) throw new HttpsError("failed-precondition", "تغيرت حالة الحجز؛ حدّث الصفحة");
+    if (!['pending', 'confirmed'].includes(latest.data().status) || latest.data().bookingDate !== current.bookingDate || latest.data().bookingTime !== current.bookingTime || latest.data().staffId !== current.staffId) throw new HttpsError("failed-precondition", "تغير الحجز أثناء إعادة الجدولة؛ حدّث الصفحة");
     if (duplicate.exists && duplicate.data()?.bookingId !== id) throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: duplicate.data()?.bookingId });
     const lockRefs = newKeys.map(key => db.doc(`appointmentLocks/${key}`));
     const locks = lockRefs.length ? await transaction.getAll(...lockRefs) : [];
@@ -713,7 +852,7 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
     transaction.set(duplicateRef, { bookingId: id, createdAt: now, expiresAt: businessDateExpiry(date, 2) });
     transaction.update(bookingRef, { bookingDate: date, bookingTime: time, staffId, staffNameAr: staff.nameAr || staffId, staffNameEn: staff.nameEn || staff.nameAr || staffId, lockIds: newKeys, duplicateGuardId: duplicateRef.id, rescheduledAt: now, rescheduledBy: request.auth.uid, updatedAt: now });
     transaction.create(guardRef, { bookingId: id, date, time, staffId, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
-    transaction.set(db.collection("activityLogs").doc(), { action: "reschedule-booking", targetType: "booking", targetId: id, branchId: current.branchId, before: { date: current.bookingDate, time: current.bookingTime, staffId: current.staffId }, after: { date, time, staffId }, actorUid: request.auth.uid, requestId, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "reschedule-booking", targetType: "booking", targetId: id, branchId: current.branchId, before: { date: current.bookingDate, time: current.bookingTime, staffId: current.staffId }, after: { date, time, staffId }, actorUid: request.auth.uid, requestId, createdAt: now });
     return { ok: true, bookingId: id, bookingCode: current.code || id, date, time, workerId: staffId, workerNameAr: staff.nameAr || staffId };
   });
 });
@@ -738,31 +877,37 @@ export const submitReview = onCall(publicOptions, async request => {
 });
 
 export const getCustomerBooking = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
   const code = sanitizeText(request.data?.code, 40).toUpperCase();
-  let phone;
-  try { phone = normalizePhone(request.data?.phone); }
-  catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
-  await enforceRateLimit(request, "booking_lookup", 10, 15 * 60 * 1000, phone);
+  if (request.data?.phone) {
+    let supplied; try { supplied = normalizePhone(request.data.phone); } catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+    if (supplied !== identity.phone) throw new HttpsError("invalid-argument", "استخدم رقم الهاتف المرتبط بحسابك");
+  }
+  await enforceRateLimit(request, "booking_lookup", 10, 15 * 60 * 1000, identity.uid);
   if (!/^MZ-[A-Z0-9-]{6,36}$/.test(code)) throw new HttpsError("invalid-argument", "كود الحجز غير صحيح");
   const snapshot = await db.doc(`bookings/${code}`).get();
-  if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
+  if (!snapshot.exists || snapshot.data().phoneHash !== identity.customerId) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك بهذا الكود");
   const booking = cleanDoc(snapshot);
-  return { booking: { code: booking.code, branchId: booking.branchId, branchNameAr: booking.branchNameAr, branchWhatsapp: booking.branchWhatsapp, serviceNamesAr: booking.serviceNamesAr || [], staffNameAr: booking.staffNameAr, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, total: booking.total, status: booking.status, paymentStatus: booking.paymentStatus, canCancel: ["pending", "confirmed"].includes(booking.status) } };
+  return { booking: { code: booking.code, branchId: booking.branchId, branchNameAr: booking.branchNameAr, branchWhatsapp: booking.branchWhatsapp, serviceNamesAr: booking.serviceNamesAr || [], staffNameAr: booking.staffNameAr, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, subtotal: booking.subtotal, discountAmount: booking.discountAmount, couponCode: booking.couponCode, total: booking.total, status: booking.status, paymentStatus: booking.paymentStatus, canCancel: ["pending", "confirmed"].includes(booking.status) && booking.paymentStatus !== "paid" } };
 });
 
 export const cancelCustomerBooking = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
   const code = sanitizeText(request.data?.code, 40).toUpperCase();
-  let phone;
-  try { phone = normalizePhone(request.data?.phone); }
-  catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
-  await enforceRateLimit(request, "booking_cancel", 5, 60 * 60 * 1000, phone);
+  if (!/^MZ-[A-Z0-9-]{6,36}$/.test(code)) throw new HttpsError("invalid-argument", "كود الحجز غير صحيح");
+  if (request.data?.phone) {
+    let supplied; try { supplied = normalizePhone(request.data.phone); } catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
+    if (supplied !== identity.phone) throw new HttpsError("invalid-argument", "استخدم رقم الهاتف المرتبط بحسابك");
+  }
+  await enforceRateLimit(request, "booking_cancel", 5, 60 * 60 * 1000, identity.uid);
   const ref = db.doc(`bookings/${code}`);
   await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists || snapshot.data().phoneHash !== hash(phone)) throw new HttpsError("not-found", "لم نجد حجزًا مطابقًا للكود ورقم الهاتف");
+    if (!snapshot.exists || snapshot.data().phoneHash !== identity.customerId) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك بهذا الكود");
     const booking = snapshot.data();
     if (booking.status === "cancelled" && booking.cancellationSource === "customer") return;
     if (!["pending", "confirmed"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إلغاء هذا الحجز من الموقع");
+    if (booking.paymentStatus === "paid") throw new HttpsError("failed-precondition", "الحجز مدفوع؛ تواصل مع الفرع لمعالجة الاسترداد قبل الإلغاء");
     const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
     const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
     const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
@@ -774,7 +919,7 @@ export const cancelCustomerBooking = onCall(publicOptions, async request => {
     });
     transaction.update(ref, { status: "cancelled", cancellationSource: "customer", inventoryReleased: soldInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: FieldValue.serverTimestamp() });
     if (booking.phoneHash) transaction.set(db.doc(`customers/${booking.phoneHash}`), { cancellationCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    transaction.set(db.collection("activityLogs").doc(), { action: "customer-cancel-booking", targetType: "booking", targetId: code, branchId: booking.branchId, actorUid: request.auth?.uid || null, requestId: sanitizeText(request.data?.requestId, 100) || null, createdAt: FieldValue.serverTimestamp() });
+    transaction.set(db.collection("activityLogs").doc(), { action: "customer-cancel-booking", targetType: "booking", targetId: code, branchId: booking.branchId, actorUid: request.auth?.uid || null, actorRole: "customer", requestId: sanitizeText(request.data?.requestId, 100) || null, createdAt: FieldValue.serverTimestamp() });
   });
   return { ok: true };
 });
@@ -785,6 +930,13 @@ function scopedQueries(collection, allowedBranches, configure = query => query) 
     if (branchId) query = query.where("branchId", "==", branchId);
     return configure(query);
   });
+}
+function scopedArrayQueries(collection, allowedBranches, configure = query => query) {
+  return (allowedBranches.length ? allowedBranches : [null]).map(branchId => configure(branchId ? db.collection(collection).where("branchIds", "array-contains", branchId) : db.collection(collection)));
+}
+async function scopedRows(queries) {
+  const snapshots = await Promise.all(queries.map(query => query.get()));
+  return [...new Map(snapshots.flatMap(snapshot => snapshot.docs.map(document => [document.id, cleanDoc(document)]))).values()];
 }
 
 async function aggregateScoped(collection, allowedBranches, configure = query => query, fields = {}, includeCount = true) {
@@ -797,6 +949,78 @@ async function aggregateScoped(collection, allowedBranches, configure = query =>
     return total;
   }, includeCount ? { count: 0 } : {});
 }
+
+// Mobile history uses the same canonical ledgers as Dashboard and reports.
+// Page rows never contribute to totals. Each branch query is bounded to 20.
+export const getOwnerMobileHistory = onCall(adminOptions, async request => {
+  requireRole(request, ["admin"]);
+  const kind = sanitizeText(request.data?.kind, 12);
+  if (!["sales", "expenses"].includes(kind)) throw new HttpsError("invalid-argument", "اختر سجلًا صحيحًا");
+  const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (!["all", "talkha", "mashaya"].includes(requestedBranch)) throw new HttpsError("invalid-argument", "فرع غير صالح");
+  const branches = requestedBranch === "all" ? ["talkha", "mashaya"] : [requestedBranch];
+  let period;
+  try { period = ownerRange(sanitizeText(request.data?.period || "month", 20), new Date(), sanitizeText(request.data?.from, 10), sanitizeText(request.data?.to, 10)); }
+  catch { throw new HttpsError("invalid-argument", "نطاق التاريخ غير صحيح"); }
+  const cursor = request.data?.cursor;
+  if (cursor && (!/^\d{4}-\d{2}-\d{2}$/.test(cursor.dateKey || "") || !/^[A-Za-z0-9_-]{1,100}$/.test(cursor.id || ""))) throw new HttpsError("invalid-argument", "مؤشر الصفحة غير صالح");
+  const category = sanitizeText(request.data?.category || "all", 30);
+  const categories = ["inventory", "electricity", "water", "rent", "maintenance", "tools", "salary", "marketing", "other"];
+  if (kind === "expenses" && !["all", ...categories].includes(category)) throw new HttpsError("invalid-argument", "تصنيف غير صالح");
+  const filters = kind === "sales" ? {
+    staffId: sanitizeText(request.data?.staffId || "all", 100),
+    paymentMethod: sanitizeText(request.data?.paymentMethod || "all", 40),
+    source: sanitizeText(request.data?.source || "all", 30),
+    type: sanitizeText(request.data?.type || "all", 20),
+    bookingCode: sanitizeText(request.data?.bookingCode || "", 100)
+  } : {};
+  if (kind === "sales" && (!/^(all|cash|card|vodafone_cash|instapay|other)$/.test(filters.paymentMethod)
+    || !/^(all|pos|website)$/.test(filters.source) || !/^(all|payment|refund)$/.test(filters.type)
+    || !/^(all|[A-Za-z0-9_-]{1,100})$/.test(filters.staffId)
+    || (filters.bookingCode && !/^[A-Za-z0-9_-]{1,100}$/.test(filters.bookingCode))))
+    throw new HttpsError("invalid-argument", "فلتر المبيعات غير صالح");
+  const collection = kind === "sales" ? "revenueLedger" : "expenses";
+  const configure = (query, branchId) => {
+    query = query.where("branchId", "==", branchId);
+    if (period.from) query = query.where("dateKey", ">=", period.from);
+    query = query.where("dateKey", "<=", period.to);
+    if (kind === "expenses" && category !== "all") query = query.where("category", "==", category);
+    if (kind === "sales") for (const [field, value] of Object.entries(filters)) {
+      if (value && value !== "all") query = query.where(field, "==", value);
+    }
+    return query;
+  };
+  const [pages, summaries] = await Promise.all([
+    Promise.all(branches.map(id => {
+      let query = configure(db.collection(collection), id).orderBy("dateKey", "desc").orderBy(FieldPath.documentId(), "desc");
+      if (cursor) query = query.startAfter(cursor.dateKey, cursor.id);
+      return query.limit(21).get();
+    })),
+    Promise.all(branches.map(id => configure(db.collection(collection), id).orderBy("dateKey", "desc").aggregate({ count: AggregateField.count(), amount: AggregateField.sum("amount") }).get()))
+  ]);
+  const rows = pages.flatMap(page => page.docs.map(cleanDoc)).sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)) || b.id.localeCompare(a.id));
+  const pageRows = rows.slice(0, 20);
+  const bookingRefs = kind === "sales" ? [...new Set(pageRows.map(row => row.bookingId).filter(id => /^[A-Za-z0-9_-]{1,100}$/.test(id)))].map(id => db.doc(`bookings/${id}`)) : [];
+  const bookings = new Map((bookingRefs.length ? await db.getAll(...bookingRefs) : []).filter(snapshot => snapshot.exists).map(snapshot => [snapshot.id, snapshot.data()]));
+  const items = pageRows.map(item => kind === "sales"
+    ? { id: item.id, bookingCode: item.bookingCode || item.bookingId || "", customerName: bookings.get(item.bookingId)?.customerName || "", itemNames: bookings.get(item.bookingId)?.serviceNamesAr || [], amount: item.amount, paymentMethod: item.paymentMethod, source: item.source || "", type: item.type, staffId: item.staffId || "", dateKey: item.dateKey, createdAt: item.createdAt, branchId: item.branchId }
+    : { id: item.id, category: item.category, amount: item.amount, dateKey: item.dateKey, description: item.description || item.notes || "", branchId: item.branchId, createdAt: item.createdAt });
+  const totals = summaries.reduce((sum, snapshot) => ({ count: sum.count + Number(snapshot.data().count || 0), amount: sum.amount + Number(snapshot.data().amount || 0) }), { count: 0, amount: 0 });
+  const nextCursor = rows.length > 20 ? { dateKey: items.at(-1).dateKey, id: items.at(-1).id } : null;
+  let categoryTotals = null;
+  if (kind === "expenses") {
+    const result = await Promise.all(categories.map(async name => {
+      const parts = await Promise.all(branches.map(id => {
+        let query = db.collection("expenses").where("branchId", "==", id).where("category", "==", name);
+        if (period.from) query = query.where("dateKey", ">=", period.from);
+        return query.where("dateKey", "<=", period.to).orderBy("dateKey", "desc").aggregate({ count: AggregateField.count(), amount: AggregateField.sum("amount") }).get();
+      }));
+      return [name, parts.reduce((sum, snap) => ({ count: sum.count + Number(snap.data().count || 0), amount: sum.amount + Number(snap.data().amount || 0) }), { count: 0, amount: 0 })];
+    }));
+    categoryTotals = Object.fromEntries(result);
+  }
+  return { items, totals, categoryTotals, nextCursor, period, branchId: requestedBranch };
+});
 
 async function sumCashShifts(allowedBranches, businessDate) {
   const snapshots = await Promise.all(scopedQueries("cashShifts", allowedBranches, query => query.where("businessDate", "==", businessDate)).map(query => query.get()));
@@ -830,8 +1054,10 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
   const canDailyRevenue = access.has("dashboard") || access.has("revenue") || access.has("pos");
   const canRevenue = access.has("revenue");
+  const canViewTarget = canRevenue || access.has("dashboard");
   const canExpenses = access.has("expenses");
   const claimedBranches = branchesFor(request);
+  if (request.auth.token.role !== "admin" && !claimedBranches.length) throw new HttpsError("permission-denied", "الحساب غير مرتبط بفرع");
   const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
   if (requestedBranch !== "all" && !["talkha", "mashaya"].includes(requestedBranch)) throw new HttpsError("invalid-argument", "اختر نطاق فرع صحيحًا");
   if (requestedBranch !== "all" && claimedBranches.length && !claimedBranches.includes(requestedBranch)) throw new HttpsError("permission-denied", "هذا الحساب غير مصرح له بهذا الفرع");
@@ -841,7 +1067,7 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
   const month = today.slice(0, 7);
   const nextMonth = nextMonthKey(month);
   const zero = Promise.resolve({ count: 0, amount: 0 });
-  const [bookings, ledger, expenses, allBookings, todayAll, todayPos, unpaid, paid, completed, cancelled, noShow, upcoming, revenueToday, revenueMonth, revenueTotal, expenseToday, expenseMonth, expenseTotal] = await Promise.all([
+  const [bookings, ledger, expenses, allBookings, todayAll, todayPos, unpaid, paid, completed, cancelled, noShow, upcoming, revenueToday, revenueTotal, expenseToday, expenseMonth, expenseTotal] = await Promise.all([
     canBookings ? recentScoped("bookings", allowedBranches, 140) : [],
     canRevenue ? recentScoped("revenueLedger", allowedBranches, 80) : [],
     canExpenses ? recentScoped("expenses", allowedBranches, 80) : [],
@@ -855,28 +1081,32 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
     canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("bookingDate", "==", today).where("status", "==", "no_show")) : zero,
     canBookings ? aggregateScoped("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).where("bookingDate", ">=", today)) : zero,
     canDailyRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
-    canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
     canRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }) : zero,
     canExpenses ? aggregateScoped("expenses", allowedBranches, query => query, { amount: AggregateField.sum("amount") }) : zero
   ]);
-  const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday, branchSnapshots, branchMonthRevenue] = await Promise.all([
+  const [cashToday, openShifts, cashTotals, inventorySnapshots, newCustomersToday, branchSnapshots, branchMonthRevenue, ownerMonthPayments, ownerNewCustomers] = await Promise.all([
     canDailyRevenue ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today).where("paymentMethod", "==", "cash"), { amount: AggregateField.sum("amount") }) : zero,
     hasPermission(request, "pos") ? aggregateScoped("cashShifts", allowedBranches, query => query.where("status", "==", "OPEN")) : zero,
     hasPermission(request, "pos") ? sumCashShifts(allowedBranches, today) : zero,
     hasPermission(request, "inventory") ? Promise.all(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500)).map(query => query.get())) : [],
     canBookings ? countNewCustomers(allowedBranches, today) : 0,
-    canRevenue ? Promise.all(dashboardBranchIds.map(branchId => db.doc(`branches/${branchId}`).get())) : [],
-    canRevenue ? Promise.all(dashboardBranchIds.map(branchId => aggregateScoped("revenueLedger", [branchId], query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }))) : []
+    canViewTarget ? Promise.all(dashboardBranchIds.map(branchId => db.doc(`branches/${branchId}`).get())) : [],
+    canViewTarget ? Promise.all(dashboardBranchIds.map(branchId => aggregateScoped("revenueLedger", [branchId], query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }))) : [],
+    request.auth.token.role === "admin" ? aggregateScoped("revenueLedger", allowedBranches, query => query.where("type", "==", "payment").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`)) : zero,
+    request.auth.token.role === "admin" ? Promise.all((allowedBranches.length ? allowedBranches : [null]).map(branchId => {
+      let query = db.collection("customers").where("firstVisitDateKey", ">=", `${month}-01`).where("firstVisitDateKey", "<", `${nextMonth}-01`);
+      if (branchId) query = query.where("lastBranchId", "==", branchId);
+      return query.count().get();
+    })) : []
   ]);
   const monthlyTargetByBranch = Object.fromEntries(branchSnapshots.flatMap((snapshot, index) => {
     if (!snapshot.exists || snapshot.data().active === false) return [];
-    const target = Math.max(0, Number(snapshot.data().monthlyRevenueTarget || 0));
-    const achieved = Math.max(0, Number(branchMonthRevenue[index]?.amount || 0));
-    return [[dashboardBranchIds[index], { target, achieved, remaining: Math.max(0, target - achieved), progressPercent: target ? Math.min(100, Math.round(achieved / target * 100)) : 0 }]];
+    return [[dashboardBranchIds[index], branchMonthlyTargetSummary(snapshot.data(), month, branchMonthRevenue[index]?.amount)]];
   }));
-  const monthlyRevenueTarget = Object.values(monthlyTargetByBranch).reduce((sum, item) => sum + item.target, 0);
+  const monthlyRevenueTarget = sumBranchMonthlyTargets(monthlyTargetByBranch, dashboardBranchIds);
+  const monthRevenue = branchMonthRevenue.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const inventoryItems = inventorySnapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc));
   const lowStockCount = inventoryItems.filter(item => item.active !== false && Number(item.stockQty || 0) <= Number(item.minStock || 0)).length;
   return {
@@ -903,29 +1133,55 @@ export const getAdminDashboard = onCall(adminOptions, async request => {
       cashSalesToday: cashToday.amount,
       otherPaymentsToday: revenueToday.amount - cashToday.amount,
       expectedCash: calculateExpectedCash(cashTotals),
-      monthRevenue: revenueMonth.amount,
+      monthRevenue: canRevenue ? monthRevenue : 0,
+      ownerMonthTransactions: request.auth.token.role === "admin" ? ownerMonthPayments.count : null,
+      ownerNewCustomers: request.auth.token.role === "admin" ? ownerNewCustomers.reduce((sum, snapshot) => sum + Number(snapshot.data().count || 0), 0) : null,
+      targetMonth: month,
       monthlyRevenueTarget,
       monthlyTargetByBranch,
       totalRevenue: revenueTotal.amount,
       todayExpenses: expenseToday.amount,
       monthExpenses: expenseMonth.amount,
       totalExpenses: expenseTotal.amount,
-      monthNetProfit: revenueMonth.amount - expenseMonth.amount,
+      monthNetProfit: (canRevenue ? monthRevenue : 0) - expenseMonth.amount,
       totalNetProfit: revenueTotal.amount - expenseTotal.amount,
       lastCollected: ledger.find(item => item.type === "payment")?.amount || 0
     }
   };
 });
 
+export const setBranchMonthlyTarget = onCall(adminOptions, async request => {
+  requireRole(request, ["admin"]);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  const month = sanitizeText(request.data?.month, 7);
+  const targetAmount = Number(request.data?.targetAmount);
+  if (!["talkha", "mashaya"].includes(branchId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !Number.isFinite(targetAmount) || targetAmount < 0 || targetAmount > 1_000_000_000) throw new HttpsError("invalid-argument", "بيانات هدف الفرع غير صحيحة");
+  const branchRef = db.doc(`branches/${branchId}`);
+  const branch = await branchRef.get();
+  if (!branch.exists || branch.data()?.active === false) throw new HttpsError("not-found", "الفرع غير متاح");
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async transaction => {
+    transaction.update(branchRef, { [`monthlyRevenueTargets.${month}`]: { targetAmount, updatedAt: now, updatedBy: request.auth.uid }, updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "set-branch-monthly-target", targetType: "branch", targetId: branchId, branchId, month, targetAmount, actorUid: request.auth.uid, createdAt: now });
+  });
+  return { ok: true, branchId, month, targetAmount };
+});
+
 export const getCashierSnapshot = onCall(adminOptions, async request => {
   const access = permissionsFor(request);
   if (!["dashboard", "bookings", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية شاشة الكاشير");
   const today = businessDateParts().dateKey;
-  const allowedBranches = branchesFor(request);
+  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (branchId !== "all" && !["talkha", "mashaya"].includes(branchId)) throw new HttpsError("invalid-argument", "اختر نطاق فرع صحيحًا");
+  if (branchId !== "all") requireBranchAccess(request, branchId);
+  const allowedBranches = branchId === "all" ? branchesFor(request) : [branchId];
   const activeQueries = scopedQueries("bookings", allowedBranches, query => query.where("status", "in", ["pending", "confirmed", "arrived"]).orderBy("createdAt", "desc").limit(120));
   const todayQueries = scopedQueries("bookings", allowedBranches, query => query.where("bookingDate", "==", today).orderBy("bookingTime", "desc").limit(160));
   const recentQueries = scopedQueries("bookings", allowedBranches, query => query.orderBy("createdAt", "desc").limit(180));
-  const snapshots = await Promise.all([...activeQueries, ...todayQueries, ...recentQueries].map(query => query.get()));
+  const [snapshots, collectedToday] = await Promise.all([
+    Promise.all([...activeQueries, ...todayQueries, ...recentQueries].map(query => query.get())),
+    aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", "==", today), { amount: AggregateField.sum("amount") })
+  ]);
   const unique = new Map();
   snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
   const rows = [...unique.values()].filter(item => itemInAllowedBranch(item, allowedBranches));
@@ -944,10 +1200,27 @@ export const getCashierSnapshot = onCall(adminOptions, async request => {
       todayBookings: todayItems.filter(item => item.source !== "pos").length,
       unpaidCount: bookings.filter(item => item.paymentStatus === "unpaid").length,
       paidCount: paidToday.length,
-      todayRevenue: paidToday.reduce((sum, item) => sum + Number(item.total || 0), 0),
+      todayRevenue: collectedToday.amount,
+      ledgerTransactions: collectedToday.count,
       lastCollected: paidToday.sort((a, b) => String(b.paidAt || b.createdAt || "").localeCompare(String(a.paidAt || a.createdAt || "")))[0]?.total || 0
     }
   };
+});
+
+// POS can sell an active offer without acquiring the separate capability to
+// manage offers. The server scopes the query and returns only checkout fields.
+export const getPosOffers = onCall(adminOptions, async request => {
+  requirePermission(request, "pos");
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  if (!["talkha", "mashaya"].includes(branchId)) throw new HttpsError("invalid-argument", "حدد فرع البيع");
+  requireBranchAccess(request, branchId);
+  const snapshot = await db.collection("offers")
+    .where("branchIds", "array-contains", branchId)
+    .where("active", "==", true).limit(100).get();
+  return { items: snapshot.docs.filter(doc => offerAtBranch(doc.data(), branchId))
+    .map(doc => ({ id: doc.id, nameAr: doc.data().nameAr || "", newPrice: Number(doc.data().newPrice || 0),
+      branchIds: [branchId], active: true, status: doc.data().status || "active",
+      choiceGroups: Array.isArray(doc.data().choiceGroups) ? doc.data().choiceGroups : [] })) };
 });
 
 export const getAdminCollection = onCall(adminOptions, async request => {
@@ -956,10 +1229,16 @@ export const getAdminCollection = onCall(adminOptions, async request => {
   const allowed = [...ADMIN_COLLECTIONS, "customers", "walletTransactions", "campaigns", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
   if (!allowed.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   const permission = COLLECTION_PERMISSIONS[collection];
-  const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "customers", "drinks", "inventoryItems"].includes(collection);
+  if (["offers", "campaigns"].includes(collection) && hasPermission(request, permission)) await requireMarketingGrant(request, permission);
+  const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "drinks", "inventoryItems"].includes(collection);
   const operationsReadable = (hasPermission(request, "revenue") || hasPermission(request, "payroll")) && ["services", "staff"].includes(collection);
   const scheduleReadable = hasPermission(request, "schedule") && collection === "settings";
   const contentReadable = collection === "content" && ["gallery", "results", "hairMedia", "celebrities", "posts"].some(value => hasPermission(request, value));
+  const cashierContentGrants = collection === "content" && role === "cashier"
+    ? await db.doc(`users/${request.auth.uid}`).get().then(account => account.data()?.role === "cashier"
+      && Array.isArray(account.data()?.branchIds) && branchesFor(request).every(id => account.data().branchIds.includes(id))
+      ? account.data().permissions || [] : []) : null;
+  if (collection === "content" && role === "cashier" && !["gallery", "results", "hairMedia", "celebrities", "posts"].some(permission => cashierContentGrants.includes(permission) && hasPermission(request, permission))) throw new HttpsError("permission-denied", "لا تملك صلاحية إدارة المحتوى");
   if (role !== "admin" && permission && !hasPermission(request, permission) && !posReadable && !operationsReadable && !scheduleReadable && !contentReadable) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   if (collection === "settings") {
     const snapshot = await db.doc("settings/public").get();
@@ -967,19 +1246,29 @@ export const getAdminCollection = onCall(adminOptions, async request => {
   }
   const pageSize = Math.max(1, Math.min(200, Number(request.data?.limit || 100)));
   const cursor = sanitizeText(request.data?.cursor, 200);
-  let collectionQuery = db.collection(collection).orderBy("__name__").limit(pageSize);
-  if (cursor) collectionQuery = collectionQuery.startAfter(cursor);
-  const snapshot = await collectionQuery.get();
-  let items = snapshot.docs.map(cleanDoc);
   const allowedBranches = branchesFor(request);
-  if (role !== "admin" && collection !== "users") items = items.filter(item => itemInAllowedBranch(item, allowedBranches));
-  if (role !== "admin" && collection === "users") items = [];
+  if (role !== "admin" && ["users", "activityLogs", "settings", "translations", "branches", "categories"].includes(collection) && !posReadable) throw new HttpsError("permission-denied", "هذا القسم يتطلب صلاحية الأدمن الرئيسي");
+  // Query by the canonical branch field before returning rows; a page of global
+  // documents followed by an in-memory filter can starve or expose a branch.
+  const field = ["services", "packages", "offers", "staff", "content", "faqs", "coupons"].includes(collection) ? "branchIds" : collection === "customers" ? "lastBranchId" : "branchId";
+  const allowedContentTypes = collection === "content" && role !== "admin" ? Object.keys(CONTENT_PERMISSIONS).filter(type => hasPermission(request, CONTENT_PERMISSIONS[type]) && (!cashierContentGrants || cashierContentGrants.includes(CONTENT_PERMISSIONS[type]))) : [];
+  const queryBranches = collection === "drinks" && allowedBranches.length ? [...allowedBranches, "all"] : allowedBranches;
+  const queries = role === "admin" || collection === "categories"
+    ? [db.collection(collection).orderBy("__name__").limit(pageSize)]
+    : queryBranches.map(branchId => {
+      let query = db.collection(collection).where(field, field === "branchIds" ? "array-contains" : "==", branchId);
+      if (collection === "content") query = query.where("type", "in", allowedContentTypes);
+      return query.orderBy("__name__").limit(pageSize);
+    });
+  const snapshots = await Promise.all(queries.map(query => (cursor ? query.startAfter(cursor) : query).get()));
+  let items = [...new Map(snapshots.flatMap(snapshot => snapshot.docs.map(document => [document.id, cleanDoc(document)]))) .values()].sort((a, b) => a.id.localeCompare(b.id)).slice(0, pageSize);
+  if (role !== "admin" && collection === "customers") items = items.map(item => ({ id: item.id, firstName: item.firstName, lastName: item.lastName, phone: item.phone, lastBranchId: item.lastBranchId, whatsappOptIn: item.whatsappOptIn }));
   if ((posReadable || operationsReadable) && !hasPermission(request, permission)) {
     if (collection === "staff") items = items.map(({ baseSalary, monthlyTarget, targetBonusPercent, revenueTotal, ...item }) => item);
     if (collection === "inventoryItems") items = items.map(({ costPrice, minStock, ...item }) => item);
   }
-  if (role !== "admin" && collection === "content") items = items.filter(item => hasPermission(request, contentPermission(item.type)));
-  return { items, nextCursor: snapshot.size === pageSize ? snapshot.docs.at(-1)?.id || null : null };
+  if (role !== "admin" && collection === "content") items = items.filter(item => CONTENT_PERMISSIONS[item.type] && hasPermission(request, CONTENT_PERMISSIONS[item.type]) && (!cashierContentGrants || cashierContentGrants.includes(CONTENT_PERMISSIONS[item.type])));
+  return { items, nextCursor: snapshots.some(snapshot => snapshot.size === pageSize) ? items.at(-1)?.id || null : null };
 });
 
 function normalizeAdminPayload(collection, raw) {
@@ -989,14 +1278,14 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.updatedAt;
   ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "monthlyRevenueTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent", "latitude", "longitude", "attendanceRadiusMeters"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
   ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "cashDrawerEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
-  ["branchIds", "serviceIds", "includedServiceIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds", "includedItemsAr", "includedItemsEn", "actions", "keywords"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(/[\n،,]/).map(item => item.trim()).filter(Boolean); });
+  ["branchIds", "serviceIds", "includedServiceIds", "linkedPackageIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds", "includedItemsAr", "includedItemsEn", "actions", "keywords"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(/[\n،,]/).map(item => item.trim()).filter(Boolean); });
   if (["services", "packages", "offers", "staff", "content", "faqs"].includes(collection)) {
     payload.branchIds = [...new Set((Array.isArray(payload.branchIds) ? payload.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => ["talkha", "mashaya"].includes(value)))];
     if (!payload.branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا السجل");
   }
   if ("choiceGroups" in payload) payload.choiceGroups = normalizeChoiceGroups(payload.choiceGroups);
   if (Array.isArray(payload.workDays)) payload.workDays = payload.workDays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
-  ["startAt", "endAt"].forEach(key => { if (payload[key]) payload[key] = Timestamp.fromDate(new Date(payload[key])); else if (key in payload) payload[key] = null; });
+  ["startAt", "endAt"].forEach(key => { if (payload[key]) { const value = new Date(payload[key]); if (!Number.isFinite(value.getTime())) throw new HttpsError("invalid-argument", "تاريخ العرض غير صحيح"); payload[key] = Timestamp.fromDate(value); } else if (key in payload) payload[key] = null; });
   if (collection === "coupons") payload.code = sanitizeText(payload.code || raw.id, 30).toUpperCase();
   if (collection === "branches") {
     payload.code = sanitizeText(payload.code, 3).toUpperCase();
@@ -1018,6 +1307,27 @@ function normalizeAdminPayload(collection, raw) {
     if ("branchId" in payload) payload.branchId = sanitizeText(payload.branchId || "talkha", 40).toLowerCase();
     if ("drinkOptions" in payload) payload.drinkOptions = normalizeDrinkOptions(payload.drinkOptions);
     if (("nameAr" in payload && !payload.nameAr) || ("price" in payload && payload.price < 0) || ("branchId" in payload && !/^[a-z0-9-]{2,40}$/.test(payload.branchId))) throw new HttpsError("invalid-argument", "بيانات المشروب غير صحيحة");
+  }
+  if (collection === "offers") {
+    if (!Number.isFinite(payload.newPrice) || payload.newPrice < 0 || !Number.isFinite(payload.oldPrice) || payload.oldPrice < payload.newPrice) throw new HttpsError("invalid-argument", "سعر العرض غير صحيح");
+    if (payload.startAt && payload.endAt && payload.startAt.toMillis() >= payload.endAt.toMillis()) throw new HttpsError("invalid-argument", "نهاية العرض يجب أن تكون بعد بدايته");
+  }
+  if (collection === "content") {
+    contentPermission(payload.type);
+    payload.titleAr = sanitizeText(payload.titleAr, 160);
+    payload.bodyAr = sanitizeText(payload.bodyAr, 2000);
+    if (!payload.titleAr) throw new HttpsError("invalid-argument", "عنوان المحتوى مطلوب");
+    if ("status" in payload) {
+      if (!["draft", "published", "hidden"].includes(payload.status)) throw new HttpsError("invalid-argument", "حالة النشر غير صالحة");
+      payload.active = payload.status === "published";
+    } else if ("active" in payload) payload.status = payload.active ? "published" : "hidden";
+    if (payload.beforeImageUrl || payload.afterImageUrl) {
+      if (payload.type !== "result" || !payload.beforeImageUrl || !payload.afterImageUrl) throw new HttpsError("invalid-argument", "صور قبل وبعد مطلوبة معًا لنتيجة العمل");
+    }
+  }
+  if (collection === "settings" && "whatsappMarketingTemplates" in payload) {
+    const templates = payload.whatsappMarketingTemplates;
+    if (!Array.isArray(templates) || templates.length > 10 || templates.some(value => !campaignTemplate({ whatsappMarketingTemplates: [value] }, value?.name))) throw new HttpsError("invalid-argument", "إعدادات قوالب واتساب غير صالحة");
   }
   if (collection === "reviews") {
     if ("name" in payload) payload.name = sanitizeText(payload.name, 60);
@@ -1057,14 +1367,17 @@ export const adminUpsert = onCall(adminOptions, async request => {
   if (collection === "branches") requireRole(request, ["admin"]);
   const raw = request.data?.data || {};
   validatePayloadSize(raw);
-  requirePermission(request, collection === "content" ? contentPermission(raw.type) : COLLECTION_PERMISSIONS[collection] || "settings");
+  if (collection === "content") requireRole(request); // Type permission is checked against the existing document below.
+  else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
+  if (collection === "offers") await requireMarketingGrant(request, "offers");
   if (!ADMIN_COLLECTIONS.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   if (request.auth.token.role !== "admin") {
     const allowedBranches = branchesFor(request);
     if (raw.branchId) requireBranchAccess(request, raw.branchId);
     if (typeof raw.branchIds === "string") raw.branchIds = raw.branchIds.split(",").map(value => value.trim()).filter(Boolean);
-    if (Array.isArray(raw.branchIds)) raw.branchIds = raw.branchIds.filter(value => allowedBranches.includes(String(value).toLowerCase()));
-    if (Array.isArray(raw.branchIds) && !raw.branchIds.length && ["services", "packages", "offers", "staff", "content"].includes(collection)) raw.branchIds = allowedBranches;
+    if (["settings", "branches", "categories", "translations"].includes(collection)) throw new HttpsError("permission-denied", "هذا القسم يتطلب صلاحية الأدمن الرئيسي");
+    if (Array.isArray(raw.branchIds) && !raw.branchIds.length) throw new HttpsError("invalid-argument", "حدد نطاق الفرع صراحة");
+    if (Array.isArray(raw.branchIds) && !raw.branchIds.every(value => allowedBranches.includes(String(value).toLowerCase()))) throw new HttpsError("permission-denied", "لا يمكنك تعديل نطاق فرع آخر");
   }
   let id = sanitizeText(request.data?.id || raw.id, 100);
   if (collection === "settings") id = "public";
@@ -1081,15 +1394,51 @@ export const adminUpsert = onCall(adminOptions, async request => {
   if (!id) id = db.collection(collection).doc().id;
   const ref = db.collection(collection).doc(id);
   const before = await ref.get();
-  if (request.auth.token.role !== "admin" && before.exists && !itemInAllowedBranch(before.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
-  const payload = normalizeAdminPayload(collection, raw);
+  if (collection === "content") requirePermission(request, contentPermission(raw.type || before.data()?.type));
+  if (collection === "content" && request.auth.token.role === "cashier") await requireMarketingGrant(request, contentPermission(raw.type || before.data()?.type));
+  if (request.auth.token.role !== "admin" && before.exists && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), before.data())) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
+  if (collection === "content" && before.exists) {
+    requirePermission(request, contentPermission(before.data()?.type));
+    if (request.auth.token.role === "cashier") await requireMarketingGrant(request, contentPermission(before.data()?.type));
+  }
+  const offerBase = collection === "offers" && before.exists ? {
+    ...before.data(),
+    startAt: before.data().startAt?.toDate?.()?.toISOString() || null,
+    endAt: before.data().endAt?.toDate?.()?.toISOString() || null
+  } : {};
+  const contentBase = collection === "content" && before.exists ? before.data() : {};
+  const normalizedRaw = collection === "content" && before.exists && "active" in raw && !("status" in raw)
+    ? { ...raw, status: raw.active ? "published" : "hidden" } : raw;
+  const payload = normalizeAdminPayload(collection, { ...offerBase, ...contentBase, ...normalizedRaw });
+  if (collection === "content") {
+    // New media must be under a path constrained by both type and branch in Storage rules.
+    for (const field of ["imageUrl", "videoUrl", "beforeImageUrl", "afterImageUrl"]) {
+      const value = payload[field];
+      if (!value || value === before.data()?.[field]) continue;
+      const path = managedStoragePath(value);
+      if (!path || (request.auth.token.role !== "admin" && !payload.branchIds.some(id => path.startsWith(`public/content/${payload.type}/${id}/`))))
+        throw new HttpsError("invalid-argument", "ارفع الوسائط إلى مساحة المحتوى والفرع المصرح بهما");
+    }
+  }
+  if (collection === "offers" && payload.imageUrl && payload.imageUrl !== before.data()?.imageUrl && !managedStoragePath(payload.imageUrl)) throw new HttpsError("invalid-argument", "ارفع صورة العرض عبر مساحة التخزين المعتمدة");
+  if (request.auth.token.role !== "admin" && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), { ...(before.exists ? before.data() : {}), ...payload })) throw new HttpsError("permission-denied", "حدد فرعًا مصرحًا له بالسجل");
   if (collection === "packages") await validatePackageReferences({ ...(before.exists ? before.data() : {}), ...payload });
+  if (collection === "offers") {
+    const services = [...new Set(payload.includedServiceIds || before.data()?.includedServiceIds || [])];
+    const packages = [...new Set(payload.linkedPackageIds || before.data()?.linkedPackageIds || [])];
+    if (services.length + packages.length > 30 || [...services, ...packages].some(value => !/^[A-Za-z0-9_-]{1,100}$/.test(value))) throw new HttpsError("invalid-argument", "العناصر المرتبطة بالعرض غير صحيحة");
+    const linked = services.length + packages.length ? await db.getAll(...services.map(id => db.doc(`services/${id}`)), ...packages.map(id => db.doc(`packages/${id}`))) : [];
+    if (linked.some(document => !document.exists || document.data()?.active === false || !payload.branchIds.every(branch => document.data()?.branchIds?.includes(branch)))) throw new HttpsError("failed-precondition", "الخدمات أو الباقات المرتبطة ليست متاحة في فروع العرض");
+  }
   await ref.set({ ...payload, updatedAt: FieldValue.serverTimestamp(), ...(before.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
-  await db.collection("activityLogs").add({ action: before.exists ? "update" : "create", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  await db.collection("activityLogs").add({ ...auditActor(request), action: collection === "offers" ? (before.exists ? (payload.active === false || payload.status === "stopped" ? "offer-disabled" : "offer-updated") : "offer-created") : collection === "content" ? (before.exists ? (payload.active !== before.data()?.active ? payload.active ? "content-publish" : "content-hide" : "content-update") : "content-create") : before.exists ? "update" : "create", collection, entityId: id, type: collection === "content" ? payload.type : null, branchId: payload.branchId || before.data()?.branchId || null, branchIds: payload.branchIds || before.data()?.branchIds || [], userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) await markCatalogChanged();
   if (before.exists && ["content", "staff", "packages", "offers"].includes(collection)) {
-    const keep = new Set([payload.imageUrl, payload.videoUrl].map(managedStoragePath).filter(Boolean));
-    await deleteManagedMedia(before.data(), keep);
+    const keep = new Set([payload.imageUrl, payload.videoUrl, payload.beforeImageUrl, payload.afterImageUrl].map(managedStoragePath).filter(Boolean));
+    const activeCampaign = collection === "offers" && payload.imageUrl !== before.data()?.imageUrl
+      ? await db.collection("campaigns").where("offerId", "==", id).where("state", "in", ["QUEUED", "SENDING", "PAUSED"]).limit(1).get()
+      : null;
+    if (!activeCampaign || activeCampaign.empty) await deleteManagedMedia(before.data(), keep);
   }
   return { ok: true, id };
 });
@@ -1100,12 +1449,14 @@ export const adminDelete = onCall(adminOptions, async request => {
   const id = sanitizeText(request.data?.id, 100);
   if (!ADMIN_COLLECTIONS.includes(collection) || ["settings", "branches"].includes(collection) || !id) throw new HttpsError("invalid-argument", "طلب حذف غير صالح");
   const target = await db.collection(collection).doc(id).get();
-  if (role !== "admin" && target.exists && !itemInAllowedBranch(target.data(), branchesFor(request))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
+  if (role !== "admin" && (!target.exists || !allResourceBranchesAllowed(role, branchesFor(request), target.data()))) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   if (collection === "content") {
     requirePermission(request, contentPermission(target.data()?.type));
+    if (role === "cashier") await requireMarketingGrant(request, contentPermission(target.data()?.type));
   } else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
+  if (collection === "offers") await requireMarketingGrant(request, "offers");
   await db.collection(collection).doc(id).delete();
-  await db.collection("activityLogs").add({ action: "delete", collection, entityId: id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  await db.collection("activityLogs").add({ ...auditActor(request), action: collection === "content" ? "content-delete" : "delete", collection, entityId: id, type: collection === "content" ? target.data()?.type : null, branchId: target.data()?.branchId || null, branchIds: target.data()?.branchIds || [], userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   if ([...PUBLIC_COLLECTIONS, "drinks"].includes(collection)) await markCatalogChanged();
   if (target.exists && ["content", "staff", "packages", "offers"].includes(collection)) await deleteManagedMedia(target.data());
   return { ok: true };
@@ -1118,23 +1469,23 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   const month = sanitizeText(request.data?.month || currentMonth, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
   const nextMonth = nextMonthKey(month);
-  const [staffSnapshot, ledgerSnapshot, expensesSnapshot, inventorySnapshot, drinksSnapshot, payrollSnapshot, reviewsSnapshot] = await Promise.all([
-    db.collection("staff").limit(200).get(),
-    db.collection("revenueLedger").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get(),
-    db.collection("expenses").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get(),
-    db.collection("inventoryItems").limit(500).get(),
-    db.collection("drinks").limit(300).get(),
-    db.collection("payrollPayments").where("month", "==", month).limit(300).get(),
-    db.collection("reviews").limit(500).get()
-  ]);
   const allowedBranches = branchesFor(request);
+  const [staffRows, ledgerRows, expenseRows, inventoryRows, drinkRows, payrollRows, reviewRows] = await Promise.all([
+    scopedRows(scopedArrayQueries("staff", allowedBranches, query => query.limit(200))),
+    scopedRows(scopedQueries("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000))),
+    scopedRows(scopedQueries("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000))),
+    scopedRows(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500))),
+    scopedRows(scopedQueries("drinks", allowedBranches.length ? [...allowedBranches, "all"] : [], query => query.limit(300))),
+    access.has("payroll") ? scopedRows(scopedQueries("payrollPayments", allowedBranches, query => query.where("month", "==", month).limit(300))) : [],
+    access.has("reviews") ? scopedRows(scopedQueries("reviews", allowedBranches, query => query.limit(500))) : []
+  ]);
   const [monthRevenueAggregate, monthExpenseAggregate, productPurchaseAggregate, drinkRevenueAggregate] = await Promise.all([
     aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
     aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
     aggregateScoped("expenses", allowedBranches, query => query.where("category", "==", "inventory").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
     aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("revenueBreakdown.drinks") })
   ]);
-  const rawLedger = ledgerSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches));
+  const rawLedger = ledgerRows;
   const legacyBookingIds = [...new Set(rawLedger.filter(item => !item.revenueBreakdown).map(item => item.bookingId || item.bookingCode).filter(Boolean))].slice(0, 300);
   const legacyBookingSnapshots = legacyBookingIds.length ? await db.getAll(...legacyBookingIds.map(id => db.doc(`bookings/${id}`))) : [];
   const bookings = new Map(legacyBookingSnapshots.filter(snapshot => snapshot.exists).map(snapshot => [snapshot.id, cleanDoc(snapshot)]).filter(([, item]) => itemInAllowedBranch(item, allowedBranches)));
@@ -1143,18 +1494,18 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
     const breakdown = item.revenueBreakdown || calculateRevenueBreakdown(booking?.items || [], item.amount);
     return { ...item, revenueBreakdown: breakdown };
   });
-  const inventory = inventorySnapshot.docs.map(cleanDoc).filter(item => item.category !== "drink" && itemInAllowedBranch(item, allowedBranches)).sort((a, b) => String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
-  const drinks = drinksSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const inventory = inventoryRows.filter(item => item.category !== "drink").sort((a, b) => String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
+  const drinks = drinkRows.sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
   const inventoryById = new Map(inventory.map(item => [item.id, item]));
-  const expenses = expensesSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
-  const payrollPayments = new Map(payrollSnapshot.docs.map(snapshot => [snapshot.data().staffId, cleanDoc(snapshot)]));
-  const payroll = staffSnapshot.docs.map(snapshot => cleanDoc(snapshot)).filter(item => itemInAllowedBranch(item, allowedBranches)).map(staff => {
+  const expenses = expenseRows.filter(item => String(item.dateKey || "").startsWith(month)).map(item => ({ ...item, inventoryCategory: item.inventoryCategory || inventoryById.get(item.inventoryItemId)?.category || null })).sort((a, b) => String(b.dateKey || "").localeCompare(String(a.dateKey || "")));
+  const payrollPayments = new Map(payrollRows.map(item => [item.staffId, item]));
+  const payroll = staffRows.map(staff => {
     const revenue = ledger.reduce((sum, item) => sum + Number(item.workerBreakdown?.[staff.id] ?? (item.staffId === staff.id ? item.revenueBreakdown?.services || item.amount || 0 : 0)), 0);
     return { ...staff, ...calculatePayroll({ ...staff, revenue }), payment: payrollPayments.get(staff.id) || null };
   }).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const grossRevenue = monthRevenueAggregate.amount;
   const totalExpenses = monthExpenseAggregate.amount;
-  const reviews = reviewsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const reviews = reviewRows.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const productPurchaseCost = productPurchaseAggregate.amount;
   const drinkRevenue = drinkRevenueAggregate.amount;
   const posOnly = access.has("pos") && !access.has("inventory");
@@ -1182,14 +1533,13 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
 });
 
 export const getServiceTargetsDashboard = onCall(adminOptions, async request => {
-  requirePermission(request, "payroll");
+  if (!hasPermission(request, "payroll") && !hasPermission(request, "dashboard")) throw new HttpsError("permission-denied", "لا تملك صلاحية عرض الأهداف");
   const month = sanitizeText(request.data?.month || businessDateParts().month, 7);
   const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (branchId !== "all" && !/^[a-z0-9-]{2,40}$/.test(branchId))) throw new HttpsError("invalid-argument", "الشهر أو الفرع غير صحيح");
   if (branchId !== "all") requireBranchAccess(request, branchId);
   const allowedBranches = branchesFor(request);
-  const snapshot = await db.collection("serviceTargets").where("month", "==", month).limit(500).get();
-  const targets = snapshot.docs.map(cleanDoc)
+  const targets = (await scopedRows(scopedQueries("serviceTargets", branchId === "all" ? allowedBranches : [branchId], query => query.where("month", "==", month).limit(500))))
     .filter(item => (branchId === "all" || item.branchId === branchId) && itemInAllowedBranch(item, allowedBranches) && Number(item.targetCount || 0) > 0)
     .map(item => ({ ...item, ...calculateServiceTargetProgress(item.targetCount, item.achievedCount) }))
     .sort((a, b) => String(a.branchId || "").localeCompare(String(b.branchId || "")) || String(a.nameAr || "").localeCompare(String(b.nameAr || ""), "ar"));
@@ -1208,7 +1558,7 @@ export const upsertServiceTarget = onCall(adminOptions, async request => {
   const [branch, itemSnapshot] = await Promise.all([readBranch(branchId), db.doc(`${collection}/${itemId}`).get()]);
   if (!itemSnapshot.exists || itemSnapshot.data()?.active === false) throw new HttpsError("not-found", "الخدمة أو الباقة غير موجودة");
   const item = itemSnapshot.data();
-  if (Array.isArray(item.branchIds) && item.branchIds.length && !item.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "العنصر غير متاح في هذا الفرع");
+  if (!Array.isArray(item.branchIds) || !item.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "العنصر غير متاح في هذا الفرع");
   const id = serviceTargetDocumentId({ month, branchId, kind, itemId });
   const ref = db.doc(`serviceTargets/${id}`);
   const now = FieldValue.serverTimestamp();
@@ -1228,27 +1578,30 @@ export const upsertServiceTarget = onCall(adminOptions, async request => {
       updatedAt: now,
       updatedBy: request.auth.uid
     }, { merge: true });
-    transaction.set(db.collection("activityLogs").doc(), { action: "upsert-service-target", targetType: "serviceTarget", targetId: id, branchId, month, itemId, kind, targetCount, actorUid: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "upsert-service-target", targetType: "serviceTarget", targetId: id, branchId, month, itemId, kind, targetCount, actorUid: request.auth.uid, createdAt: now });
   });
   return { ok: true, id, ...calculateServiceTargetProgress(targetCount, 0) };
 });
 
 export const getAttendanceDashboard = onCall(adminOptions, async request => {
   requireRole(request, ["admin", "manager", "cashier"]);
-  requirePermission(request, "attendance");
+  if (request.auth.token.role === "cashier") requirePermission(request, "teamOperations");
+  else requirePermission(request, "attendance");
   const dateKey = sanitizeText(request.data?.dateKey || businessDateParts().dateKey, 10);
   const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || (requestedBranch !== "all" && !/^[a-z0-9-]{2,40}$/.test(requestedBranch))) throw new HttpsError("invalid-argument", "التاريخ أو الفرع غير صحيح");
+  if (request.auth.token.role === "cashier" && dateKey !== businessDateParts().dateKey) throw new HttpsError("permission-denied", "الكاشير يرى حالة الفريق الحالية فقط");
   if (requestedBranch !== "all") requireBranchAccess(request, requestedBranch);
   const allowedBranches = branchesFor(request);
+  if (request.auth.token.role !== "admin" && !allowedBranches.length) throw new HttpsError("permission-denied", "الحساب غير مرتبط بفرع");
   const branchIds = requestedBranch !== "all" ? [requestedBranch] : allowedBranches.length ? allowedBranches : ["talkha", "mashaya"];
-  const [attendanceSnapshots, taskSnapshots, staffSnapshot] = await Promise.all([
+  const [attendanceSnapshots, taskSnapshots, staffRows] = await Promise.all([
     Promise.all(branchIds.map(branchId => db.collection("attendanceDays").where("branchId", "==", branchId).where("dateKey", "==", dateKey).limit(300).get())),
     Promise.all(branchIds.map(branchId => db.collection("workerTasks").where("branchId", "==", branchId).limit(250).get())),
-    db.collection("staff").where("active", "==", true).limit(500).get()
+    scopedRows(scopedArrayQueries("staff", branchIds, query => query.where("active", "==", true).limit(500)))
   ]);
   const attendance = new Map(attendanceSnapshots.flatMap(snapshot => snapshot.docs).map(document => [document.id, cleanDoc(document)]));
-  const staff = staffSnapshot.docs.map(cleanDoc).filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.some(id => branchIds.includes(id)));
+  const staff = staffRows.filter(member => member.available !== false);
   const rows = staff.map(member => {
     const record = attendance.get(`${dateKey}_${member.id}`);
     return { staffId: member.id, nameAr: member.nameAr || member.id, imageUrl: member.imageUrl || "", branchIds: member.branchIds, status: record?.status || "ABSENT", attendance: record || null };
@@ -1300,14 +1653,14 @@ export const recordWorkerAttendance = onCall(adminOptions, async request => {
         locationEvidence: { ...evidence, latitude: Number(Number(request.data?.latitude).toFixed(5)), longitude: Number(Number(request.data?.longitude).toFixed(5)) },
         createdAt: now, updatedAt: now
       });
-      transaction.set(db.collection("activityLogs").doc(), { action: "worker-check-in", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, distanceMeters: evidence.distanceMeters, createdAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "worker-check-in", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, distanceMeters: evidence.distanceMeters, createdAt: now });
       return { idempotent: false, status: "PRESENT" };
     }
     if (!current.exists) throw new HttpsError("failed-precondition", "سجل الحضور غير موجود");
     if (current.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "فرع الانصراف لا يطابق فرع الحضور");
     if (current.data()?.status === "CHECKED_OUT") return { idempotent: true, status: "CHECKED_OUT" };
     transaction.update(ref, { status: "CHECKED_OUT", checkOutTime: time, checkOutAt: now, checkOutEvidence: evidence, updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "worker-check-out", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "worker-check-out", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, createdAt: now });
     return { idempotent: false, status: "CHECKED_OUT" };
   });
   return { ok: true, dateKey, branchId, ...evidence, ...result };
@@ -1318,26 +1671,26 @@ export const getWorkerWorkspace = onCall(adminOptions, async request => {
   const staffId = await linkedStaffId(request);
   if (!staffId) throw new HttpsError("failed-precondition", "حساب العامل غير مرتبط بسجل فريق العمل");
   const { dateKey, month } = businessDateParts();
-  const [staffSnapshot, attendanceSnapshot, totalSnapshot, bookingsSnapshot, tasksSnapshot, notificationsSnapshot] = await Promise.all([
-    db.doc(`staff/${staffId}`).get(),
-    db.doc(`attendanceDays/${dateKey}_${staffId}`).get(),
-    db.doc(`workerMonthlyTotals/${month}_${staffId}`).get(),
-    db.collection("bookings").where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60).get(),
-    db.collection("workerTasks").where("assigneeStaffId", "==", staffId).orderBy("createdAt", "desc").limit(80).get(),
-    db.collection("workerNotifications").where("staffId", "==", staffId).orderBy("createdAt", "desc").limit(30).get()
-  ]);
+  const staffSnapshot = await db.doc(`staff/${staffId}`).get();
   if (!staffSnapshot.exists || staffSnapshot.data()?.active === false) throw new HttpsError("permission-denied", "حساب العامل غير فعال");
   const staff = cleanDoc(staffSnapshot);
   const allowedBranches = branchesFor(request);
   if (!Array.isArray(staff.branchIds) || !staff.branchIds.some(id => allowedBranches.includes(id))) throw new HttpsError("permission-denied", "فروع الحساب لا تطابق سجل العامل");
-  const revenue = Number(totalSnapshot.data()?.revenue || 0);
+  const [attendanceSnapshot, bookings, tasks, notifications, scopedLedger] = await Promise.all([
+    db.doc(`attendanceDays/${dateKey}_${staffId}`).get(),
+    scopedRows(scopedQueries("bookings", allowedBranches, query => query.where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60))),
+    scopedRows(scopedQueries("workerTasks", allowedBranches, query => query.where("assigneeStaffId", "==", staffId).orderBy("createdAt", "desc").limit(80))),
+    scopedRows(scopedQueries("workerNotifications", allowedBranches, query => query.where("staffId", "==", staffId).orderBy("createdAt", "desc").limit(30))),
+    scopedRows(scopedQueries("revenueLedger", allowedBranches, query => query.where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonthKey(month)}-01`).limit(2000)))
+  ]);
+  const revenue = scopedLedger.reduce((sum, entry) => sum + Number(entry.workerBreakdown?.[staffId] ?? entry.amount ?? 0), 0);
   const target = Math.max(0, Number(staff.monthlyTarget || 0));
   return {
     staff,
-    attendance: attendanceSnapshot.exists ? cleanDoc(attendanceSnapshot) : null,
-    bookings: bookingsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches) && !["cancelled", "rejected"].includes(item.status)),
-    tasks: tasksSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)),
-    notifications: notificationsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, allowedBranches)),
+    attendance: attendanceSnapshot.exists && itemInAllowedBranch(attendanceSnapshot.data(), allowedBranches) ? cleanDoc(attendanceSnapshot) : null,
+    bookings: bookings.filter(item => !["cancelled", "rejected"].includes(item.status)),
+    tasks,
+    notifications,
     target: { month, target, achieved: revenue, remaining: Math.max(0, target - revenue), progressPercent: target ? Math.min(100, Math.round(revenue / target * 100)) : 0 },
     dateKey,
     _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION }
@@ -1349,9 +1702,7 @@ export const updateWorkerProfilePhoto = onCall(adminOptions, async request => {
   const staffId = await linkedStaffId(request);
   const imageUrl = sanitizeText(request.data?.imageUrl, 1200);
   if (!staffId || !imageUrl) throw new HttpsError("invalid-argument", "صورة العامل غير صحيحة");
-  let decoded = "";
-  try { decoded = decodeURIComponent(new URL(imageUrl).pathname); } catch { throw new HttpsError("invalid-argument", "رابط الصورة غير صحيح"); }
-  if (!decoded.includes(`/public/staff/${staffId}/`) && !decoded.includes(`/o/public/staff/${staffId}/`)) throw new HttpsError("permission-denied", "الصورة ليست ضمن مجلد العامل");
+  if (!isOwnManagedStaffPhoto(imageUrl, getStorage().bucket().name, staffId)) throw new HttpsError("permission-denied", "الصورة ليست ضمن مساحة تخزين العامل المعتمدة");
   const ref = db.doc(`staff/${staffId}`);
   const snapshot = await ref.get();
   if (!snapshot.exists || snapshot.data()?.active === false) throw new HttpsError("not-found", "العامل غير موجود");
@@ -1361,8 +1712,8 @@ export const updateWorkerProfilePhoto = onCall(adminOptions, async request => {
 });
 
 export const createWorkerTask = onCall(adminOptions, async request => {
-  requirePermission(request, "tasks");
-  requireRole(request, ["admin", "manager", "cashier"]);
+  const role = requireRole(request, ["admin", "manager", "cashier"]);
+  requirePermission(request, role === "cashier" ? "teamOperations" : "tasks");
   await enforceRateLimit(request, "create_worker_task", 100, 15 * 60 * 1000, request.auth.uid);
   const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
   const assigneeStaffId = sanitizeText(request.data?.staffId, 100);
@@ -1387,7 +1738,7 @@ export const createWorkerTask = onCall(adminOptions, async request => {
     if (current.exists) return;
     created = true;
     transaction.create(ref, { branchId, assigneeStaffId, assigneeNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), title, details, priority, bookingId: bookingId || null, dueAt: dueDate ? Timestamp.fromDate(dueDate) : null, status: "NEW", createdBy: request.auth.uid, createdByName: sanitizeText(request.auth.token.name || request.auth.token.email, 100), createdAt: now, updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "create-worker-task", collection: "workerTasks", entityId: taskId, staffId: assigneeStaffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "create-worker-task", collection: "workerTasks", entityId: taskId, staffId: assigneeStaffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
   });
   if (created) {
     await db.doc(`workerNotifications/task_${taskId}`).set({ staffId: assigneeStaffId, branchId, type: "task", entityId: taskId, title: "مهمة جديدة", body: title, read: false, createdAt: FieldValue.serverTimestamp() });
@@ -1402,24 +1753,27 @@ export const updateWorkerTask = onCall(adminOptions, async request => {
   const status = sanitizeText(request.data?.status, 30).toUpperCase();
   if (!taskId || !["SEEN", "IN_PROGRESS", "DONE", "CANCELLED"].includes(status)) throw new HttpsError("invalid-argument", "حالة المهمة غير صحيحة");
   const ref = db.doc(`workerTasks/${taskId}`);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) throw new HttpsError("not-found", "المهمة غير موجودة");
-  const task = snapshot.data();
-  requireBranchAccess(request, task.branchId);
-  if (role === "worker") {
-    const staffId = await linkedStaffId(request);
-    if (!staffId || task.assigneeStaffId !== staffId || status === "CANCELLED") throw new HttpsError("permission-denied", "لا يمكنك تعديل هذه المهمة");
-  } else requirePermission(request, "tasks");
-  if (task.status === status) return { ok: true, idempotent: true, status };
-  const now = FieldValue.serverTimestamp();
-  await ref.set({ status, ...(status === "SEEN" ? { readAt: now } : {}), ...(status === "DONE" ? { completedAt: now } : {}), updatedAt: now, updatedBy: request.auth.uid }, { merge: true });
-  await db.collection("activityLogs").add({ action: "update-worker-task", collection: "workerTasks", entityId: taskId, staffId: task.assigneeStaffId, branchId: task.branchId, status, userId: request.auth.uid, createdAt: now });
-  return { ok: true, idempotent: false, status };
+  const staffId = role === "worker" ? await linkedStaffId(request) : null;
+  if (role !== "worker") requirePermission(request, role === "cashier" ? "teamOperations" : "tasks");
+  const transitions = { NEW: ["SEEN", "IN_PROGRESS", "CANCELLED"], SEEN: ["IN_PROGRESS", "CANCELLED"], IN_PROGRESS: ["DONE", "CANCELLED"], DONE: [], CANCELLED: [] };
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError("not-found", "المهمة غير موجودة");
+    const task = snapshot.data();
+    requireBranchAccess(request, task.branchId);
+    if (role === "worker" && (!staffId || task.assigneeStaffId !== staffId || status === "CANCELLED")) throw new HttpsError("permission-denied", "لا يمكنك تعديل هذه المهمة");
+    if (task.status === status) return { ok: true, idempotent: true, status };
+    if (!transitions[task.status || "NEW"]?.includes(status)) throw new HttpsError("failed-precondition", "لا يمكن الانتقال إلى هذه الحالة");
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, { status, ...(status === "SEEN" ? { readAt: now } : {}), ...(status === "DONE" ? { completedAt: now } : {}), updatedAt: now, updatedBy: request.auth.uid });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "update-worker-task", collection: "workerTasks", entityId: taskId, staffId: task.assigneeStaffId, branchId: task.branchId, status, userId: request.auth.uid, createdAt: now });
+    return { ok: true, idempotent: false, status };
+  });
 });
 
 export const notifyWorker = onCall(adminOptions, async request => {
   requireRole(request, ["admin", "manager", "cashier"]);
-  if (!hasPermission(request, "tasks") && !hasPermission(request, "bookings")) throw new HttpsError("permission-denied", "لا تملك صلاحية تنبيه العامل");
+  if (!hasPermission(request, "teamOperations") && !hasPermission(request, "tasks") && !hasPermission(request, "bookings")) throw new HttpsError("permission-denied", "لا تملك صلاحية تنبيه العامل");
   await enforceRateLimit(request, "notify_worker", 120, 15 * 60 * 1000, request.auth.uid);
   const staffId = sanitizeText(request.data?.staffId, 100);
   const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
@@ -1440,7 +1794,7 @@ export const notifyWorker = onCall(adminOptions, async request => {
     created = true;
     const now = FieldValue.serverTimestamp();
     transaction.create(ref, { staffId, staffNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), branchId, bookingId: bookingId || null, type: "alert", entityId: bookingId || notificationId, title: `تنبيه ${sanitizeText(staffSnapshot.data()?.nameAr, 80)}`, body: message, read: false, createdBy: request.auth.uid, createdAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "notify-worker", collection: "workerNotifications", entityId: notificationId, staffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "notify-worker", collection: "workerNotifications", entityId: notificationId, staffId, branchId, bookingId: bookingId || null, userId: request.auth.uid, createdAt: now });
   });
   const delivery = created ? await sendWorkerPush(staffId, { title: `تنبيه ${sanitizeText(staffSnapshot.data()?.nameAr, 80)}`, body: message, type: "worker_alert", entityId: bookingId || notificationId }) : { attempted: 0, sent: 0 };
   return { ok: true, notificationId, idempotent: !created, delivery };
@@ -1455,6 +1809,23 @@ function cashAmount(value, label = "المبلغ") {
 function requireCashPermission(request, type = "read") {
   requireRole(request);
   if (!hasPermission(request, "pos") && !hasPermission(request, "revenue") && !(type === "out" && hasPermission(request, "expenses"))) throw new HttpsError("permission-denied", "لا تملك صلاحية درج الكاش");
+}
+
+// Resolve the branch's current shift inside the financial write transaction.
+// Reading both documents makes a concurrent close/open retry this transaction;
+// a client-supplied shiftId is never used for attribution.
+async function ledgerShiftInTransaction(transaction, branchId, cashRequired = false) {
+  const state = await transaction.get(db.doc(`cashShiftState/${branchId}`));
+  if (state.data()?.status === "CLOSING") throw new HttpsError("failed-precondition", "إغلاق الوردية جارٍ؛ أعد المحاولة بعد اكتماله");
+  const shiftId = sanitizeText(state.data()?.openShiftId, 100);
+  if (!shiftId || state.data()?.status !== "OPEN") {
+    if (cashRequired) throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل العملية النقدية");
+    return null;
+  }
+  const ref = db.doc(`cashShifts/${shiftId}`);
+  const snapshot = await transaction.get(ref);
+  if (!snapshot.exists || snapshot.data()?.status !== "OPEN" || snapshot.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة لهذا الفرع");
+  return { ref, snapshot };
 }
 
 export const openCashShift = onCall(adminOptions, async request => {
@@ -1476,7 +1847,7 @@ export const openCashShift = onCall(adminOptions, async request => {
     const record = { branchId: branch.id, businessDate: dateKey, cashierUid: request.auth.uid, cashierName: request.auth.token.name || request.auth.token.email || request.auth.uid, openingCash, cashSales: 0, cashIn: 0, cashOut: 0, cashRefunds: 0, expectedCash: openingCash, status: "OPEN", openedAt: now, openedBy: request.auth.uid, createdAt: now, updatedAt: now };
     transaction.create(shiftRef, record);
     transaction.set(stateRef, { branchId: branch.id, openShiftId: shiftRef.id, businessDate: dateKey, status: "OPEN", updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "open-cash-shift", targetType: "cashShift", targetId: shiftRef.id, branchId: branch.id, amount: openingCash, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "open-cash-shift", targetType: "cashShift", targetId: shiftRef.id, branchId: branch.id, amount: openingCash, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
     return { ok: true, shiftId: shiftRef.id, shift: { id: shiftRef.id, ...record, openedAt: new Date().toISOString(), createdAt: new Date().toISOString() } };
   });
 });
@@ -1491,29 +1862,83 @@ export const addCashMovement = onCall(adminOptions, async request => {
   const reason = sanitizeText(request.data?.reason, 200);
   const category = sanitizeText(request.data?.category, 60);
   const note = sanitizeText(request.data?.note, 300);
+  const isAdvance = type === "CASH_OUT" && category === "advance";
+  const staffId = sanitizeText(request.data?.staffId, 100);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   if (!amount || !reason || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "المبلغ والسبب مطلوبان");
+  if ((isAdvance && !staffId) || (!isAdvance && staffId)) throw new HttpsError("invalid-argument", "حدد الموظف للسلفة فقط");
   const stateRef = db.doc(`cashShiftState/${branch.id}`);
   const movementRef = db.doc(`cashMovements/movement_${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
   const { dateKey } = businessDateParts();
   return db.runTransaction(async transaction => {
-    const [state, existing, closing] = await transaction.getAll(stateRef, movementRef, db.doc(`dailyClosings/${branch.id}_${dateKey}`));
+    const staffRef = isAdvance ? db.doc(`staff/${staffId}`) : null;
+    const [state, existing, closing, staff] = await transaction.getAll(stateRef, movementRef, db.doc(`dailyClosings/${branch.id}_${dateKey}`), ...(staffRef ? [staffRef] : []));
     if (existing.exists) return { ok: true, idempotent: true, movementId: movementRef.id };
+    if (isAdvance && (!staff?.exists || staff.data()?.active === false || !Array.isArray(staff.data()?.branchIds) || !staff.data().branchIds.includes(branch.id))) throw new HttpsError("failed-precondition", "الموظف غير نشط أو لا يتبع هذا الفرع");
     const shiftId = sanitizeText(state.data()?.openShiftId, 100);
     if (!shiftId || state.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "لا توجد وردية كاش مفتوحة");
     if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع");
     const shiftRef = db.doc(`cashShifts/${shiftId}`);
     const shift = await transaction.get(shiftRef);
-    if (!shift.exists || shift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
+    if (!shift.exists || shift.data().status !== "OPEN" || shift.data().branchId !== branch.id) throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة لهذا الفرع");
     const now = FieldValue.serverTimestamp();
     const incrementField = type === "CASH_IN" ? "cashIn" : "cashOut";
     const next = { ...shift.data(), [incrementField]: Number(shift.data()[incrementField] || 0) + amount };
-    transaction.create(movementRef, { type, amount, reason, category: type === "CASH_OUT" ? category || "other" : null, note, branchId: branch.id, shiftId, businessDate: dateKey, actorUid: request.auth.uid, actorName: request.auth.token.name || request.auth.token.email || request.auth.uid, createdAt: now });
+    transaction.create(movementRef, { type, amount, reason, category: type === "CASH_OUT" ? category || "other" : null, note, ...(isAdvance ? { staffId, staffNameAr: staff.data().nameAr || staffId } : {}), branchId: branch.id, shiftId, businessDate: dateKey, actorUid: request.auth.uid, actorName: request.auth.token.name || request.auth.token.email || request.auth.uid, createdAt: now });
     transaction.update(shiftRef, { [incrementField]: FieldValue.increment(amount), expectedCash: calculateExpectedCash(next), updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: type === "CASH_IN" ? "cash-in" : "cash-out", targetType: "cashMovement", targetId: movementRef.id, branchId: branch.id, amount, reason, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: isAdvance ? "employee-advance" : type === "CASH_IN" ? "cash-in" : "cash-out", targetType: "cashMovement", targetId: movementRef.id, branchId: branch.id, ...(isAdvance ? { staffId } : {}), amount, reason, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
     return { ok: true, movementId: movementRef.id, expectedCash: calculateExpectedCash(next) };
   });
 });
+
+// The same ledger attribution powers the live snapshot and the immutable close
+// report. Direct shiftId is authoritative; the time window is legacy-only.
+async function summarizeShiftFinance(branchId, shiftId, since, cutoff) {
+  const scope = [branchId];
+  const windowQuery = query => query.where("createdAt", ">=", since).where("createdAt", "<=", cutoff);
+  const methods = [null, "cash", "card", "vodafone_cash", "instapay", "other", "refund"];
+  const summary = method => aggregateScoped("revenueLedger", scope, query => {
+    let selected = query.where("shiftId", "==", shiftId);
+    if (method === "refund") selected = selected.where("type", "==", "refund");
+    else if (method) selected = selected.where("paymentMethod", "==", method);
+    return selected;
+  }, { amount: AggregateField.sum("amount") });
+  const [direct, legacyRows, directExpenses, legacyExpenses, advances] = await Promise.all([
+    Promise.all(methods.map(summary)),
+    windowQuery(db.collection("revenueLedger").where("branchId", "==", branchId))
+      .orderBy("createdAt", "desc").select("shiftId", "type", "amount", "paymentMethod").get(),
+    aggregateScoped("expenses", scope, query => query.where("shiftId", "==", shiftId), { amount: AggregateField.sum("amount") }),
+    windowQuery(db.collection("expenses").where("branchId", "==", branchId))
+      .orderBy("createdAt", "desc").select("shiftId", "amount").get(),
+    aggregateScoped("cashMovements", scope, query => query.where("shiftId", "==", shiftId).where("category", "==", "advance"), { amount: AggregateField.sum("amount") })
+  ]);
+  const legacy = methods.map(() => ({ count: 0, amount: 0 }));
+  for (const row of legacyRows.docs) {
+    const entry = row.data();
+    if (entry.shiftId) continue;
+    for (let index = 0; index < methods.length; index++) {
+      const method = methods[index];
+      if (method === "refund" ? entry.type !== "refund" : method && entry.paymentMethod !== method) continue;
+      legacy[index].count++;
+      legacy[index].amount += Number(entry.amount || 0);
+    }
+  }
+  const amount = index => Number(direct[index].amount || 0) + legacy[index].amount;
+  const directCount = direct[0].count;
+  const legacyCount = legacy[0].count;
+  const refunds = Math.abs(amount(6));
+  const refundCount = direct[6].count + legacy[6].count;
+  const grossRevenue = amount(0) + refunds;
+  return {
+    grossRevenue, netCollected: amount(0), cash: amount(1), card: amount(2),
+    transfer: amount(3) + amount(4), other: amount(5), refunds,
+    expenses: Number(directExpenses.amount || 0) + legacyExpenses.docs.reduce((sum, row) => sum + (row.data().shiftId ? 0 : Number(row.data().amount || 0)), 0),
+    advances: Number(advances.amount || 0), transactions: directCount + legacyCount,
+    averageTicket: directCount + legacyCount - refundCount ? grossRevenue / (directCount + legacyCount - refundCount) : 0,
+    snapshotCutoff: toIso(cutoff), directShiftAttributed: directCount, legacyTimeAttributed: legacyCount,
+    attributionMode: directCount && legacyCount ? "mixed" : directCount ? "direct" : "legacy"
+  };
+}
 
 export const closeCashShift = onCall(adminOptions, async request => {
   requireCashPermission(request);
@@ -1524,24 +1949,53 @@ export const closeCashShift = onCall(adminOptions, async request => {
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين إغلاق الوردية");
   const stateRef = db.doc(`cashShiftState/${branch.id}`);
-  return db.runTransaction(async transaction => {
+  // Seal the branch shift before aggregating. Financial writers read both state
+  // and shift in their own transaction, so a payment either commits before this
+  // seal and is included, or retries and cannot attach to the closing shift.
+  const sealed = await db.runTransaction(async transaction => {
     const state = await transaction.get(stateRef);
     const shiftId = sanitizeText(state.data()?.openShiftId, 100);
     if (!shiftId) {
-      if (state.data()?.lastCloseRequestId === idempotencyKey) return { ok: true, idempotent: true, shiftId: state.data()?.lastClosedShiftId };
+      if (state.data()?.lastCloseRequestId === idempotencyKey) {
+        const prior = await transaction.get(db.doc(`cashShifts/${state.data()?.lastClosedShiftId}`));
+        return { completed: { ok: true, idempotent: true, shiftId: prior.id, report: prior.data()?.report || null } };
+      }
       throw new HttpsError("failed-precondition", "لا توجد وردية مفتوحة");
     }
     const shiftRef = db.doc(`cashShifts/${shiftId}`);
     const shift = await transaction.get(shiftRef);
-    if (!shift.exists || shift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "الوردية مغلقة بالفعل");
+    if (!shift.exists || shift.data().branchId !== branch.id) throw new HttpsError("failed-precondition", "الوردية لا تتبع هذا الفرع");
+    if (state.data()?.status === "CLOSING" && shift.data().status === "CLOSING") {
+      if (shift.data().closingBy !== request.auth.uid && request.auth.token.role !== "admin") throw new HttpsError("permission-denied", "إغلاق الوردية قيد التنفيذ بواسطة مستخدم آخر");
+      if (Number(shift.data().closingActualCash) !== actualCash || shift.data().closingReason !== (reason || "")) throw new HttpsError("failed-precondition", "إغلاق الوردية قيد التنفيذ بقيم مختلفة");
+      return { shiftId };
+    }
+    if (state.data()?.status !== "OPEN" || shift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "الوردية مغلقة أو قيد الإغلاق");
     const expectedCash = calculateExpectedCash(shift.data());
     const variance = Math.round((actualCash - expectedCash) * 100) / 100;
     if (variance !== 0 && !reason) throw new HttpsError("invalid-argument", "سبب العجز أو الزيادة مطلوب");
     const now = FieldValue.serverTimestamp();
-    transaction.update(shiftRef, { status: "CLOSED", expectedCash, actualCash, variance, closeReason: reason || null, closedAt: now, closedBy: request.auth.uid, updatedAt: now });
-    transaction.set(stateRef, { branchId: branch.id, openShiftId: null, status: "CLOSED", lastClosedShiftId: shiftId, lastCloseRequestId: idempotencyKey, updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "close-cash-shift", targetType: "cashShift", targetId: shiftId, branchId: branch.id, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
-    return { ok: true, shiftId, expectedCash, actualCash, variance };
+    transaction.update(shiftRef, { status: "CLOSING", closingBy: request.auth.uid, closingRequestId: idempotencyKey, closingActualCash: actualCash, closingReason: reason || "", closingCutoff: now, updatedAt: now });
+    transaction.update(stateRef, { status: "CLOSING", updatedAt: now });
+    return { shiftId };
+  });
+  if (sealed.completed) return sealed.completed;
+  const shiftRef = db.doc(`cashShifts/${sealed.shiftId}`);
+  const candidate = await shiftRef.get();
+  if (!candidate.exists || candidate.data()?.status !== "CLOSING" || candidate.data()?.branchId !== branch.id) throw new HttpsError("aborted", "تغيرت الوردية أثناء الإغلاق؛ أعد المحاولة");
+  const ledgerSnapshot = await summarizeShiftFinance(branch.id, sealed.shiftId, candidate.data().openedAt, candidate.data().closingCutoff);
+  return db.runTransaction(async transaction => {
+    const [state, shift] = await transaction.getAll(stateRef, shiftRef);
+    if (!state.data()?.openShiftId && state.data()?.lastClosedShiftId === sealed.shiftId && state.data()?.lastCloseRequestId === candidate.data().closingRequestId) return { ok: true, idempotent: true, shiftId: sealed.shiftId, report: shift.data()?.report || null };
+    if (state.data()?.status !== "CLOSING" || state.data()?.openShiftId !== sealed.shiftId || shift.data()?.status !== "CLOSING" || shift.data()?.closingRequestId !== candidate.data().closingRequestId) throw new HttpsError("aborted", "تغيرت الوردية أثناء الإغلاق؛ أعد المحاولة");
+    const expectedCash = calculateExpectedCash(shift.data());
+    const variance = Math.round((actualCash - expectedCash) * 100) / 100;
+    const now = FieldValue.serverTimestamp();
+    const report = { type: "shift", branchId: branch.id, branchName: branch.nameAr || branch.id, shiftId: sealed.shiftId, cashierUid: shift.data().cashierUid, cashierName: shift.data().cashierName, businessDate: shift.data().businessDate, openedAt: toIso(shift.data().openedAt), closedAt: new Date().toISOString(), openingCash: Number(shift.data().openingCash || 0), ...ledgerSnapshot, cashIn: Number(shift.data().cashIn || 0), cashOut: Number(shift.data().cashOut || 0), cashSalesInDrawer: Number(shift.data().cashSales || 0), expectedCash, actualCash, variance, notes: reason || "", closedBy: request.auth.uid, sourceVersion: 2 };
+    transaction.update(shiftRef, { status: "CLOSED", expectedCash, actualCash, variance, report, closeReason: reason || null, closedAt: now, closedBy: request.auth.uid, updatedAt: now });
+    transaction.set(stateRef, { branchId: branch.id, openShiftId: null, status: "CLOSED", lastClosedShiftId: sealed.shiftId, lastCloseRequestId: candidate.data().closingRequestId, updatedAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "close-cash-shift", targetType: "cashShift", targetId: sealed.shiftId, branchId: branch.id, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: candidate.data().closingRequestId, createdAt: now });
+    return { ok: true, shiftId: sealed.shiftId, expectedCash, actualCash, variance, report };
   });
 });
 
@@ -1551,11 +2005,25 @@ export const getCashOperations = onCall(adminOptions, async request => {
   requireBranchAccess(request, branch.id);
   const state = await db.doc(`cashShiftState/${branch.id}`).get();
   const shiftId = sanitizeText(state.data()?.openShiftId || state.data()?.lastClosedShiftId, 100);
-  const [shift, movements] = await Promise.all([
+  const includeReports = request.data?.includeReports === true;
+  const [shift, movements, priorReports] = await Promise.all([
     shiftId ? db.doc(`cashShifts/${shiftId}`).get() : null,
-    db.collection("cashMovements").where("branchId", "==", branch.id).orderBy("createdAt", "desc").limit(50).get()
+    db.collection("cashMovements").where("branchId", "==", branch.id).orderBy("createdAt", "desc").limit(50).get(),
+    includeReports ? db.collection("cashShifts").where("branchId", "==", branch.id).where("cashierUid", "==", request.auth.uid).where("status", "==", "CLOSED").orderBy("closedAt", "desc").limit(20).get() : null
   ]);
-  return { state: state.exists ? cleanDoc(state) : null, shift: shift?.exists ? cleanDoc(shift) : null, movements: movements.docs.map(cleanDoc) };
+  const visibleShift = shift?.exists && shift.data().branchId === branch.id ? cleanDoc(shift) : null;
+  if (visibleShift && request.auth.token.role === "cashier" && visibleShift.cashierUid !== request.auth.uid) delete visibleShift.report;
+  const live = visibleShift?.status === "OPEN" && state.data()?.status === "OPEN"
+    ? await summarizeShiftFinance(branch.id, visibleShift.id, shift.data().openedAt, Timestamp.now()) : null;
+  const snapshot = live ? { shiftId: visibleShift.id, branchId: branch.id, openedAt: visibleShift.openedAt,
+    openingCash: Number(visibleShift.openingCash || 0), cashSales: Number(visibleShift.cashSales || 0),
+    cardSales: live.card, transferSales: live.transfer, otherSales: live.other,
+    cashIn: Number(visibleShift.cashIn || 0), cashOut: Number(visibleShift.cashOut || 0),
+    expenses: live.expenses, advances: live.advances, refunds: live.refunds,
+    grossRevenue: live.grossRevenue, netRevenue: live.netCollected, transactionsCount: live.transactions,
+    completedBookings: null, expectedCash: Number(visibleShift.expectedCash || 0), averageTicket: live.averageTicket,
+    attributionMode: live.attributionMode, legacyTimeAttributed: live.legacyTimeAttributed } : null;
+  return { state: state.exists ? cleanDoc(state) : null, shift: visibleShift, snapshot, movements: movements.docs.map(cleanDoc), ...(includeReports ? { recentReports: priorReports.docs.map(doc => ({ shiftId: doc.id, branchId: doc.data().branchId, businessDate: doc.data().businessDate, closedAt: toIso(doc.data().closedAt), cashierName: doc.data().cashierName, hasReport: Boolean(doc.data().report) })) } : {}) };
 });
 
 export const getBookingCalendar = onCall(adminOptions, async request => {
@@ -1565,45 +2033,50 @@ export const getBookingCalendar = onCall(adminOptions, async request => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new HttpsError("invalid-argument", "نطاق التقويم غير صحيح");
   const span = (new Date(`${to}T12:00:00Z`) - new Date(`${from}T12:00:00Z`)) / 86400000;
   if (span < 0 || span > 7) throw new HttpsError("invalid-argument", "حمّل يومًا أو أسبوعًا واحدًا فقط");
-  const allowedBranches = branchesFor(request);
+  const claimedBranches = branchesFor(request);
+  const requestedBranch = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  if (requestedBranch !== "all" && !["talkha", "mashaya"].includes(requestedBranch)) throw new HttpsError("invalid-argument", "نطاق الفرع غير صحيح");
+  if (requestedBranch !== "all" && claimedBranches.length && !claimedBranches.includes(requestedBranch)) throw new HttpsError("permission-denied", "هذا الفرع خارج صلاحيات الحساب");
+  const allowedBranches = requestedBranch === "all" ? claimedBranches : [requestedBranch];
   const snapshots = await Promise.all(scopedQueries("bookings", allowedBranches, query => query.where("bookingDate", ">=", from).where("bookingDate", "<=", to).orderBy("bookingDate", "asc").orderBy("bookingTime", "asc").limit(500)).map(query => query.get()));
   const unique = new Map();
   snapshots.forEach(snapshot => snapshot.docs.forEach(document => unique.set(document.id, cleanDoc(document))));
   const bookings = [...unique.values()].filter(item => item.source !== "pos");
   const staffIds = [...new Set(bookings.map(item => item.staffId).filter(id => id && id !== "none"))];
   const staffSnapshots = staffIds.length ? await db.getAll(...staffIds.map(id => db.doc(`staff/${id}`))) : [];
-  return { from, to, bookings, staff: staffSnapshots.filter(item => item.exists).map(cleanDoc) };
+  return { from, to, bookings, staff: staffSnapshots.filter(item => item.exists).map(item => ({ id: item.id, nameAr: item.data()?.nameAr || "", nameEn: item.data()?.nameEn || "", imageUrl: item.data()?.imageUrl || "", branchIds: (item.data()?.branchIds || []).filter(branchId => !claimedBranches.length || claimedBranches.includes(branchId)) })) };
 });
 
 export const getCustomer360 = onCall(adminOptions, async request => {
-  if (!hasPermission(request, "customers") && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية ملف العميل");
+  requirePermission(request, "customers");
   const customerId = sanitizeText(request.data?.customerId, 100);
   const customerSnapshot = await db.doc(`customers/${customerId}`).get();
   if (!customerSnapshot.exists) throw new HttpsError("not-found", "العميل غير موجود");
   const customer = cleanDoc(customerSnapshot);
-  if (!itemInAllowedBranch(customer, branchesFor(request))) throw new HttpsError("permission-denied", "العميل تابع لفرع غير مسموح");
-  const [bookingsSnapshot, walletSnapshot] = await Promise.all([
-    db.collection("bookings").where("phoneHash", "==", customerId).orderBy("createdAt", "desc").limit(30).get(),
-    hasPermission(request, "rewards") ? db.collection("walletTransactions").where("customerId", "==", customerId).orderBy("createdAt", "desc").limit(12).get() : { docs: [] }
-  ]);
-  const bookings = bookingsSnapshot.docs.map(cleanDoc).filter(item => itemInAllowedBranch(item, branchesFor(request)));
+  const allowedBranches = branchesFor(request);
+  const bookings = (await scopedRows(scopedQueries("bookings", allowedBranches, query => query.where("phoneHash", "==", customerId).orderBy("createdAt", "desc").limit(30))))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 30);
+  if (allowedBranches.length && !bookings.length) throw new HttpsError("permission-denied", "لا توجد معاملات لهذا العميل في فروع الحساب");
+  const wallet = hasPermission(request, "rewards") ? (await scopedRows(scopedQueries("walletTransactions", allowedBranches, query => query.where("customerId", "==", customerId).orderBy("createdAt", "desc").limit(12)))).slice(0, 12) : [];
   const completed = bookings.filter(item => item.status === "completed");
+  const branchCustomer = allowedBranches.length ? { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, whatsappOptIn: customer.whatsappOptIn, pointsBalance: 0, cashbackBalance: 0 } : customer;
+  const spent = bookings.filter(item => item.paymentStatus === "paid").reduce((sum, item) => sum + Number(item.total || 0), 0);
   return {
-    customer,
+    customer: branchCustomer,
     overview: {
-      totalVisits: Number(customer.bookingCount || bookings.length),
-      completedVisits: Number(customer.completedVisits || completed.length),
-      cancellations: Number(customer.cancellationCount || bookings.filter(item => item.status === "cancelled").length),
-      noShows: Number(customer.noShowCount || bookings.filter(item => item.status === "no_show").length),
-      totalSpent: Number(customer.totalSpent || 0),
-      averageTicket: Number(customer.completedVisits || completed.length) ? Number(customer.totalSpent || 0) / Number(customer.completedVisits || completed.length) : 0,
-      favoriteWorkerId: customer.favoriteStaffId || customer.favoriteWorkerId || null,
-      preferredBranch: customer.lastBranchId || null
+      totalVisits: allowedBranches.length ? bookings.length : Number(customer.bookingCount || bookings.length),
+      completedVisits: allowedBranches.length ? completed.length : Number(customer.completedVisits || completed.length),
+      cancellations: allowedBranches.length ? bookings.filter(item => item.status === "cancelled").length : Number(customer.cancellationCount || 0),
+      noShows: allowedBranches.length ? bookings.filter(item => item.status === "no_show").length : Number(customer.noShowCount || 0),
+      totalSpent: allowedBranches.length ? spent : Number(customer.totalSpent || 0),
+      averageTicket: completed.length ? spent / completed.length : 0,
+      favoriteWorkerId: allowedBranches.length ? null : customer.favoriteStaffId || customer.favoriteWorkerId || null,
+      preferredBranch: allowedBranches.length ? allowedBranches[0] : customer.lastBranchId || null
     },
     upcoming: bookings.filter(item => ["pending", "confirmed", "arrived"].includes(item.status)).slice(0, 10),
     bookingHistory: bookings.filter(item => item.source !== "pos").slice(0, 12),
     orders: bookings.filter(item => item.source === "pos").slice(0, 12),
-    wallet: walletSnapshot.docs.map(cleanDoc)
+    wallet
   };
 });
 
@@ -1640,9 +2113,178 @@ export const closeBusinessDay = onCall(adminOptions, async request => {
     const now = FieldValue.serverTimestamp();
     const record = { branchId: branch.id, businessDate, grossSales: gross.amount, netSales: net.amount, cashSales: cashNet.amount, otherPayments: net.amount - cashNet.amount, expenses: expenses.amount, refunds: Math.abs(refunds.amount), cashIn: shifts.cashIn || 0, cashOut: shifts.cashOut || 0, expectedCash, actualCash, variance, ordersCount: orderCount.count, refundCount: refundCount.count, reason: reason || null, status: "CLOSED", closedBy: request.auth.uid, closedByName: request.auth.token.name || request.auth.token.email || request.auth.uid, closedAt: now, createdAt: now };
     transaction.create(closingRef, record);
-    transaction.set(db.collection("activityLogs").doc(), { action: "close-business-day", targetType: "dailyClosing", targetId: closingRef.id, branchId: branch.id, businessDate, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "close-business-day", targetType: "dailyClosing", targetId: closingRef.id, branchId: branch.id, businessDate, expectedCash, actualCash, variance, reason: reason || null, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
     return { ok: true, closingId: closingRef.id, closing: { id: closingRef.id, ...record, closedAt: new Date().toISOString() } };
   });
+});
+
+// Report snapshots deliberately contain aggregates only. Daily money is from
+// revenueLedger and expenses, the same canonical collections used by Dashboard.
+async function generateDailyReport(branchId, dateKey, actorUid = "scheduler", rebuild = false) {
+  const period = reportPeriod("daily", dateKey);
+  if (dateKey >= cairoDateKey()) throw new HttpsError("failed-precondition", "التقرير اليومي النهائي متاح بعد انتهاء يوم القاهرة");
+  const ref = db.doc(`businessReports/${reportId("daily", branchId, dateKey)}`);
+  if (!rebuild) { const existing = await ref.get(); if (existing.exists) return cleanDoc(existing); }
+  const scope = [branchId];
+  const revenue = (configure, fields = { amount: AggregateField.sum("amount") }) => aggregateScoped("revenueLedger", scope, query => configure(query.where("dateKey", "==", dateKey)), fields);
+  const bookingCount = status => aggregateScoped("bookings", scope, query => {
+    const dated = query.where("bookingDate", "==", dateKey);
+    return status ? dated.where("status", "==", status) : dated;
+  });
+  const [net, gross, refunds, cash, card, voda, insta, other, expenses, advances, bookings, completed, cancelled, noShow, shifts, attendance, monthToDate] = await Promise.all([
+    revenue(query => query), revenue(query => query.where("type", "==", "payment")), revenue(query => query.where("type", "==", "refund")),
+    ...["cash", "card", "vodafone_cash", "instapay", "other"].map(method => revenue(query => query.where("paymentMethod", "==", method))),
+    aggregateScoped("expenses", scope, query => query.where("dateKey", "==", dateKey), { amount: AggregateField.sum("amount") }),
+    aggregateScoped("cashMovements", scope, query => query.where("businessDate", "==", dateKey).where("category", "==", "advance"), { amount: AggregateField.sum("amount") }),
+    bookingCount(), bookingCount("completed"), bookingCount("cancelled"), bookingCount("no_show"),
+    aggregateScoped("cashShifts", scope, query => query.where("businessDate", "==", dateKey), { cashIn: AggregateField.sum("cashIn"), cashOut: AggregateField.sum("cashOut") }),
+    aggregateScoped("attendanceDays", scope, query => query.where("dateKey", "==", dateKey)),
+    aggregateScoped("revenueLedger", scope, query => query.where("dateKey", ">=", `${dateKey.slice(0, 7)}-01`).where("dateKey", "<=", dateKey), { amount: AggregateField.sum("amount") })
+  ]);
+  const totals = { grossRevenue: gross.amount, netRevenue: net.amount, refunds: Math.abs(refunds.amount), cash: cash.amount, card: card.amount, transfer: voda.amount + insta.amount, other: other.amount, wallet: null, expenses: expenses.amount, advances: advances.amount, cashIn: shifts.cashIn, cashOut: shifts.cashOut, transactions: gross.count, bookings: bookings.count, completed: completed.count, cancelled: cancelled.count, noShow: noShow.count, averageTicket: gross.count ? gross.amount / gross.count : 0 };
+  const branch = await readBranch(branchId);
+  const targetAmount = branch.monthlyRevenueTargets?.[dateKey.slice(0, 7)]?.targetAmount;
+  const target = targetAmount == null ? null : { amount: Number(targetAmount), actual: monthToDate.amount, remaining: Math.max(0, Number(targetAmount) - monthToDate.amount), percent: Number(targetAmount) > 0 ? Math.round(monthToDate.amount / Number(targetAmount) * 100) : 0 };
+  const record = { type: "daily", branchId, branchName: branch.nameAr || branchId, periodKey: dateKey, periodStart: period.start, periodEnd: period.end, totals, attendance: { checkedIn: attendance.count }, target, sourceVersion: 1, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
+  await db.runTransaction(async transaction => {
+    const before = await transaction.get(ref);
+    if (before.exists && !rebuild) return;
+    transaction.set(ref, { ...record, createdAt: before.data()?.createdAt || FieldValue.serverTimestamp() });
+    if (rebuild) transaction.set(db.collection("activityLogs").doc(), { action: "report-rebuilt", actorUid, actorRole: "admin", branchId, entityType: "businessReport", entityId: ref.id, createdAt: FieldValue.serverTimestamp() });
+  });
+  return cleanDoc(await ref.get());
+}
+
+async function generatePeriodReport(type, branchId, key, actorUid = "scheduler", rebuild = false) {
+  const period = reportPeriod(type, key);
+  if (period.end >= cairoDateKey()) throw new HttpsError("failed-precondition", "الفترة لم تنته بعد بتوقيت القاهرة");
+  const ref = db.doc(`businessReports/${reportId(type, branchId, key)}`);
+  if (!rebuild) { const existing = await ref.get(); if (existing.exists) return cleanDoc(existing); }
+  const dailyRefs = periodDays(period).map(date => db.doc(`businessReports/${reportId("daily", branchId, date)}`));
+  const [daily, branch] = await Promise.all([db.getAll(...dailyRefs), readBranch(branchId)]);
+  const missing = daily.filter(item => !item.exists).map(item => item.id.slice(-10));
+  if (missing.length) throw new HttpsError("failed-precondition", `أنشئ التقارير اليومية الناقصة أولًا: ${missing.slice(0, 5).join("، ")}`);
+  const amount = type === "monthly" ? branch.monthlyRevenueTargets?.[key]?.targetAmount ?? null : null;
+  const rollup = rollupDaily(daily.map(item => item.data()), period, amount);
+  const record = { type, branchId, branchName: branch.nameAr || branchId, periodKey: key, periodStart: period.start, periodEnd: period.end, ...rollup, sourceVersion: 1, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
+  await db.runTransaction(async transaction => {
+    const before = await transaction.get(ref);
+    if (before.exists && !rebuild) return;
+    transaction.set(ref, { ...record, createdAt: before.data()?.createdAt || FieldValue.serverTimestamp() });
+    if (rebuild) transaction.set(db.collection("activityLogs").doc(), { action: "report-rebuilt", actorUid, actorRole: "admin", branchId, entityType: "businessReport", entityId: ref.id, createdAt: FieldValue.serverTimestamp() });
+  });
+  return cleanDoc(await ref.get());
+}
+
+function reportAccess(request, branchId, type) {
+  const role = requireRole(request);
+  if (role === "worker" || (role !== "admin" && !["manager", "cashier"].includes(role))) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
+  if (role === "cashier" && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
+  if (role === "manager" && !hasPermission(request, type === "shift" ? "pos" : "revenue")) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
+  requireBranchAccess(request, branchId);
+}
+
+export const getBusinessReport = onCall(adminOptions, async request => {
+  const type = sanitizeText(request.data?.type, 10);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  if (type === "shift") {
+    const id = sanitizeText(request.data?.shiftId, 100);
+    if (!/^shift_[a-f0-9]{32}$/.test(id)) throw new HttpsError("invalid-argument", "معرف الوردية غير صالح");
+    const snapshot = await db.doc(`cashShifts/${id}`).get();
+    if (!snapshot.exists || !snapshot.data()?.branchId) throw new HttpsError("not-found", "تقرير الوردية غير موجود");
+    reportAccess(request, snapshot.data().branchId, type);
+    if (request.auth.token.role === "cashier" && snapshot.data().cashierUid !== request.auth.uid) throw new HttpsError("permission-denied", "هذه وردية حساب آخر");
+    if (!snapshot.data().report) throw new HttpsError("not-found", "لا يوجد تقرير محفوظ لهذه الوردية");
+    return { report: snapshot.data().report };
+  }
+  const key = sanitizeText(request.data?.periodKey, 10);
+  try { reportPeriod(type, key); } catch { throw new HttpsError("invalid-argument", "الفترة غير صحيحة"); }
+  const ids = branchId === "all" && request.auth?.token?.role === "admin" ? ["talkha", "mashaya"] : [branchId];
+  const snapshots = await Promise.all(ids.map(async id => {
+    reportAccess(request, id, type);
+    const snapshot = await db.doc(`businessReports/${reportId(type, id, key)}`).get();
+    if (snapshot.exists && snapshot.data()?.branchId !== id) {
+      if (request.auth.token.role !== "admin") throw new HttpsError("permission-denied", "التقرير بلا ملكية فرع مؤكدة");
+      return null;
+    }
+    return snapshot;
+  }));
+  const reports = snapshots.filter(snapshot => snapshot?.exists).map(cleanDoc);
+  const missingBranches = ids.filter((id, index) => !snapshots[index]?.exists);
+  const combined = ids.length > 1 && !missingBranches.length ? {
+    type, branchId: "all", branchName: "كل الفروع", periodStart: reports[0].periodStart, periodEnd: reports[0].periodEnd,
+    totals: Object.fromEntries(Object.keys(reports[0].totals).filter(field => field !== "averageTicket" && reports.every(report => typeof report.totals?.[field] === "number")).map(field => [field, reports.reduce((sum, report) => sum + report.totals[field], 0)])),
+    target: reports.every(report => report.target) ? { amount: reports.reduce((sum, report) => sum + report.target.amount, 0), actual: reports.reduce((sum, report) => sum + report.target.actual, 0) } : null
+  } : null;
+  if (combined) {
+    combined.totals.averageTicket = combined.totals.transactions ? combined.totals.grossRevenue / combined.totals.transactions : 0;
+    if (combined.target) { combined.target.remaining = Math.max(0, combined.target.amount - combined.target.actual); combined.target.percent = combined.target.amount > 0 ? Math.round(combined.target.actual / combined.target.amount * 100) : 0; }
+  }
+  return { reports, combined, missingBranches };
+});
+
+export const rebuildBusinessReport = onCall(adminOptions, async request => {
+  requireRole(request, ["admin"]);
+  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
+  const type = sanitizeText(request.data?.type, 10);
+  const key = sanitizeText(request.data?.periodKey, 10);
+  if (!["talkha", "mashaya"].includes(branchId) || !["daily", "weekly", "monthly"].includes(type)) throw new HttpsError("invalid-argument", "حدد فرعًا ونوع تقرير صحيحين");
+  try { reportPeriod(type, key); } catch { throw new HttpsError("invalid-argument", "الفترة غير صحيحة"); }
+  const report = type === "daily" ? await generateDailyReport(branchId, key, request.auth.uid, true) : await generatePeriodReport(type, branchId, key, request.auth.uid, true);
+  return { report };
+});
+
+export const scheduledBusinessReports = onSchedule({ schedule: "10 2 * * *", timeZone: "Africa/Cairo", region, memory: "512MiB", maxInstances: 1 }, async () => {
+  const yesterday = addDays(cairoDateKey(), -1);
+  const today = cairoDateKey();
+  const branches = ["talkha", "mashaya"];
+  for (const branchId of branches) {
+    const attempt = async (type, work) => {
+      try { await work(); }
+      catch (error) { console.error("scheduledBusinessReports", { branchId, day: yesterday, type, code: error.code || error.message }); }
+    };
+    await attempt("daily", () => generateDailyReport(branchId, yesterday));
+    if (new Date(`${today}T12:00:00Z`).getUTCDay() === 1) await attempt("weekly", () => generatePeriodReport("weekly", branchId, weekStart(yesterday)));
+    if (today.endsWith("-01")) await attempt("monthly", () => generatePeriodReport("monthly", branchId, yesterday.slice(0, 7)));
+  }
+});
+
+export const getAuditEvents = onCall(adminOptions, async request => {
+  requireRole(request, ["admin"]);
+  const limit = Math.max(1, Math.min(100, Number(request.data?.limit || 50)));
+  const cursor = sanitizeText(request.data?.cursor, 100);
+  const filter = {
+    branchId: sanitizeText(request.data?.branchId, 40), actorUid: sanitizeText(request.data?.actorUid, 128),
+    role: sanitizeText(request.data?.role, 30), action: sanitizeText(request.data?.action, 80),
+    entityType: sanitizeText(request.data?.entityType, 50), date: sanitizeText(request.data?.date, 10)
+  };
+  if (filter.branchId && !["talkha", "mashaya", "all"].includes(filter.branchId)) throw new HttpsError("invalid-argument", "الفرع غير صحيح");
+  if (filter.date && !isValidDateKey(filter.date)) throw new HttpsError("invalid-argument", "التاريخ غير صحيح");
+  let query = db.collection("activityLogs").orderBy("createdAt", "desc");
+  if (filter.branchId && filter.branchId !== "all") query = db.collection("activityLogs").where("branchId", "==", filter.branchId).orderBy("createdAt", "desc");
+  if (cursor) {
+    const prior = await db.doc(`activityLogs/${cursor}`).get();
+    if (!prior.exists) throw new HttpsError("invalid-argument", "صفحة السجل غير موجودة");
+    query = query.startAfter(prior);
+  }
+  const page = await query.limit(limit).get();
+  const matches = page.docs.map(cleanDoc).filter(item => {
+    const actor = item.actorUid || item.userId || "";
+    const entity = item.entityType || item.targetType || item.collection || "";
+    return (!filter.actorUid || actor === filter.actorUid) && (!filter.role || item.actorRole === filter.role) && (!filter.action || item.action === filter.action) && (!filter.entityType || entity === filter.entityType) && (!filter.date || cairoDateKey(new Date(item.createdAt)) === filter.date);
+  });
+  return { items: matches, nextCursor: page.size === limit ? page.docs.at(-1).id : null, scanned: page.size };
+});
+
+export const recordPasswordChange = onCall(adminOptions, async request => {
+  const role = requireRole(request, ["admin", "manager", "cashier"]);
+  if (!isRecentAuthentication(request.auth?.token?.auth_time)) throw new HttpsError("unauthenticated", "أعد تسجيل الدخول لتوثيق العملية");
+  const id = `password_changed_${hash(`${request.auth.uid}|${request.auth.token.auth_time}`)}`;
+  // The update happens in Firebase Auth. This is an authenticated client
+  // acknowledgement, not server proof that a password was updated.
+  const allowedBranches = role === "admin" ? [] : branchesFor(request);
+  await db.doc(`activityLogs/${id}`).create({ ...auditActor(request), action: "password-change-client-confirmed", actorUid: request.auth.uid, actorRole: role, entityType: "user", entityId: request.auth.uid, branchId: allowedBranches.length === 1 ? allowedBranches[0] : null, createdAt: FieldValue.serverTimestamp() }).catch(error => { if (error.code !== 6) throw error; });
+  return { ok: true };
 });
 
 export const recordExpense = onCall(adminOptions, async request => {
@@ -1670,18 +2312,11 @@ export const recordExpense = onCall(adminOptions, async request => {
     if (inventorySnapshot?.exists && inventorySnapshot.data().branchId !== input.branchId) throw new HttpsError("failed-precondition", "صنف المخزون تابع لفرع آخر");
     const closing = await transaction.get(db.doc(`dailyClosings/${input.branchId}_${input.dateKey}`));
     if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن تسجيل مصروف عليه");
-    let cashShiftRef = null;
-    let cashShift = null;
-    if (input.paymentMethod === "cash" && settings.cashDrawerEnabled === true) {
-      const cashState = await transaction.get(db.doc(`cashShiftState/${input.branchId}`));
-      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
-      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تسجيل مصروف نقدي");
-      cashShiftRef = db.doc(`cashShifts/${shiftId}`);
-      cashShift = await transaction.get(cashShiftRef);
-      if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
-    }
+    const activeShift = await ledgerShiftInTransaction(transaction, input.branchId, input.paymentMethod === "cash" && settings.cashDrawerEnabled === true);
+    const cashShiftRef = input.paymentMethod === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null;
+    const cashShift = cashShiftRef ? activeShift.snapshot : null;
     const now = FieldValue.serverTimestamp();
-    transaction.create(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: inventoryRef ? input.inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? input.stockQuantity : 0, cashMovementId: cashShiftRef ? `expense_${expenseRef.id}` : null, createdAt: now, createdBy: request.auth.uid, createdByEmail: request.auth.token.email || "", createdByName: request.auth.token.name || request.auth.token.email || request.auth.uid });
+    transaction.create(expenseRef, { ...input, ...(activeShift ? { shiftId: activeShift.ref.id } : {}), idempotencyKey: null, inventoryItemId: inventoryRef ? input.inventoryItemId : null, inventoryCategory: inventorySnapshot?.data()?.category || null, stockQuantity: inventoryRef ? input.stockQuantity : 0, cashMovementId: cashShiftRef ? `expense_${expenseRef.id}` : null, createdAt: now, createdBy: request.auth.uid, createdByEmail: request.auth.token.email || "", createdByName: request.auth.token.name || request.auth.token.email || request.auth.uid });
     if (inventorySnapshot?.exists && input.stockQuantity > 0) {
       const oldQuantity = Math.max(0, Number(inventorySnapshot.data().stockQty || 0));
       const oldCost = Math.max(0, Number(inventorySnapshot.data().costPrice || 0));
@@ -1694,7 +2329,7 @@ export const recordExpense = onCall(adminOptions, async request => {
       transaction.update(cashShiftRef, { cashOut: FieldValue.increment(input.amount), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
       transaction.create(db.doc(`cashMovements/expense_${expenseRef.id}`), { type: "CASH_OUT", amount: input.amount, reason: input.description, category: input.category, expenseId: expenseRef.id, branchId: input.branchId, shiftId: cashShiftRef.id, businessDate: input.dateKey, actorUid: request.auth.uid, createdAt: now });
     }
-    transaction.set(activityRef, { action: input.kind === "purchase" ? "record-purchase" : "record-expense", collection: "expenses", entityId: expenseRef.id, branchId: input.branchId, amount: input.amount, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    transaction.set(activityRef, { ...auditActor(request), action: input.kind === "purchase" ? "record-purchase" : "record-expense", collection: "expenses", entityId: expenseRef.id, branchId: input.branchId, amount: input.amount, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     return { ok: true, id: expenseRef.id };
   });
 });
@@ -1743,7 +2378,7 @@ export const updateExpense = onCall(adminOptions, async request => {
     transaction.set(expenseRef, { ...input, idempotencyKey: null, inventoryItemId: newRef ? input.inventoryItemId : null, inventoryCategory: newRef ? inventoryByPath.get(newRef.path).data().category || null : null, stockQuantity: newRef ? input.stockQuantity : 0, updatedAt: now, updatedBy: request.auth.uid, updatedByEmail: request.auth.token.email || "" }, { merge: true });
     transaction.delete(db.doc(`stockMovements/purchase_${id}`));
     if (newRef && input.stockQuantity > 0) transaction.set(db.doc(`stockMovements/purchase_${id}`), { inventoryItemId: input.inventoryItemId, branchId: input.branchId, expenseId: id, quantity: input.stockQuantity, amount: input.amount, type: "purchase", dateKey: input.dateKey, updatedAt: now, createdBy: before.createdBy || request.auth.uid });
-    transaction.set(activityRef, { action: "update-expense", collection: "expenses", entityId: id, branchId: input.branchId, before: { amount: before.amount || 0, category: before.category || "other", branchId: before.branchId || "" }, after: { amount: input.amount, category: input.category, branchId: input.branchId }, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    transaction.set(activityRef, { ...auditActor(request), action: "update-expense", collection: "expenses", entityId: id, branchId: input.branchId, before: { amount: before.amount || 0, category: before.category || "other", branchId: before.branchId || "" }, after: { amount: input.amount, category: input.category, branchId: input.branchId }, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     return { ok: true, id };
   });
 });
@@ -1785,12 +2420,16 @@ export const createPosOrder = onCall(adminOptions, async request => {
     if (!worker || worker.active === false || !Array.isArray(worker.branchIds) || !worker.branchIds.includes(branch.id)) throw new HttpsError("failed-precondition", "أحد العمال غير متاح في الفرع المختار أو يحتاج تحديد فرعه من الإدارة");
   }
   const method = sanitizeText(request.data?.paymentMethod || "cash", 30);
-  if (!["cash", "vodafone_cash", "instapay", "other"].includes(method)) throw new HttpsError("invalid-argument", "طريقة الدفع غير صحيحة");
+  if (!["cash", "card", "vodafone_cash", "instapay", "other"].includes(method)) throw new HttpsError("invalid-argument", "طريقة الدفع غير صحيحة");
   const paid = request.data?.paid !== false;
   const code = bookingCode(branch.code);
   const bookingRef = db.doc(`bookings/${code}`);
   const customerRef = db.doc(`customers/${hash(customer.phone)}`);
   const ledgerRef = db.doc(`revenueLedger/payment_${code}`);
+  const couponCode = sanitizeText(request.data?.couponCode, 30).toUpperCase();
+  if (couponCode && !/^[A-Z0-9_-]{2,30}$/.test(couponCode)) throw new HttpsError("invalid-argument", "كود الخصم غير صحيح");
+  const couponRef = couponCode ? db.doc(`coupons/${couponCode}`) : null;
+  const couponUsageRef = couponCode ? db.doc(`couponUsage/${couponCode}_${hash(customer.phone)}`) : null;
   const inventoryRefs = inventoryLines.map(line => db.doc(`inventoryItems/${sanitizeText(line.id, 100)}`));
   const drinkRefs = drinkLines.map(line => db.doc(`drinks/${sanitizeText(line.id, 100)}`));
   const activityRef = db.collection("activityLogs").doc();
@@ -1804,10 +2443,12 @@ export const createPosOrder = onCall(adminOptions, async request => {
       const existingReceipt = existingCode ? await transaction.get(db.doc(`bookings/${existingCode}`)) : null;
       return { ok: true, bookingCode: existingCode, total: existingGuard.data().total, paymentStatus: existingGuard.data().paymentStatus, idempotent: true, receipt: existingReceipt?.exists ? cleanDoc(existingReceipt) : null };
     }
+    const [couponSnapshot, couponUsageSnapshot] = couponRef ? await transaction.getAll(couponRef, couponUsageRef) : [null, null];
     const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
     const inventoryItems = inventorySnapshots.map((snapshot, index) => {
       if (!snapshot.exists || snapshot.data().active === false || snapshot.data().category === "supply") throw new HttpsError("failed-precondition", "أحد أصناف البضاعة غير متاح للبيع");
       const source = snapshot.data();
+      if (source.branchId !== branch.id) throw new HttpsError("permission-denied", "صنف المخزون تابع لفرع آخر");
       const qty = Math.max(1, Math.min(100, Math.floor(Number(inventoryLines[index].qty || 1))));
       if (Number(source.stockQty || 0) < qty) throw new HttpsError("failed-precondition", `الكمية غير كافية من ${source.nameAr || "الصنف"}`);
       const unitPrice = Number(source.sellingPrice || 0);
@@ -1828,41 +2469,47 @@ export const createPosOrder = onCall(adminOptions, async request => {
       return { ...item, workerId, workerNameAr: worker?.nameAr || "بدون عامل", workerNameEn: worker?.nameEn || "No staff" };
     }), legacyStaffId);
     const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
-    const discountAmount = Math.max(0, Math.min(subtotal, Number(request.data?.discountAmount || 0)));
+    const coupon = couponSnapshot?.exists && Array.isArray(couponSnapshot.data()?.branchIds) && couponSnapshot.data().branchIds.includes(branch.id) ? couponSnapshot.data() : null;
+    const couponResult = couponCode ? calculateCoupon(coupon, items, { usageCount: Number(coupon?.usageCount || 0), phoneUsageCount: Number(couponUsageSnapshot?.data()?.count || 0) }) : null;
+    if (couponCode && !couponResult?.valid) throw new HttpsError("failed-precondition", "كود الخصم غير متاح لهذه الفاتورة أو الفرع");
+    const manualDiscountAmount = Math.max(0, Math.min(subtotal, Number(request.data?.discountAmount || 0)));
+    const couponDiscountAmount = Math.min(subtotal - manualDiscountAmount, Number(couponResult?.discountAmount || 0));
+    const discountAmount = manualDiscountAmount + couponDiscountAmount;
     const beforeWalletTotal = subtotal - discountAmount;
     const now = FieldValue.serverTimestamp();
     const publicItems = items.map(({ ref, ...item }) => item);
     const primaryWorkerId = publicItems.find(item => item.workerId && item.workerId !== "none")?.workerId || "none";
     const primaryWorker = workers.get(primaryWorkerId);
     const customerSnapshot = await transaction.get(customerRef);
+    if (!customerSnapshot.exists) {
+      const legacy = await transaction.get(db.collection("customers").where("phone", "in", [customer.phone, `2${customer.phone}`, `+2${customer.phone}`, customer.phone.slice(1)]).limit(10));
+      if (legacy.docs.some(item => item.id !== customerRef.id)) throw new HttpsError("failed-precondition", "وجدنا سجل عميل قديم لهذا الرقم يحتاج مراجعة آمنة قبل إنشاء سجل جديد");
+    }
     const closingSnapshot = await transaction.get(db.doc(`dailyClosings/${branch.id}_${dateKey}`));
     if (closingSnapshot.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن إضافة شيك مالي لهذا التاريخ");
-    let cashShiftRef = null;
-    let cashShift = null;
-    if (paid && method === "cash" && settings.cashDrawerEnabled === true) {
-      const cashState = await transaction.get(db.doc(`cashShiftState/${branch.id}`));
-      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
-      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تحصيل شيك نقدي");
-      cashShiftRef = db.doc(`cashShifts/${shiftId}`);
-      cashShift = await transaction.get(cashShiftRef);
-      if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
-    }
+    const activeShift = paid ? await ledgerShiftInTransaction(transaction, branch.id, method === "cash" && settings.cashDrawerEnabled === true) : null;
+    const cashShiftRef = method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null;
+    const cashShift = cashShiftRef ? activeShift.snapshot : null;
     const requestedPoints=Math.max(0,Math.floor(Number(request.data?.redeemPoints||0)));const requestedCashback=Math.max(0,Math.round(Number(request.data?.redeemCashback||0)*100)/100);const pointValue=Math.max(0,Number(settings.pointValue||0.1));const redemptionValue=requestedPoints*pointValue+requestedCashback;const maxRedemption=beforeWalletTotal*Math.max(0,Math.min(100,Number(settings.maximumRedemptionPercent||0)))/100;
     if((requestedPoints||requestedCashback)&&(!paid||settings.walletRedemptionEnabled!==true))throw new HttpsError("failed-precondition","استبدال المحفظة يحتاج شيكًا مدفوعًا وتفعيل الميزة");
     if(requestedPoints>Number(customerSnapshot.data()?.pointsBalance||0)||requestedCashback>Number(customerSnapshot.data()?.cashbackBalance||0)||redemptionValue>maxRedemption||redemptionValue<Math.max(0,Number(settings.minimumRedemption||0)))throw new HttpsError("failed-precondition","قيمة استبدال المحفظة غير مسموحة");
     const total=Math.max(0,beforeWalletTotal-redemptionValue);const revenueBreakdown=calculateRevenueBreakdown(publicItems,total);
     const redemption=(requestedPoints||requestedCashback)?{points:requestedPoints,cashback:requestedCashback,value:redemptionValue}:null;
     const targetEntries = serviceTargetEntries(publicItems);
-    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, finalizedBy: request.auth.uid, createdAt: now, updatedAt: now, paidAt: paid ? now : null };
+    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, manualDiscountAmount, couponDiscountAmount, couponCode: couponCode || null, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, updatedAt: now, paidAt: paid ? now : null };
     if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
     transaction.create(bookingRef, bookingRecord);
     transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
+    if (couponCode) {
+      transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(couponDiscountAmount), updatedAt: now });
+      transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(couponDiscountAmount), updatedAt: now }, { merge: true });
+    }
     const workerRevenue = new Map();
     const workerItems=publicItems.filter(item=>item.workerId&&item.workerId!=="none");const workerSubtotal=workerItems.reduce((sum,item)=>sum+Number(item.lineTotal||0),0);workerItems.forEach(item=>workerRevenue.set(item.workerId,(workerRevenue.get(item.workerId)||0)+(paid&&workerSubtotal?Number(item.lineTotal||0)/workerSubtotal*Number(revenueBreakdown.services||0):0)));
     workerRevenue.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { bookingCount: FieldValue.increment(1), ...(paid ? { revenueTotal: FieldValue.increment(amount) } : {}), updatedAt: now }));
     if (paid) workerRevenue.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: branch.id, dateKey, amount, now }));
     if (paid && targetEntries.length) postServiceMonthlyTargets(transaction, { items: publicItems, branchId: branch.id, dateKey, now });
-    if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, amount: total, revenueBreakdown, workerBreakdown: Object.fromEntries(workerRevenue), type: "payment", paymentMethod: method, staffId: primaryWorkerId, itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
+    if (paid) transaction.create(ledgerRef, { bookingId: code, bookingCode: code, branchId: branch.id, ...(activeShift ? { shiftId: activeShift.ref.id } : {}), amount: total, revenueBreakdown, workerBreakdown: Object.fromEntries(workerRevenue), type: "payment", paymentMethod: method, staffId: primaryWorkerId, itemIds: publicItems.map(item => item.id), dateKey, source: "pos", createdAt: now, createdBy: request.auth.uid });
     if (cashShiftRef && cashShift) {
       const nextShift = { ...cashShift.data(), cashSales: Number(cashShift.data().cashSales || 0) + total };
       transaction.update(cashShiftRef, { cashSales: FieldValue.increment(total), expectedCash: calculateExpectedCash(nextShift), updatedAt: now });
@@ -1873,7 +2520,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
       transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
     });
     transaction.create(idempotencyRef, { bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", branchId: branch.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
-    transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, entityType: "booking", branchId: branch.id, actorUid: request.auth.uid, actorRole: request.auth.token.role, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     const clientTimestamp = new Date().toISOString();
     return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", receipt: { id: code, ...bookingRecord, createdAt: clientTimestamp, updatedAt: clientTimestamp, paidAt: paid ? clientTimestamp : null } };
   }).then(result => {
@@ -1892,11 +2539,15 @@ export const recordPayrollPayment = onCall(adminOptions, async request => {
   const adjustment = Number(request.data?.adjustment || 0);
   if (!/^\d{4}-\d{2}$/.test(month) || !staffId || !Number.isFinite(adjustment) || Math.abs(adjustment) > 1000000) throw new HttpsError("invalid-argument", "بيانات صرف الراتب غير صحيحة");
   const nextMonth = nextMonthKey(month);
-  const [staffSnapshot, monthlyTotalSnapshot, ledgerSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.doc(`workerMonthlyTotals/${month}_${staffId}`).get(), db.collection("revenueLedger").where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000).get()]);
+  const staffSnapshot = await db.doc(`staff/${staffId}`).get();
   if (!staffSnapshot.exists) throw new HttpsError("not-found", "العامل غير موجود");
   const staff = staffSnapshot.data();
-  if (!itemInAllowedBranch(staff, branchesFor(request))) throw new HttpsError("permission-denied", "العامل تابع لفرع آخر");
-  const revenue = monthlyTotalSnapshot.exists ? Number(monthlyTotalSnapshot.data()?.revenue || 0) : ledgerSnapshot.docs.reduce((sum, snapshot) => sum + Number(snapshot.data().workerBreakdown?.[staffId] ?? snapshot.data().amount ?? 0), 0);
+  if (!allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), staff) || (request.auth.token.role !== "admin" && staff.branchIds.length !== 1)) throw new HttpsError("permission-denied", "صرف راتب عامل يعمل في أكثر من فرع يتطلب الأدمن الرئيسي");
+  const [monthlyTotalSnapshot, ledgerRows] = await Promise.all([
+    db.doc(`workerMonthlyTotals/${month}_${staffId}`).get(),
+    scopedRows(scopedQueries("revenueLedger", request.auth.token.role === "admin" ? [] : [staff.branchIds[0]], query => query.where("staffId", "==", staffId).where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000)))
+  ]);
+  const revenue = monthlyTotalSnapshot.exists && (request.auth.token.role === "admin" || staff.branchIds.length === 1) ? Number(monthlyTotalSnapshot.data()?.revenue || 0) : ledgerRows.reduce((sum, entry) => sum + Number(entry.workerBreakdown?.[staffId] ?? entry.amount ?? 0), 0);
   const calculated = calculatePayroll({ ...staff, revenue, adjustment });
   if (calculated.netSalary <= 0) throw new HttpsError("failed-precondition", "حدد الراتب الأساسي للعامل من قسم فريق العمل أولًا");
   const payrollRef = db.doc(`payrollPayments/${month}_${staffId}`);
@@ -1906,9 +2557,9 @@ export const recordPayrollPayment = onCall(adminOptions, async request => {
     const existing = await transaction.get(payrollRef);
     if (existing.exists) throw new HttpsError("already-exists", "تم تسجيل صرف راتب هذا العامل لهذا الشهر");
     const now = FieldValue.serverTimestamp();
-    transaction.create(payrollRef, { month, staffId, staffNameAr: staff.nameAr || staffId, ...calculated, status: "paid", paidAt: now, createdBy: request.auth.uid });
+    transaction.create(payrollRef, { month, staffId, branchId: staff.branchIds.length === 1 ? staff.branchIds[0] : "all", staffNameAr: staff.nameAr || staffId, ...calculated, status: "paid", paidAt: now, createdBy: request.auth.uid });
     transaction.create(expenseRef, { amount: calculated.netSalary, category: "salary", description: `راتب ${staff.nameAr || staffId} عن ${month}`, branchId: Array.isArray(staff.branchIds) && staff.branchIds.length === 1 ? staff.branchIds[0] : "all", dateKey: businessDateParts().dateKey, payrollPaymentId: payrollRef.id, staffId, month, paymentMethod: sanitizeText(request.data?.paymentMethod || "cash", 30), createdAt: now, createdBy: request.auth.uid });
-    transaction.set(activityRef, { action: "pay-salary", collection: "payrollPayments", entityId: payrollRef.id, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+    transaction.set(activityRef, { action: "pay-salary", collection: "payrollPayments", entityId: payrollRef.id, branchId: staff.branchIds.length === 1 ? staff.branchIds[0] : "all", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
   });
   return { ok: true, payroll: calculated };
 });
@@ -1973,7 +2624,7 @@ async function deleteBookingPermanently(id, request, reason) {
       const coupon = couponSnapshot.data();
       transaction.update(couponRef, {
         usageCount: Math.max(0, Number(coupon.usageCount || 0) - 1),
-        discountTotal: Math.max(0, Number(coupon.discountTotal || 0) - Number(booking.discountAmount || 0)),
+        discountTotal: Math.max(0, Number(coupon.discountTotal || 0) - Number(booking.couponDiscountAmount ?? booking.discountAmount ?? 0)),
         updatedAt: FieldValue.serverTimestamp()
       });
     }
@@ -1982,11 +2633,11 @@ async function deleteBookingPermanently(id, request, reason) {
       const usage = couponUsageSnapshot.data();
       transaction.update(couponUsageRef, {
         count: Math.max(0, Number(usage.count || 0) - 1),
-        discountTotal: Math.max(0, Number(usage.discountTotal || 0) - Number(booking.discountAmount || 0)),
+        discountTotal: Math.max(0, Number(usage.discountTotal || 0) - Number(booking.couponDiscountAmount ?? booking.discountAmount ?? 0)),
         updatedAt: FieldValue.serverTimestamp()
       });
     }
-    transaction.set(activityRef, { action: "secure-delete-booking", collection: "bookings", entityId: id, reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { ...auditActor(request), action: "secure-delete-booking", collection: "bookings", entityId: id, branchId: booking.branchId || null, reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
@@ -2026,7 +2677,7 @@ async function deleteRevenuePermanently(id, request) {
         : { paymentStatus: "unpaid", paymentMethod: null, paidAt: null, updatedAt: FieldValue.serverTimestamp() });
     }
     transaction.delete(ledgerRef);
-    transaction.set(activityRef, { action: "secure-delete-revenue", collection: "revenueLedger", entityId: id, bookingId, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { ...auditActor(request), action: "secure-delete-revenue", collection: "revenueLedger", entityId: id, branchId: ledger.branchId || null, bookingId, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
@@ -2058,7 +2709,7 @@ async function deleteExpensePermanently(id, request, reason) {
     }
     if (payrollRef && related.get(payrollRef.path)?.exists) transaction.delete(payrollRef);
     transaction.delete(expenseRef);
-    transaction.set(activityRef, { action: "secure-delete-expense", collection: "expenses", entityId: id, branchId: expense.branchId || "", amount: expense.amount || 0, category: expense.category || "other", reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+    transaction.set(activityRef, { ...auditActor(request), action: "secure-delete-expense", collection: "expenses", entityId: id, branchId: expense.branchId || "", amount: expense.amount || 0, category: expense.category || "other", reason, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
     return { ok: true };
   });
 }
@@ -2078,13 +2729,14 @@ async function deleteUserAccountPermanently(uid, request) {
   batch.delete(userRef);
   if (user.staffId) batch.set(db.doc(`staff/${sanitizeText(user.staffId, 100)}`), { userUid: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   tokenSnapshots.docs.forEach(snapshot => batch.delete(snapshot.ref));
-  batch.set(db.collection("activityLogs").doc(), { action: "secure-delete-user", collection: "users", entityId: uid, deletedUserEmail: sanitizeText(user.email, 200), deletedUserName: sanitizeText(user.name, 80), deletedUserRole: sanitizeText(user.role, 30), userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
+  batch.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "secure-delete-user", collection: "users", entityId: uid, deletedUserEmail: sanitizeText(user.email, 200), deletedUserName: sanitizeText(user.name, 80), deletedUserRole: sanitizeText(user.role, 30), userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: FieldValue.serverTimestamp() });
   await batch.commit();
   return { ok: true };
 }
 
 export const adminSecureDelete = onCall(adminOptions, async request => {
   requireRecentAdmin(request);
+  await requireLiveAdmin(request);
   const kind = sanitizeText(request.data?.kind, 30);
   const id = sanitizeText(request.data?.id, 100);
   const reason = sanitizeText(request.data?.reason, 300);
@@ -2131,27 +2783,21 @@ export const updateBooking = onCall(adminOptions, async request => {
       const createsPayment = Boolean(transition?.changed && !ledgerSnapshot?.exists);
       const revenueBreakdown = createsPayment ? calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount) : null;
       const dateKey = businessDateParts().dateKey;
-      let cashShiftRef = null;
-      let cashShift = null;
+      let activeShift = null;
       if (createsPayment) {
         const closing = await transaction.get(db.doc(`dailyClosings/${booking.branchId || "talkha"}_${dateKey}`));
         if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن تحصيل شيك جديد");
-        if (transition.method === "cash" && settings.cashDrawerEnabled === true) {
-          const cashState = await transaction.get(db.doc(`cashShiftState/${booking.branchId || "talkha"}`));
-          const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
-          if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل التحصيل النقدي");
-          cashShiftRef = db.doc(`cashShifts/${shiftId}`);
-          cashShift = await transaction.get(cashShiftRef);
-          if (!cashShift.exists || cashShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
-        }
+        activeShift = await ledgerShiftInTransaction(transaction, booking.branchId, transition.method === "cash" && settings.cashDrawerEnabled === true);
       }
+      const cashShiftRef = transition?.method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null;
+      const cashShift = cashShiftRef ? activeShift.snapshot : null;
       if (booking.phoneHash) await applyRewards(transaction, { booking: { ...booking, status: "completed", paymentStatus: "paid", code: booking.code || id }, customerRef: db.doc(`customers/${booking.phoneHash}`), settings, now });
       if (createsPayment) {
         const workerBreakdown = new Map();
         const attributedItems = normalizeLineWorkers(booking.items || [], booking.staffId).filter(item => item.workerId && item.workerId !== "none");
         const attributedSubtotal = attributedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
         attributedItems.forEach(item => workerBreakdown.set(item.workerId, (workerBreakdown.get(item.workerId) || 0) + (attributedSubtotal ? Number(item.lineTotal || 0) / attributedSubtotal * Number(revenueBreakdown.services || 0) : 0)));
-        transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: "payment", paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
+        transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId, ...(activeShift ? { shiftId: activeShift.ref.id } : {}), amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: "payment", paymentMethod: transition.method, source: booking.source || null, ...(booking.staffId ? { staffId: sanitizeText(booking.staffId, 100) } : {}), itemIds: booking.itemIds || [], dateKey, createdAt: now, createdBy: request.auth.uid });
         workerBreakdown.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { revenueTotal: FieldValue.increment(amount), updatedAt: now }));
         workerBreakdown.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: booking.branchId || "talkha", dateKey, amount, now }));
         if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
@@ -2167,7 +2813,7 @@ export const updateBooking = onCall(adminOptions, async request => {
       if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
       transaction.update(ref, { status: "completed", orderState: "PAID", paymentStatus: "paid", paymentMethod: transition?.method || booking.paymentMethod || "cash", financialPosted: true, rewardPosted: true, cashPosted: Boolean(cashShiftRef) || Boolean(booking.cashPosted), serviceTargetsPosted: Boolean(booking.serviceTargetsPosted) || targetEntries.length > 0, serviceTargetsDateKey: targetEntries.length ? dateKey : booking.serviceTargetsDateKey || null, finalizedAt: booking.finalizedAt || now, finalizedBy: booking.finalizedBy || request.auth.uid, paidAt: booking.paidAt || now, updatedAt: now });
       if (booking.phoneHash && booking.status !== "completed") transaction.update(db.doc(`customers/${booking.phoneHash}`), { completedVisits: FieldValue.increment(1), lastVisitAt: now, updatedAt: now });
-      transaction.set(db.collection("activityLogs").doc(), { action: "checkout-booking", collection: "bookings", entityId: id, branchId: booking.branchId || "talkha", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "checkout-booking", collection: "bookings", entityId: id, branchId: booking.branchId || "talkha", userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
       return { ok: true, status: "completed", paymentStatus: "paid", idempotent: alreadyPaid || ledgerSnapshot?.exists || false };
     }
     if (action === "void") {
@@ -2181,6 +2827,7 @@ export const updateBooking = onCall(adminOptions, async request => {
       const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
       const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
       inventorySnapshots.forEach((inventory, index) => {
+        if (inventory.exists && inventory.data().branchId !== booking.branchId) throw new HttpsError("permission-denied", "الصنف تابع لفرع آخر");
         if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: now });
         transaction.create(db.doc(`stockMovements/${id}_${soldInventory[index].id}_void`), { inventoryItemId: soldInventory[index].id, branchId: booking.branchId, bookingId: id, quantity: Math.max(1, Number(soldInventory[index].qty || 1)), type: "void-reversal", dateKey: businessDateParts().dateKey, reason, createdAt: now, createdBy: request.auth.uid });
       });
@@ -2188,7 +2835,7 @@ export const updateBooking = onCall(adminOptions, async request => {
       if (booking.duplicateGuardId) transaction.delete(db.doc(`bookingGuards/${booking.duplicateGuardId}`));
       transaction.update(ref, { status: "cancelled", orderState: "VOIDED", voidReason: reason, voidedAt: now, voidedBy: request.auth.uid, inventoryReleased: soldInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
       transaction.create(guardRef, { bookingId: id, reason, actorUid: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000) });
-      transaction.set(db.collection("activityLogs").doc(), { action: "void-order", collection: "bookings", entityId: id, branchId: booking.branchId, reason, userId: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "void-order", collection: "bookings", entityId: id, branchId: booking.branchId, reason, userId: request.auth.uid, requestId: idempotencyKey, createdAt: now });
       return { ok: true, status: "cancelled", orderState: "VOIDED" };
     }
     if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed"].includes(action)) {
@@ -2201,6 +2848,7 @@ export const updateBooking = onCall(adminOptions, async request => {
         const inventoryRefs = soldInventory.map(item => db.doc(`inventoryItems/${item.id}`));
         const inventorySnapshots = inventoryRefs.length ? await transaction.getAll(...inventoryRefs) : [];
         inventorySnapshots.forEach((inventory, index) => {
+          if (inventory.exists && inventory.data().branchId !== booking.branchId) throw new HttpsError("permission-denied", "الصنف تابع لفرع آخر");
           if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(soldInventory[index].qty || 1))), updatedAt: now });
           transaction.delete(db.doc(`stockMovements/${id}_${soldInventory[index].id}`));
         });
@@ -2222,12 +2870,14 @@ export const updateBooking = onCall(adminOptions, async request => {
         ...(action === "no_show" ? { noShowCount: FieldValue.increment(1) } : {}),
         updatedAt: now
       }, { merge: true });
-      transaction.set(db.collection("activityLogs").doc(), { action: `booking-${action}`, collection: "bookings", entityId: id, branchId: booking.branchId, userId: request.auth.uid, createdAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: `booking-${action}`, collection: "bookings", entityId: id, branchId: booking.branchId, userId: request.auth.uid, createdAt: now });
       return { ok: true, status: action };
     }
     let transition;
-    requirePermission(request, "revenue");
-    try { transition = paymentTransition(booking, action, request.data?.paymentMethod || booking.paymentMethod || "cash"); }
+    if (action === "refund" && hasPermission(request, "refundTransactions")) requireRole(request);
+    else requirePermission(request, "revenue");
+    if (action === "refund" && !booking.paymentMethod) throw new HttpsError("failed-precondition", "طريقة الدفع الأصلية غير موثقة؛ راجع العملية مع الإدارة");
+    try { transition = paymentTransition(booking, action, action === "refund" ? booking.paymentMethod : request.data?.paymentMethod || booking.paymentMethod || "cash"); }
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
     if (!transition.changed) return { ok: true, idempotent: true, paymentStatus: transition.status };
     const ledgerId = `${transition.ledgerType}_${id}`;
@@ -2240,16 +2890,9 @@ export const updateBooking = onCall(adminOptions, async request => {
     if (operationGuard?.exists) return { ok: true, idempotent: true, paymentStatus: "refunded" };
     const closing = await transaction.get(db.doc(`dailyClosings/${booking.branchId || "talkha"}_${dateKey}`));
     if (closing.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ يلزم إجراء تسوية بصلاحية مدير");
-    let refundShiftRef = null;
-    let refundShift = null;
-    if (action === "refund" && transition.method === "cash" && settings.cashDrawerEnabled === true) {
-      const cashState = await transaction.get(db.doc(`cashShiftState/${booking.branchId || "talkha"}`));
-      const shiftId = sanitizeText(cashState.data()?.openShiftId, 100);
-      if (!shiftId || cashState.data()?.status !== "OPEN") throw new HttpsError("failed-precondition", "افتح وردية الكاش قبل تنفيذ استرداد نقدي");
-      refundShiftRef = db.doc(`cashShifts/${shiftId}`);
-      refundShift = await transaction.get(refundShiftRef);
-      if (!refundShift.exists || refundShift.data().status !== "OPEN") throw new HttpsError("failed-precondition", "وردية الكاش غير مفتوحة");
-    }
+    const activeShift = await ledgerShiftInTransaction(transaction, booking.branchId, transition.method === "cash" && settings.cashDrawerEnabled === true);
+    const refundShiftRef = action === "refund" && transition.method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null;
+    const refundShift = refundShiftRef ? activeShift.snapshot : null;
     const refundableInventory = action === "refund" && !booking.inventoryReleased ? (booking.items || []).filter(item => item.kind === "inventory" && item.id) : [];
     const refundableSnapshots = refundableInventory.length ? await transaction.getAll(...refundableInventory.map(item => db.doc(`inventoryItems/${item.id}`))) : [];
     const revenueBreakdown = calculateRevenueBreakdown(booking.items || [], transition.ledgerAmount);
@@ -2265,9 +2908,10 @@ export const updateBooking = onCall(adminOptions, async request => {
         ? serviceTargetEntries(booking.items || [])
         : [];
     if (targetEntries.length) postServiceMonthlyTargets(transaction, { items: booking.items || [], branchId: booking.branchId || "talkha", dateKey: targetDateKey, direction: action === "refund" ? -1 : 1, now });
-    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId || "talkha", amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: transition.ledgerType, paymentMethod: transition.method, staffId: booking.staffId, itemIds: booking.itemIds || [], dateKey, reason: action === "refund" ? reason : null, requestId: action === "refund" ? idempotencyKey : null, createdAt: now, createdBy: request.auth.uid });
+    transaction.create(ledgerRef, { bookingId: id, bookingCode: booking.code, branchId: booking.branchId, ...(activeShift ? { shiftId: activeShift.ref.id } : {}), amount: transition.ledgerAmount, revenueBreakdown, workerBreakdown: Object.fromEntries(workerBreakdown), type: transition.ledgerType, paymentMethod: transition.method, source: booking.source || null, ...(booking.staffId ? { staffId: sanitizeText(booking.staffId, 100) } : {}), itemIds: booking.itemIds || [], dateKey, reason: action === "refund" ? reason : null, requestId: action === "refund" ? idempotencyKey : null, createdAt: now, createdBy: request.auth.uid });
     transaction.update(ref, { paymentStatus: transition.status, orderState: action === "refund" ? "REFUNDED" : "PAID", financialPosted: action !== "refund", paymentMethod: transition.method, paidAt: action === "markPaid" ? now : booking.paidAt || null, refundedAt: action === "refund" ? now : null, refundReason: action === "refund" ? reason : null, refundedBy: action === "refund" ? request.auth.uid : null, serviceTargetsPosted: action === "refund" ? false : Boolean(booking.serviceTargetsPosted) || targetEntries.length > 0, serviceTargetsDateKey: action === "refund" ? booking.serviceTargetsDateKey || null : targetEntries.length ? targetDateKey : booking.serviceTargetsDateKey || null, inventoryReleased: refundableInventory.length ? true : Boolean(booking.inventoryReleased), updatedAt: now });
     refundableSnapshots.forEach((inventory, index) => {
+      if (inventory.exists && inventory.data().branchId !== booking.branchId) throw new HttpsError("permission-denied", "الصنف تابع لفرع آخر");
       if (inventory.exists) transaction.update(inventory.ref, { stockQty: FieldValue.increment(Math.max(1, Number(refundableInventory[index].qty || 1))), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${id}_${refundableInventory[index].id}_refund`), { inventoryItemId: refundableInventory[index].id, branchId: booking.branchId, bookingId: id, quantity: Math.max(1, Number(refundableInventory[index].qty || 1)), type: "refund-reversal", dateKey, reason, createdAt: now, createdBy: request.auth.uid });
     });
@@ -2281,7 +2925,7 @@ export const updateBooking = onCall(adminOptions, async request => {
     workerBreakdown.forEach((amount, workerId) => transaction.update(db.doc(`staff/${workerId}`), { revenueTotal: FieldValue.increment(amount), updatedAt: now }));
     workerBreakdown.forEach((amount, workerId) => postWorkerMonthlyRevenue(transaction, { workerId, branchId: booking.branchId || "talkha", dateKey, amount, now }));
     if (booking.phoneHash) transaction.update(db.doc(`customers/${booking.phoneHash}`), { totalSpent: FieldValue.increment(transition.ledgerAmount), updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: action === "refund" ? "refund-order" : "mark-paid", collection: "bookings", entityId: id, branchId: booking.branchId, amount: transition.ledgerAmount, reason: action === "refund" ? reason : null, userId: request.auth.uid, requestId: action === "refund" ? idempotencyKey : null, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: action === "refund" ? "refund-order" : "mark-paid", collection: "bookings", entityId: id, branchId: booking.branchId, amount: transition.ledgerAmount, reason: action === "refund" ? reason : null, userId: request.auth.uid, requestId: action === "refund" ? idempotencyKey : null, createdAt: now });
     return { ok: true, paymentStatus: transition.status };
   });
 });
@@ -2298,25 +2942,41 @@ export const getCustomerPortal = onCall(publicOptions, async request => {
   const identity = authenticatedCustomer(request);
   await enforceRateLimit(request, "customer_portal", 60, 15 * 60 * 1000, identity.uid);
   const customerRef = db.doc(`customers/${identity.customerId}`);
-  const [customerSnapshot, bookingsSnapshot, walletSnapshot, offersSnapshot] = await Promise.all([
-    customerRef.get(),
+  if (request.data?.profileOnly === true) {
+    const snapshot = await customerRef.get();
+    return { customer: { firstName: snapshot.data()?.firstName || "", lastName: snapshot.data()?.lastName || "", phone: identity.phone } };
+  }
+  const [bookingsSnapshot, walletSnapshot, offersSnapshot] = await Promise.all([
     db.collection("bookings").where("phoneHash", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
     db.collection("walletTransactions").where("customerId", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
     db.collection("offers").where("active", "==", true).limit(20).get()
   ]);
-  if (!customerSnapshot.exists) throw new HttpsError("not-found", "لا يوجد ملف عميل لهذا الرقم بعد؛ نفّذ أول حجز ثم حاول مرة أخرى");
-  const customer = customerSnapshot.data();
-  const qrToken = customer.qrToken || customerQrToken();
-  if (!customer.qrToken) await customerRef.set({ qrToken, authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  else if (customer.authUid !== identity.uid) await customerRef.set({ authUid: identity.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const customer = await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(customerRef);
+    const record = snapshot.data() || {};
+    const qrToken = record.qrToken || customerQrToken();
+    if (!snapshot.exists) {
+      const local = identity.phone;
+      const variants = [local, `2${local}`, `+2${local}`, local.slice(1)];
+      const legacy = await transaction.get(db.collection("customers").where("phone", "in", variants).limit(10));
+      if (legacy.docs.some(item => item.id !== identity.customerId)) throw new HttpsError("failed-precondition", "وجدنا سجل عميل قديم لهذا الرقم يحتاج مراجعة آمنة؛ تواصل مع الفرع لربط حسابك");
+      const previous = bookingsSnapshot.docs[0]?.data()?.customer || {};
+      transaction.create(customerRef, { phone: identity.phone, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), qrToken, authUid: identity.uid, bookingCount: bookingsSnapshot.size, pointsBalance: 0, cashbackBalance: 0, createdAt: FieldValue.serverTimestamp() });
+      return { ...record, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), bookingCount: bookingsSnapshot.size, qrToken };
+    } else if (record.authUid !== identity.uid || !record.qrToken || record.phone !== identity.phone) {
+      transaction.set(customerRef, { authUid: identity.uid, phone: identity.phone, qrToken, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    return { ...record, qrToken };
+  });
+  const qrToken = customer.qrToken;
   const bookings = bookingsSnapshot.docs.map(cleanDoc);
   return {
-    customer: { firstName: customer.firstName || "", lastName: customer.lastName || "", qrToken, bookingCount: Number(customer.bookingCount || 0), completedVisits: Number(customer.completedVisits || 0), noShowCount: Number(customer.noShowCount || 0), lastBranchId: customer.lastBranchId || null, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
+    customer: { firstName: customer.firstName || "", lastName: customer.lastName || "", phone: identity.phone, qrToken, bookingCount: Number(customer.bookingCount || bookingsSnapshot.size || 0), completedVisits: Number(customer.completedVisits || 0), noShowCount: Number(customer.noShowCount || 0), lastBranchId: customer.lastBranchId || null, whatsappOptIn: customer.whatsappOptIn === true, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
     upcomingBookings: bookings.filter(item => ["pending", "confirmed", "arrived"].includes(item.status)).slice(0, 10),
     bookingHistory: bookings.slice(0, 20),
     lastBooking: bookings.find(item => !["cancelled", "rejected"].includes(item.status)) || null,
     walletActivity: walletSnapshot.docs.map(cleanDoc),
-    offers: offersSnapshot.docs.map(cleanDoc)
+    offers: offersSnapshot.docs.map(cleanDoc).filter(offer => offerAtBranch(offer, customer.lastBranchId || "", new Date()))
   };
 });
 
@@ -2333,7 +2993,7 @@ export const saveFavoriteBarber = onCall(publicOptions, async request => {
 });
 
 export const rotateCustomerQr = onCall(adminOptions, async request => {
-  requirePermission(request, "customers");
+  requireRole(request, ["admin"]); // Rotates a global identity shared across branches.
   const customerId = sanitizeText(request.data?.customerId, 100);
   const reason = sanitizeText(request.data?.reason, 300);
   const requestId = sanitizeText(request.data?.requestId, 100);
@@ -2351,7 +3011,7 @@ export const rotateCustomerQr = onCall(adminOptions, async request => {
     if (previousToken) transaction.create(db.doc(`revokedQrTokens/${hash(previousToken)}`), { customerId, reason, revokedBy: request.auth.uid, revokedAt: now });
     transaction.update(customerRef, { qrToken, qrRotatedAt: now, updatedAt: now });
     transaction.create(guardRef, { customerId, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
-    transaction.set(db.collection("activityLogs").doc(), { action: "rotate-customer-qr", targetType: "customer", targetId: customerId, branchId: customer.data()?.lastBranchId || null, reason, actorUid: request.auth.uid, requestId, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "rotate-customer-qr", targetType: "customer", targetId: customerId, branchId: customer.data()?.lastBranchId || null, reason, actorUid: request.auth.uid, requestId, createdAt: now });
     return { ok: true, qrToken };
   });
 });
@@ -2365,20 +3025,21 @@ export const scanCustomerCode = onCall(adminOptions, async request => {
   const snapshot = await db.collection("customers").where("qrToken", "==", code).limit(1).get();
   if (snapshot.empty) throw new HttpsError("not-found", "العميل غير موجود أو تم إلغاء الكود");
   const customer = cleanDoc(snapshot.docs[0]);
-  if (!itemInAllowedBranch(customer, branchesFor(request))) throw new HttpsError("permission-denied", "العميل تابع لفرع غير مسموح");
-  const bookings = await db.collection("bookings").where("phoneHash", "==", customer.id).orderBy("createdAt", "desc").limit(5).get();
-  return { customer: { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null }, bookings: bookings.docs.map(cleanDoc) };
+  const bookings = (await scopedRows(scopedQueries("bookings", branchesFor(request), query => query.where("phoneHash", "==", customer.id).orderBy("createdAt", "desc").limit(5)))).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 5);
+  return { customer: { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0) }, bookings };
 });
 
 export const findCustomerByPhone = onCall(adminOptions, async request => {
   if (!hasPermission(request, "customers") && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية البحث عن العملاء");
   let phone; try { phone=normalizePhone(request.data?.phone); } catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
   await enforceRateLimit(request,"customer_phone_lookup",120,15*60*1000,request.auth.uid);
-  const snapshot=await db.doc(`customers/${hash(phone)}`).get();if(!snapshot.exists)return {customer:null};const customer=cleanDoc(snapshot);if(!itemInAllowedBranch(customer,branchesFor(request)))throw new HttpsError("permission-denied","العميل تابع لفرع غير مسموح");return {customer};
+  branchesFor(request); // Operational identity lookup; it grants no customer-management or history access.
+  const snapshot=await db.doc(`customers/${hash(phone)}`).get();if(!snapshot.exists)return {customer:null};const customer=cleanDoc(snapshot);
+  return {customer:{id:customer.id,firstName:customer.firstName,lastName:customer.lastName,phone:customer.phone,pointsBalance:Number(customer.pointsBalance||0),cashbackBalance:Number(customer.cashbackBalance||0)}};
 });
 
 export const adjustCustomerWallet = onCall(adminOptions, async request => {
-  requirePermission(request, "rewards");
+  requireRole(request, ["admin"]); // Wallet balance is global and has no safe per-branch ledger in legacy documents.
   const customerId = sanitizeText(request.data?.customerId, 100);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   const reason = sanitizeText(request.data?.reason, 300);
@@ -2396,55 +3057,144 @@ export const adjustCustomerWallet = onCall(adminOptions, async request => {
     if (nextPoints < 0 || nextCashback < 0) throw new HttpsError("failed-precondition", "الرصيد لا يسمح بهذا الخصم");
     const now = FieldValue.serverTimestamp();
     transaction.update(customerRef, { pointsBalance: FieldValue.increment(points), cashbackBalance: FieldValue.increment(cashback), walletUpdatedAt: now });
-    transaction.create(txRef, { customerId, type: "ADMIN_ADJUSTMENT", points, cashback, reason, createdBy: request.auth.uid, createdAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { action: "wallet-adjustment", collection: "customers", entityId: customerId, points, cashback, reason, userId: request.auth.uid, createdAt: now });
+    transaction.create(txRef, { customerId, branchId: "all", type: "ADMIN_ADJUSTMENT", points, cashback, reason, createdBy: request.auth.uid, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "wallet-adjustment", collection: "customers", entityId: customerId, points, cashback, reason, userId: request.auth.uid, createdAt: now });
   });
   return { ok: true };
 });
 
 export const updateWhatsappConsent = onCall(adminOptions, async request => {
-  requirePermission(request, "customers");
+  requireRole(request, ["admin"]); // Consent is attached to the shared customer identity.
   const customerId = sanitizeText(request.data?.customerId, 100); const optedIn = request.data?.optedIn === true; const source = sanitizeText(request.data?.source || "in_branch", 60);
   const customerRef = db.doc(`customers/${customerId}`); const historyRef = db.collection("whatsappConsentHistory").doc();
   await db.runTransaction(async transaction => { const customer = await transaction.get(customerRef); if (!customer.exists) throw new HttpsError("not-found", "العميل غير موجود"); const now=FieldValue.serverTimestamp();transaction.update(customerRef,{whatsappOptIn:optedIn,whatsappConsentUpdatedAt:now,updatedAt:now});transaction.create(historyRef,{customerId,optedIn,source,updatedBy:request.auth.uid,createdAt:now}) });
   return { ok: true, optedIn };
 });
 
-export const previewWhatsappCampaign = onCall(whatsappOptions, async request => {
-  requirePermission(request, "campaigns");
-  const templateName = sanitizeText(request.data?.templateName, 120);
-  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
-  if (!/^[a-z0-9_]{1,120}$/.test(templateName) || !/^(all|[a-z0-9-]{2,40})$/.test(branchId)) throw new HttpsError("invalid-argument", "القالب أو الفرع غير صحيح");
-  if (branchId !== "all") requireBranchAccess(request, branchId);
+export const updateOwnWhatsappConsent = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
+  const optedIn = request.data?.optedIn;
+  if (typeof optedIn !== "boolean") throw new HttpsError("invalid-argument", "اختر حالة موافقة صحيحة");
+  const customerRef = db.doc(`customers/${identity.customerId}`);
+  await db.runTransaction(async transaction => {
+    const customer = await transaction.get(customerRef);
+    if (!customer.exists || customer.data()?.authUid !== identity.uid || customer.data()?.phone !== identity.phone) throw new HttpsError("permission-denied", "تحقق من حساب العميل أولًا");
+    if (customer.data()?.whatsappOptIn === optedIn) return;
+    const now = FieldValue.serverTimestamp();
+    transaction.update(customerRef, { whatsappOptIn: optedIn, whatsappConsentUpdatedAt: now, updatedAt: now });
+    transaction.create(db.collection("whatsappConsentHistory").doc(), { customerId: identity.customerId, optedIn, source: "customer_account", updatedBy: identity.uid, createdAt: now });
+  });
+  return { ok: true, optedIn };
+});
+
+export const getWhatsappCampaignOptions = onCall(adminOptions, async request => {
+  await requireMarketingGrant(request, "campaigns");
+  const settings = await readSettings();
+  const branchIds = request.auth.token.role === "admin" ? ["talkha", "mashaya"] : branchesFor(request);
+  const snapshots = await Promise.all(branchIds.map(branchId => db.collection("offers").where("branchIds", "array-contains", branchId).orderBy("__name__").limit(50).get()));
+  const offers = [...new Map(snapshots.flatMap(snapshot => snapshot.docs.map(document => [document.id, { id: document.id, ...document.data() }]))).values()]
+    .filter(offer => branchIds.some(branch => offerAtBranch(offer, branch))).slice(0, 100)
+    .map(offer => ({ id: offer.id, nameAr: offer.nameAr, branchIds: offer.branchIds, imageUrl: offer.imageUrl || null }));
+  return { templates: (Array.isArray(settings.whatsappMarketingTemplates) ? settings.whatsappMarketingTemplates : []).filter(value => campaignTemplate(settings, value?.name)).map(value => ({ name: value.name, languageCode: value.languageCode || "ar", headerType: value.headerType })), offers, branchIds, testCustomerCount: Math.min(30, (settings.whatsappTestCustomerIds || []).length), enabled: settings.whatsappCampaignsEnabled === true };
+});
+
+export const checkWhatsappMarketingRecipient = onCall(adminOptions, async request => {
+  await requireMarketingGrant(request, "campaigns");
+  const customerId = sanitizeText(request.data?.customerId, 100);
+  const offerId = sanitizeText(request.data?.offerId, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(customerId)) throw new HttpsError("invalid-argument", "العميل غير صحيح");
+  const customer = await db.doc(`customers/${customerId}`).get();
+  if (!customer.exists || customer.data()?.whatsappOptIn !== true) throw new HttpsError("failed-precondition", "لا توجد موافقة واتساب مسجلة لهذا العميل");
+  campaignScope(request, customer.data().lastBranchId);
+  if (offerId) await campaignOffer(offerId, customer.data().lastBranchId);
+  return { ok: true };
+});
+
+function campaignScope(request, branchId) {
+  if (!/^(all|[a-z0-9-]{2,40})$/.test(branchId) || !campaignBranchAllowed(request.auth.token.role, branchesFor(request), branchId)) throw new HttpsError("permission-denied", "غير مصرح بهذا الفرع");
+}
+async function campaignOffer(offerId, branchId) {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(offerId)) throw new HttpsError("invalid-argument", "اختر عرضًا محفوظًا");
+  const snapshot = await db.doc(`offers/${offerId}`).get();
+  if (!offerAtBranch(snapshot.data(), branchId)) throw new HttpsError("failed-precondition", "العرض غير متاح لهذا الفرع أو انتهت صلاحيته");
+  return snapshot.data();
+}
+async function campaignAudienceCount(branchId, testMode, settings) {
+  if (testMode) {
+    const ids = [...new Set((settings.whatsappTestCustomerIds || []).filter(value => /^[A-Za-z0-9_-]{1,100}$/.test(value)))].slice(0, 30);
+    if (!ids.length) return 0;
+    const snapshots = await db.getAll(...ids.map(id => db.doc(`customers/${id}`)));
+    return snapshots.filter(snapshot => eligibleRecipient({ id: snapshot.id, ...snapshot.data() }, { branchId, testMode: true }, ids)).length;
+  }
   let query = db.collection("customers").where("whatsappOptIn", "==", true);
   if (branchId !== "all") query = query.where("lastBranchId", "==", branchId);
-  const [count, settings] = await Promise.all([query.count().get(), readSettings()]);
-  return { templateName, branchId, eligibleCount: Number(count.data().count || 0), killSwitchEnabled: settings.whatsappCampaignsEnabled === true, metaConfigured: Boolean(whatsappAccessToken.value() && whatsappPhoneNumberId.value()), variables: [], testModeRecommended: true };
+  return Number((await query.count().get()).data().count || 0);
+}
+
+export const previewWhatsappCampaign = onCall(whatsappOptions, async request => {
+  await requireMarketingGrant(request, "campaigns");
+  const templateName = sanitizeText(request.data?.templateName, 120);
+  const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
+  campaignScope(request, branchId);
+  const settings = await readSettings();
+  const template = campaignTemplate(settings, templateName);
+  if (!template) throw new HttpsError("failed-precondition", "القالب غير مضبوط في إعدادات النظام");
+  const offerId = sanitizeText(request.data?.offerId, 100);
+  const offer = await campaignOffer(offerId, branchId);
+  if (template.headerType === "image" && !managedStoragePath(offer.imageUrl)) throw new HttpsError("failed-precondition", "القالب يحتاج صورة عرض مرفوعة في مساحة التخزين المعتمدة");
+  const testMode = request.data?.testMode !== false;
+  const eligibleCount = await campaignAudienceCount(branchId, testMode, settings);
+  const recipientCap = Number(request.data?.recipientCap);
+  return { offer: { id: offerId, nameAr: offer.nameAr, imageUrl: offer.imageUrl || null, oldPrice: offer.oldPrice, newPrice: offer.newPrice }, template, branchId, eligibleCount, recipientCapValid: Number.isInteger(recipientCap) && recipientCap >= 1 && recipientCap <= eligibleCount && recipientCap <= 1000, imageIncluded: template.headerType === "image", consentFiltered: true, testMode, killSwitchEnabled: settings.whatsappCampaignsEnabled === true, metaConfigured: Boolean(whatsappAccessToken.value() && whatsappPhoneNumberId.value()) };
 });
 
 export const createWhatsappCampaign = onCall(adminOptions, async request => {
-  requirePermission(request, "campaigns");
+  await requireMarketingGrant(request, "campaigns");
   const name = sanitizeText(request.data?.name, 120);
   const templateName = sanitizeText(request.data?.templateName, 120);
   const branchId = sanitizeText(request.data?.branchId || "all", 40).toLowerCase();
-  const recipientCap = Math.max(1, Math.min(1000000, Math.floor(Number(request.data?.recipientCap || 100))));
+  const recipientCap = Number(request.data?.recipientCap);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   if (!name || !/^[a-z0-9_]{1,120}$/.test(templateName) || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "اسم الحملة أو القالب غير صحيح");
-  if (branchId !== "all") requireBranchAccess(request, branchId);
+  campaignScope(request, branchId);
+  const guardRef = db.doc(`campaignGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
+  const previousGuard = await guardRef.get();
+  if (previousGuard.exists) {
+    const previous = await db.doc(`campaigns/${previousGuard.data().campaignId}`).get();
+    if (!previous.exists || previous.data()?.createdBy !== request.auth.uid) throw new HttpsError("permission-denied", "الحملة غير متاحة");
+    campaignScope(request, previous.data().branchId);
+    if (previous.data().state === "QUEUED" && (await readSettings()).whatsappCampaignsEnabled === true) await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId: previous.id });
+    return { ok: true, campaignId: previous.id, state: previous.data().state, idempotent: true };
+  }
   const settings = await readSettings();
   if (settings.whatsappCampaignsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الحملات متوقف من إعدادات النظام");
+  if (!whatsappAccessToken.value() || !whatsappPhoneNumberId.value()) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
+  const offerId = sanitizeText(request.data?.offerId, 100);
+  const offer = await campaignOffer(offerId, branchId);
+  const template = campaignTemplate(settings, templateName);
+  if (!template) throw new HttpsError("failed-precondition", "القالب غير مضبوط في إعدادات النظام");
+  if (template.headerType === "image" && !managedStoragePath(offer.imageUrl)) throw new HttpsError("failed-precondition", "الصورة غير صالحة لهذا القالب");
+  const testMode = request.data?.testMode !== false;
+  const eligibleCount = await campaignAudienceCount(branchId, testMode, settings);
+  if (!Number.isInteger(recipientCap) || recipientCap < 1 || recipientCap > Math.min(eligibleCount, 1000)) throw new HttpsError("failed-precondition", "لا يوجد عملاء مؤهلون ضمن الحد المختار");
   const campaignRef = db.collection("campaigns").doc();
-  const guardRef = db.doc(`campaignGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`);
   const created = await db.runTransaction(async transaction => {
     const guard = await transaction.get(guardRef);
     if (guard.exists) return { campaignId: guard.data().campaignId, idempotent: true };
     const now = FieldValue.serverTimestamp();
-    transaction.create(campaignRef, { name, templateName, languageCode: sanitizeText(request.data?.languageCode || "ar", 10), branchId, state: "QUEUED", testMode: request.data?.testMode !== false, recipientCap, eligibleCount: Number(request.data?.eligibleCount || 0), sentCount: 0, failedCount: 0, lastCustomerId: null, createdBy: request.auth.uid, requestId: idempotencyKey, createdAt: now, updatedAt: now });
+    transaction.create(campaignRef, { name, offerId, offerName: sanitizeText(offer.nameAr, 120), offerOldPrice: Number(offer.oldPrice || 0), offerNewPrice: Number(offer.newPrice || 0), offerEndAt: offer.endAt || null, imageUrl: template.headerType === "image" ? offer.imageUrl : null, templateName, languageCode: template.languageCode, headerType: template.headerType, bodyVariables: template.bodyVariables, branchId, state: "QUEUED", testMode: request.data?.testMode !== false, recipientCap, eligibleCount, targetedCount: 0, sentCount: 0, failedCount: 0, lastCustomerId: null, createdBy: request.auth.uid, createdRole: request.auth.token.role, requestId: idempotencyKey, createdAt: now, updatedAt: now });
     transaction.create(guardRef, { campaignId: campaignRef.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
-    transaction.set(db.collection("activityLogs").doc(), { action: "queue-whatsapp-campaign", targetType: "campaign", targetId: campaignRef.id, branchId, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "campaign-created", targetType: "campaign", targetId: campaignRef.id, campaignId: campaignRef.id, offerId, recipientCap, testMode, branchId, actorUid: request.auth.uid, requestId: idempotencyKey, createdAt: now });
+    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "campaign-started", targetType: "campaign", targetId: campaignRef.id, campaignId: campaignRef.id, offerId, recipientCap, testMode, branchId, createdAt: now });
     return { campaignId: campaignRef.id, idempotent: false };
   });
-  if (created.idempotent) return { ok: true, campaignId: created.campaignId, state: "QUEUED", idempotent: true };
+  if (created.idempotent) {
+    const previous = await db.doc(`campaigns/${created.campaignId}`).get();
+    if (!previous.exists || previous.data()?.createdBy !== request.auth.uid) throw new HttpsError("permission-denied", "الحملة غير متاحة");
+    campaignScope(request, previous.data().branchId);
+    if (previous.data().state === "QUEUED") await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId: created.campaignId });
+    return { ok: true, campaignId: created.campaignId, state: previous.data().state, idempotent: true };
+  }
   await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId: campaignRef.id });
   return { ok: true, campaignId: campaignRef.id, state: "QUEUED" };
 });
@@ -2459,7 +3209,7 @@ export const sendWhatsappReceipt = onCall(whatsappOptions, async request => {
   const settings = await readSettings();
   if (settings.whatsappReceiptsEnabled !== true) throw new HttpsError("failed-precondition", "إرسال الشيكات عبر واتساب متوقف");
   const accessToken = whatsappAccessToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
-  if (!accessToken || !phoneNumberId) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
+  if (!accessToken || !/^[0-9]{5,25}$/.test(phoneNumberId || "")) throw new HttpsError("failed-precondition", "إعداد Meta غير مكتمل");
   const templateName = sanitizeText(settings.whatsappReceiptTemplate, 120);
   if (!/^[a-z0-9_]{1,120}$/.test(templateName)) throw new HttpsError("failed-precondition", "قالب شيك واتساب غير مضبوط");
   const guardRef = db.doc(`whatsappOperations/receipt_${bookingId}`);
@@ -2481,84 +3231,158 @@ export const sendWhatsappReceipt = onCall(whatsappOptions, async request => {
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
   batch.set(guardRef, { bookingId, customerId: booking.phoneHash || null, status: "SENT", deliveryStatus: "sent", metaMessageId, leaseUntil: null, sentBy: request.auth.uid, sentAt: now }, { merge: true });
-  batch.set(db.collection("activityLogs").doc(), { action: "send-whatsapp-receipt", targetType: "booking", targetId: bookingId, branchId: booking.branchId, actorUid: request.auth.uid, createdAt: now });
+  batch.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "send-whatsapp-receipt", targetType: "booking", targetId: bookingId, branchId: booking.branchId, actorUid: request.auth.uid, createdAt: now });
   await batch.commit();
   return { ok: true };
 });
 
 export const updateWhatsappCampaignState = onCall(adminOptions, async request => {
-  requirePermission(request, "campaigns");
+  await requireMarketingGrant(request, "campaigns");
   const campaignId = sanitizeText(request.data?.campaignId, 100);
   const action = sanitizeText(request.data?.action, 20).toUpperCase();
-  const states = { PAUSE: "PAUSED", RESUME: "QUEUED", CANCEL: "CANCELLED" };
-  if (!campaignId || !states[action]) throw new HttpsError("invalid-argument", "طلب الحملة غير صحيح");
+  if (!campaignId || !CAMPAIGN_STATES[action]) throw new HttpsError("invalid-argument", "طلب الحملة غير صحيح");
   const ref = db.doc(`campaigns/${campaignId}`);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError("not-found", "الحملة غير موجودة");
-  if (["COMPLETED", "CANCELLED"].includes(snapshot.data().state)) throw new HttpsError("failed-precondition", "الحملة منتهية");
-  await ref.update({ state: states[action], updatedAt: FieldValue.serverTimestamp() });
+  campaignScope(request, snapshot.data().branchId);
+  const next = CAMPAIGN_STATES[action]?.[snapshot.data().state];
+  if (!next) throw new HttpsError("failed-precondition", "لا يمكن تنفيذ هذا الإجراء على حالة الحملة الحالية");
+  await db.runTransaction(async transaction => {
+    const current = await transaction.get(ref);
+    if (!current.exists || CAMPAIGN_STATES[action]?.[current.data().state] !== next) throw new HttpsError("failed-precondition", "تغيرت حالة الحملة؛ حدّث الصفحة");
+    transaction.update(ref, { state: next, updatedAt: FieldValue.serverTimestamp() });
+    transaction.create(db.collection("activityLogs").doc(), { ...auditActor(request), action: { PAUSE: "campaign-paused", RESUME: "campaign-resumed", CANCEL: "campaign-cancelled" }[action], targetType: "campaign", targetId: campaignId, campaignId, offerId: current.data().offerId || null, recipientCap: current.data().recipientCap, testMode: current.data().testMode, branchId: current.data().branchId, createdAt: FieldValue.serverTimestamp() });
+  });
   if (action === "RESUME") await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId });
-  return { ok: true, state: states[action] };
+  return { ok: true, state: next };
 });
 
-export const processCampaignBatch = onTaskDispatched({ region, secrets: [whatsappAccessToken, whatsappPhoneNumberId], retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 } }, async request => {
+export const getWhatsappCampaignRecipients = onCall(adminOptions, async request => {
+  await requireMarketingGrant(request, "campaigns");
+  const campaignId = sanitizeText(request.data?.campaignId, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(campaignId)) throw new HttpsError("invalid-argument", "الحملة غير صحيحة");
+  const campaign = await db.doc(`campaigns/${campaignId}`).get();
+  if (!campaign.exists) throw new HttpsError("not-found", "الحملة غير موجودة");
+  campaignScope(request, campaign.data().branchId);
+  const cursor = sanitizeText(request.data?.cursor, 100);
+  let query = db.collection("campaignRecipients").where("campaignId", "==", campaignId).orderBy("__name__").limit(25);
+  if (cursor) query = query.startAfter(cursor);
+  const rows = await query.get();
+  return { items: rows.docs.map(document => ({ id: document.id, customerId: document.data().customerId, customerName: document.data().customerName || null, phoneMasked: document.data().phoneMasked || null, status: document.data().status, deliveryStatus: document.data().deliveryStatus || null, sentAt: document.data().sentAt || null, failureCode: document.data().deliveryErrorCode || document.data().error || null })), nextCursor: rows.size === 25 ? rows.docs.at(-1).id : null };
+});
+
+export const getWhatsappCampaignStats = onCall(adminOptions, async request => {
+  await requireMarketingGrant(request, "campaigns");
+  const campaignId = sanitizeText(request.data?.campaignId, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(campaignId)) throw new HttpsError("invalid-argument", "الحملة غير صحيحة");
+  const snapshot = await db.doc(`campaigns/${campaignId}`).get();
+  if (!snapshot.exists) throw new HttpsError("not-found", "الحملة غير موجودة");
+  campaignScope(request, snapshot.data().branchId);
+  const base = db.collection("campaignRecipients").where("campaignId", "==", campaignId);
+  const [delivered, read, deliveryFailed] = await Promise.all(["delivered", "read", "failed"].map(status => base.where("deliveryStatus", "==", status).count().get()));
+  const campaign = snapshot.data();
+  return { eligible: Number(campaign.eligibleCount || 0), targeted: Number(campaign.targetedCount || 0), sent: Number(campaign.sentCount || 0), delivered: Number(delivered.data().count || 0) + Number(read.data().count || 0), read: Number(read.data().count || 0), failed: Number(campaign.failedCount || 0) + Number(deliveryFailed.data().count || 0), skipped: Number(campaign.skippedCount || 0), remaining: Math.max(0, Number(campaign.recipientCap || 0) - Number(campaign.targetedCount || 0)) };
+});
+
+export const processCampaignBatch = onTaskDispatched({ region, secrets: [whatsappAccessToken, whatsappPhoneNumberId], timeoutSeconds: 300, retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, rateLimits: { maxConcurrentDispatches: 2 } }, async request => {
   const campaignId = sanitizeText(request.data?.campaignId, 100);
   const ref = db.doc(`campaigns/${campaignId}`);
   const snapshot = await ref.get();
   if (!snapshot.exists || !["QUEUED", "SENDING"].includes(snapshot.data().state)) return;
   const campaign = snapshot.data();
   const settings = await readSettings();
+  if (campaign.createdRole && campaign.createdRole !== "admin") {
+    const creator = await db.doc(`users/${campaign.createdBy}`).get();
+    if (!creator.exists || creator.data()?.role !== campaign.createdRole || !creator.data()?.permissions?.includes("campaigns")
+        || (campaign.branchId !== "all" && !creator.data()?.branchIds?.includes(campaign.branchId))) {
+      await ref.update({ state: "PAUSED", lastError: "CREATOR_PERMISSION_REVOKED", updatedAt: FieldValue.serverTimestamp() });
+      return;
+    }
+  }
   if (settings.whatsappCampaignsEnabled !== true) { await ref.update({ state: "PAUSED", lastError: "FEATURE_DISABLED", updatedAt: FieldValue.serverTimestamp() }); return; }
   const accessToken = whatsappAccessToken.value(); const phoneNumberId = whatsappPhoneNumberId.value();
-  if (!accessToken || !phoneNumberId) { await ref.update({ state: "PAUSED", lastError: "META_NOT_CONFIGURED", updatedAt: FieldValue.serverTimestamp() }); return; }
-  const remaining = Number(campaign.recipientCap || 100) - Number(campaign.sentCount || 0);
-  if (remaining <= 0) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
-  let query = db.collection("customers").where("whatsappOptIn", "==", true);
-  if (campaign.branchId && campaign.branchId !== "all") query = query.where("lastBranchId", "==", campaign.branchId);
-  query = query.orderBy("__name__").limit(Math.min(100, remaining));
-  if (campaign.lastCustomerId) query = query.startAfter(campaign.lastCustomerId);
-  const customers = await query.get();
-  if (customers.empty) { await ref.update({ state: "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
+  if (!accessToken || !/^[0-9]{5,25}$/.test(phoneNumberId || "")) { await ref.update({ state: "PAUSED", lastError: "META_NOT_CONFIGURED", updatedAt: FieldValue.serverTimestamp() }); return; }
+  const remaining = Number(campaign.recipientCap || 100) - Number(campaign.targetedCount || 0);
+  if (remaining <= 0) { await ref.update({ state: Number(campaign.failedCount || 0) ? "PARTIAL" : "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
+  let customerDocs;
+  if (campaign.testMode) {
+    const testIds = [...new Set((settings.whatsappTestCustomerIds || []).filter(id => /^[A-Za-z0-9_-]{1,100}$/.test(id)))].slice(0, 30);
+    customerDocs = testIds.length ? (await db.getAll(...testIds.map(id => db.doc(`customers/${id}`)))).filter(doc => doc.exists && (!campaign.lastCustomerId || doc.id > campaign.lastCustomerId)).sort((a, b) => a.id.localeCompare(b.id)).slice(0, 20) : [];
+  } else {
+    let query = db.collection("customers").where("whatsappOptIn", "==", true);
+    if (campaign.branchId && campaign.branchId !== "all") query = query.where("lastBranchId", "==", campaign.branchId);
+    query = query.orderBy("__name__").limit(20);
+    if (campaign.lastCustomerId) query = query.startAfter(campaign.lastCustomerId);
+    customerDocs = (await query.get()).docs;
+  }
+  if (!customerDocs.length) { await ref.update({ state: Number(campaign.failedCount || 0) ? "PARTIAL" : "COMPLETED", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }); return; }
   await ref.update({ state: "SENDING", updatedAt: FieldValue.serverTimestamp() });
-  let sent = 0; let failed = 0;
-  for (const customerSnapshot of customers.docs) {
-    const customer = customerSnapshot.data();
+  const offerSnapshot = await db.doc(`offers/${campaign.offerId}`).get();
+  const offer = offerSnapshot.data();
+  if (!offer || !offerAtBranch(offer, campaign.branchId)) { await ref.update({ state: "PAUSED", lastError: "OFFER_UNAVAILABLE", updatedAt: FieldValue.serverTimestamp() }); return; }
+  const template = campaignTemplate(settings, campaign.templateName);
+  if (!template || template.headerType !== campaign.headerType || (template.headerType === "image" && !managedStoragePath(campaign.imageUrl))) { await ref.update({ state: "PAUSED", lastError: "TEMPLATE_UNAVAILABLE", updatedAt: FieldValue.serverTimestamp() }); return; }
+  let sent = 0; let failed = 0; let skipped = 0; let targeted = 0;
+  for (const customerSnapshot of customerDocs) {
+    if (targeted >= remaining) break;
     const recipientRef = db.doc(`campaignRecipients/${campaignId}_${customerSnapshot.id}`);
-    const allowed = !campaign.testMode || (Array.isArray(settings.whatsappTestCustomerIds) && settings.whatsappTestCustomerIds.includes(customerSnapshot.id));
+    const customerRef = db.doc(`customers/${customerSnapshot.id}`);
     const claim = await db.runTransaction(async transaction => {
-      const existing = await transaction.get(recipientRef);
-      const value = existing.data() || {};
-      if (["SENT", "SKIPPED_TEST_MODE"].includes(value.status)) return false;
-      if (value.status === "SENDING" && Number(value.leaseUntil?.toMillis?.() || 0) > Date.now()) return false;
-      transaction.set(recipientRef, { campaignId, customerId: customerSnapshot.id, status: allowed ? "SENDING" : "SKIPPED_TEST_MODE", attempts: FieldValue.increment(allowed ? 1 : 0), leaseUntil: allowed ? Timestamp.fromMillis(Date.now() + 2 * 60 * 1000) : null, updatedAt: FieldValue.serverTimestamp(), ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }) }, { merge: true });
-      return allowed;
-    });
-    if (!claim) continue;
-    try {
-      const phone = normalizePhone(customer.phone).replace(/^0/, "20");
-      let response;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: campaign.templateName, language: { code: campaign.languageCode || "ar" } } }) });
-        if (response.ok || (response.status < 500 && response.status !== 429)) break;
+      const [currentCampaign, currentCustomer, existing] = await Promise.all([transaction.get(ref), transaction.get(customerRef), transaction.get(recipientRef)]);
+      if (!["QUEUED", "SENDING"].includes(currentCampaign.data()?.state) || Number(currentCampaign.data()?.targetedCount || 0) >= Number(campaign.recipientCap)) return "STOP";
+      if (existing.exists) return "SEEN"; // An uncertain Meta send must never be retried automatically.
+      if (!eligibleRecipient({ id: customerSnapshot.id, ...currentCustomer.data() }, campaign, settings.whatsappTestCustomerIds || [])) {
+        transaction.create(recipientRef, { campaignId, customerId: customerSnapshot.id, status: "SKIPPED_CONSENT", updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+        transaction.update(ref, { skippedCount: FieldValue.increment(1) });
+        return "SKIPPED";
       }
+      const phoneDigits = String(currentCustomer.data().phone || "").replace(/\D/g, "");
+      transaction.create(recipientRef, { campaignId, customerId: customerSnapshot.id, customerName: sanitizeText(currentCustomer.data().firstName, 50), phoneMasked: phoneDigits ? `***${phoneDigits.slice(-4)}` : null, status: "SENDING", attempts: 1, leaseUntil: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000), updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
+      transaction.update(ref, { targetedCount: FieldValue.increment(1) });
+      return { customer: currentCustomer.data() };
+    });
+    if (claim === "STOP") break;
+    if (claim === "SEEN") continue;
+    if (claim === "SKIPPED") { skipped++; continue; }
+    targeted++;
+    try {
+      const phone = normalizePhone(claim.customer.phone).replace(/^0/, "20");
+      const components = campaignComponents(template, { nameAr: campaign.offerName, oldPrice: campaign.offerOldPrice, newPrice: campaign.offerNewPrice, endAt: campaign.offerEndAt, imageUrl: campaign.imageUrl }, claim.customer, campaign.branchId === "all" ? "مزين مصر" : campaign.branchId === "talkha" ? "طلخا" : "المشاية");
+      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: template.name, language: { code: template.languageCode }, ...(components.length ? { components } : {}) } }) });
       const responseBody = await response?.json().catch(() => ({}));
       if (!response?.ok) throw new Error(`META_${response?.status || "NETWORK"}`);
       const metaMessageId = sanitizeText(responseBody?.messages?.[0]?.id, 200) || null;
-      await recipientRef.set({ status: "SENT", deliveryStatus: "sent", metaMessageId, leaseUntil: null, sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true }); sent++;
-    } catch (error) { await recipientRef.set({ status: "FAILED", leaseUntil: null, error: sanitizeText(error.message, 100), updatedAt: FieldValue.serverTimestamp() }, { merge: true }); failed++; }
+      await db.runTransaction(async transaction => {
+        const existing = await transaction.get(recipientRef);
+        if (existing.data()?.status !== "SENDING") return;
+        transaction.update(recipientRef, { status: "SENT", deliveryStatus: "sent", metaMessageId, leaseUntil: null, sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        transaction.update(ref, { sentCount: FieldValue.increment(1) });
+      }); sent++;
+    } catch (error) {
+      await db.runTransaction(async transaction => {
+        const existing = await transaction.get(recipientRef);
+        if (existing.data()?.status !== "SENDING") return;
+        transaction.update(recipientRef, { status: "FAILED", leaseUntil: null, error: sanitizeText(error.message, 100), updatedAt: FieldValue.serverTimestamp() });
+        transaction.update(ref, { failedCount: FieldValue.increment(1) });
+      }); failed++;
+    }
   }
-  const lastCustomerId = customers.docs.at(-1).id;
-  const nextSent = Number(campaign.sentCount || 0) + sent;
-  const complete = customers.size < 100 || nextSent >= Number(campaign.recipientCap || 100);
-  await ref.update({ state: complete ? (failed ? "PARTIAL" : "COMPLETED") : "QUEUED", sentCount: FieldValue.increment(sent), failedCount: FieldValue.increment(failed), lastCustomerId, updatedAt: FieldValue.serverTimestamp(), ...(complete ? { completedAt: FieldValue.serverTimestamp() } : {}) });
-  if (!complete) await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId }, { scheduleDelaySeconds: 2 });
+  const lastCustomerId = customerDocs.at(-1).id;
+  const nextTargeted = Number(campaign.targetedCount || 0) + targeted;
+  const complete = customerDocs.length < 20 || nextTargeted >= Number(campaign.recipientCap || 100);
+  const shouldContinue = await db.runTransaction(async transaction => {
+    const latest = await transaction.get(ref);
+    if (!["QUEUED", "SENDING"].includes(latest.data()?.state)) return false;
+    const finished = complete || Number(latest.data()?.targetedCount || 0) >= Number(campaign.recipientCap || 100);
+    transaction.update(ref, { state: finished ? (Number(latest.data()?.failedCount || 0) ? "PARTIAL" : "COMPLETED") : "QUEUED", lastCustomerId, updatedAt: FieldValue.serverTimestamp(), ...(finished ? { completedAt: FieldValue.serverTimestamp() } : {}) });
+    return !finished;
+  });
+  if (shouldContinue) await getAdminFunctions().taskQueue("processCampaignBatch").enqueue({ campaignId }, { scheduleDelaySeconds: 2 });
 });
 
 function validMetaSignature(request) {
   const signature = String(request.get("x-hub-signature-256") || "");
-  if (!/^sha256=[a-f0-9]{64}$/.test(signature)) return false;
-  const expected = `sha256=${createHmac("sha256", whatsappAppSecret.value()).update(request.rawBody || Buffer.from("")).digest("hex")}`;
-  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  return verifyMetaSignature(signature, request.rawBody, whatsappAppSecret.value());
 }
 
 export const whatsappWebhook = onRequest(whatsappWebhookOptions, async (request, response) => {
@@ -2571,6 +3395,7 @@ export const whatsappWebhook = onRequest(whatsappWebhookOptions, async (request,
     return response.status(200).send(challenge);
   }
   if (request.method !== "POST") return response.status(405).send("method not allowed");
+  if (!request.rawBody || request.rawBody.length > 256 * 1024) return response.status(413).send("payload too large");
   if (!validMetaSignature(request)) return response.status(401).send("invalid signature");
   const statuses = (Array.isArray(request.body?.entry) ? request.body.entry : [])
     .flatMap(entry => Array.isArray(entry?.changes) ? entry.changes : [])
@@ -2586,8 +3411,12 @@ export const whatsappWebhook = onRequest(whatsappWebhookOptions, async (request,
     ]);
     const batch = db.batch();
     const deliveryPatch = { deliveryStatus, deliveryUpdatedAt: FieldValue.serverTimestamp(), ...(deliveryStatus === "failed" ? { deliveryErrorCode: sanitizeText(item?.errors?.[0]?.code, 40) || "META_FAILED" } : {}) };
-    for (const snapshot of [...receipts.docs, ...recipients.docs]) batch.set(snapshot.ref, deliveryPatch, { merge: true });
-    if (receipts.size || recipients.size) await batch.commit();
+    let changed = 0;
+    for (const snapshot of [...receipts.docs, ...recipients.docs]) {
+      if (!shouldApplyDeliveryStatus(snapshot.data().deliveryStatus, deliveryStatus)) continue;
+      batch.set(snapshot.ref, deliveryPatch, { merge: true }); changed++;
+    }
+    if (changed) await batch.commit();
   }
   structuredLog("whatsapp_webhook", { statuses: statuses.length });
   return response.status(200).send("ok");
@@ -2613,15 +3442,16 @@ export const unregisterPushToken = onCall(adminOptions, async request => {
 
 export const setUserRole = onCall(adminOptions, async request => {
   requireRole(request, ["admin"]);
+  await requireLiveAdmin(request);
   const uid = sanitizeText(request.data?.uid, 128);
   const role = sanitizeText(request.data?.role, 30);
   const staffId = sanitizeText(request.data?.staffId, 100);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
-  const rolePermissionValues = role === "worker" ? ROLE_DEFAULT_PERMISSIONS.worker : ALL_PERMISSIONS;
+  const rolePermissionValues = ROLE_CAPABILITY_CEILINGS[role] || [];
   const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
   if (!uid || !["manager", "cashier", "worker"].includes(role)) throw new HttpsError("invalid-argument", "نوع الحساب غير صالح");
   if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "لا يمكنك تعديل صلاحيات حسابك الحالي");
-  if (!branchIds.length) throw new HttpsError("invalid-argument", "حدد فرعًا واحدًا على الأقل لهذا الحساب");
+  if (!branchIds.length || branchIds.some(id => !["talkha", "mashaya"].includes(id))) throw new HttpsError("invalid-argument", "حدد فرعًا صحيحًا على الأقل لهذا الحساب");
   const userRef = db.doc(`users/${uid}`);
   const beforeSnapshot = await userRef.get();
   if (!beforeSnapshot.exists || beforeSnapshot.data()?.role === "admin") throw new HttpsError("failed-precondition", "لا يمكن تعديل حساب الأدمن من هذه الشاشة");
@@ -2633,13 +3463,18 @@ export const setUserRole = onCall(adminOptions, async request => {
     if (linkedUsers.docs.some(document => document.id !== uid)) throw new HttpsError("already-exists", "هذا العامل مرتبط بحساب آخر بالفعل");
   }
   const { getAuth } = await import("firebase-admin/auth");
-  await getAuth().setCustomUserClaims(uid, { role, permissions, branchIds, ...(role === "worker" ? { staffId } : {}) });
+  try { await replaceClaimsAndRevoke(getAuth(), uid, { role, permissions, branchIds, ...(role === "worker" ? { staffId } : {}) }); }
+  catch (error) {
+    console.error("setUserRole refresh-token revocation failed", { uid, code: error.code });
+    throw new HttpsError("unavailable", "تعذر إبطال الجلسات القديمة؛ راجع الحساب قبل إعادة المحاولة");
+  }
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
   batch.set(userRef, { role, permissions, branchIds, staffId: role === "worker" ? staffId : FieldValue.delete(), email: sanitizeText(request.data?.email, 200) || before.email || "", updatedAt: now }, { merge: true });
   if (role === "worker") batch.set(db.doc(`staff/${staffId}`), { userUid: uid, updatedAt: now }, { merge: true });
   if (before.staffId && before.staffId !== staffId) batch.set(db.doc(`staff/${before.staffId}`), { userUid: FieldValue.delete(), updatedAt: now }, { merge: true });
   batch.set(db.collection("activityLogs").doc(), {
+    ...auditActor(request),
     action: "set-user-role", collection: "users", entityId: uid,
     targetUserId: uid, targetUserName: sanitizeText(before.name, 80), targetUserEmail: sanitizeText(before.email || request.data?.email, 200),
     beforeRole: sanitizeText(before.role, 30), afterRole: role,
@@ -2653,15 +3488,16 @@ export const setUserRole = onCall(adminOptions, async request => {
 
 export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concurrency: 10, maxInstances: 10 }, async request => {
   requireRole(request, ["admin"]);
+  await requireLiveAdmin(request);
   const name = sanitizeText(request.data?.name, 80);
   const email = sanitizeText(request.data?.email, 200).toLowerCase();
   const password = String(request.data?.password || "");
   const role = sanitizeText(request.data?.role, 30);
   const staffId = sanitizeText(request.data?.staffId, 100);
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
-  const rolePermissionValues = role === "worker" ? ROLE_DEFAULT_PERMISSIONS.worker : ALL_PERMISSIONS;
+  const rolePermissionValues = ROLE_CAPABILITY_CEILINGS[role] || [];
   const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
-  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || !["manager", "cashier", "worker"].includes(role) || (role === "worker" && !staffId)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد الفرع والعامل وباسورد 8 أحرف على الأقل");
+  if (!name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !branchIds.length || branchIds.some(id => !["talkha", "mashaya"].includes(id)) || !["manager", "cashier", "worker"].includes(role) || (role === "worker" && !staffId)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد الفرع والعامل وباسورد 8 أحرف على الأقل");
   let staffSnapshot = null;
   if (role === "worker") {
     const [candidate, linkedUsers] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("users").where("staffId", "==", staffId).limit(1).get()]);
@@ -2683,7 +3519,7 @@ export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concu
     const now = FieldValue.serverTimestamp();
     batch.set(db.doc(`users/${user.uid}`), { name, email, role, permissions, branchIds, staffId: role === "worker" ? staffId : null, active: true, mustChangePassword: true, createdBy: request.auth.uid, createdAt: now, updatedAt: now });
     if (role === "worker" && staffSnapshot) batch.set(staffSnapshot.ref, { userUid: user.uid, updatedAt: now }, { merge: true });
-    batch.set(db.collection("activityLogs").doc(), { action: "create-user-account", collection: "users", entityId: user.uid, targetUserName: name, targetUserEmail: email, afterRole: role, staffId: role === "worker" ? staffId : null, branchIds, userId: request.auth.uid, createdAt: now });
+    batch.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "create-user-account", collection: "users", entityType: "user", entityId: user.uid, targetUserName: name, targetUserEmail: email, afterRole: role, staffId: role === "worker" ? staffId : null, branchIds, actorUid: request.auth.uid, actorRole: "admin", userId: request.auth.uid, createdAt: now });
     await batch.commit();
   } catch (error) {
     await getAuth().deleteUser(user.uid).catch(() => {});

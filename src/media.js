@@ -5,11 +5,27 @@ const safeUrl = value => {
   } catch { return null; }
 };
 
+export function safeMediaUrl(value) {
+  // Browser media URLs may be relative to our site or HTTPS; no active schemes.
+  return safeUrl(value)?.href || "";
+}
+
+export function isApprovedVideoEmbed(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+    return (url.hostname === "www.youtube-nocookie.com" && /^\/embed\/[A-Za-z0-9_-]{6,20}$/.test(url.pathname))
+      || (url.hostname === "www.facebook.com" && url.pathname === "/plugins/video.php" && ["facebook.com", "www.facebook.com", "m.facebook.com", "fb.watch"].includes(safeUrl(url.searchParams.get("href"))?.hostname))
+      || (url.hostname === "www.tiktok.com" && /^\/player\/v1\/\d+$/.test(url.pathname));
+  } catch { return false; }
+}
+
 export function videoSource(value) {
   const url = safeUrl(value);
   if (!url) return { kind: "", url: "" };
   const host = url.hostname.replace(/^www\./, "").toLowerCase();
-  const path = decodeURIComponent(url.pathname);
+  let path;
+  try { path = decodeURIComponent(url.pathname); } catch { return { kind: "", url: "" }; }
   if (/\.(?:mp4|webm|ogg|mov)$/i.test(path)) return { kind: "direct", url: url.href };
 
   if (["youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com"].includes(host)) {
