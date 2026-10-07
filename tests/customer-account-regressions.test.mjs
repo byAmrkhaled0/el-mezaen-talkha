@@ -65,7 +65,7 @@ test("repeat resets the appointment and account rescheduling uses current availa
 test("direct customer routes resolve with or without a trailing slash on both hosts", () => {
   for (const config of [firebaseHosting, vercelHosting]) {
     const rewrites = JSON.parse(config).hosting?.rewrites || JSON.parse(config).rewrites;
-    for (const [route, destination] of [["/account", "/account/index.html"], ["/login", "/login/index.html"], ["/booking", "/index.html"]]) {
+    for (const [route, destination] of [["/account", "/account/index.html"], ["/login", "/login/index.html"], ["/booking", "/booking/index.html"]]) {
       assert.ok(rewrites.some(item => item.source === route && item.destination === destination), route);
     }
   }

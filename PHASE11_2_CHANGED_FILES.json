@@ -1,0 +1,242 @@
+[
+  {
+    "file": "PHASE11_2_BUSINESS_LOCK.json",
+    "status": "added",
+    "sha256": "e4cf6dd9e89df9425e56af3bba84beddd6109f038cd25b8a56a99da8e498f672"
+  },
+  {
+    "file": "PHASE11_2_FINAL_REPORT_AR.md",
+    "status": "added",
+    "sha256": "bb79ed3db1842cdc81977730ec7ea5969e843ff0ac8e21099487d9ea3b2263ea"
+  },
+  {
+    "file": "PHASE11_2_GENERATED_ASSETS.json",
+    "status": "added",
+    "sha256": "4c74a728888a0305dd962aed95816c065a98253450fe244e859a1469dabc0f09"
+  },
+  {
+    "file": "PHASE11_2_TEST_RESULTS.json",
+    "status": "added",
+    "sha256": "6902637f246f70b7fff59c4fcea7e37ab6485dcfb10fbc6357670bb77557657e"
+  },
+  {
+    "file": "account/index.html",
+    "status": "modified",
+    "sha256": "6c77f1bbfda4176f76c9e770555f117a89fa68c0a4c463965ba122638e8e7e86"
+  },
+  {
+    "file": "admin/index.html",
+    "status": "modified",
+    "sha256": "7c4d776a3a0c252373f7d69f0baa3a6348733f8546c4b69c348f9f48033f4675"
+  },
+  {
+    "file": "branches/mashaya/index.html",
+    "status": "modified",
+    "sha256": "c097c133770d77efa40c252623755ca0759bae7eb06673369e254430593a4aae"
+  },
+  {
+    "file": "branches/talkha/index.html",
+    "status": "modified",
+    "sha256": "83d4964c32656dafa22eac1b126972f8746fdd32fb63a2ef6e8df0fea7354ab4"
+  },
+  {
+    "file": "hair-systems/index.html",
+    "status": "modified",
+    "sha256": "db6206f9c7f7f4d2fc56918d85aa0d8b55fd8e3af38233efe380afc1188ade63"
+  },
+  {
+    "file": "index.html",
+    "status": "modified",
+    "sha256": "c425138ecb5b92c64c04cfd23874b68a89087d17f2c424755a849fea91a7ebc9"
+  },
+  {
+    "file": "login/index.html",
+    "status": "modified",
+    "sha256": "6eec3920db41f67483925c9df1abced0f3cad7d6c6d301a522a39aa9705aa147"
+  },
+  {
+    "file": "packages/index.html",
+    "status": "modified",
+    "sha256": "5b59fe929a8a4cee6f2699d52aea3df673ef019ec8c1187463a49a99079f5ace"
+  },
+  {
+    "file": "public/assets/premium/beard-1-1280.webp",
+    "status": "added",
+    "sha256": "1fcbc653fff133436f34f3cef506c1e0631a1f8e8be2a99c35ae644389d10730"
+  },
+  {
+    "file": "public/assets/premium/beard-1-640.webp",
+    "status": "added",
+    "sha256": "dc9dbefa615df952732b07c9ccb683cdfc92f3a875baf075a238d608cb991636"
+  },
+  {
+    "file": "public/assets/premium/beard-2-1280.webp",
+    "status": "added",
+    "sha256": "a0cac7fa19e076cf524fefe1544c0f03196177eb5cd796382f3ea113ebc757c4"
+  },
+  {
+    "file": "public/assets/premium/beard-2-640.webp",
+    "status": "added",
+    "sha256": "580f01472ca6d9b1e670cf8bfebcf94ac164fbdbdcef63b4dd5834d51cb39fae"
+  },
+  {
+    "file": "public/assets/premium/hair-system-1-1280.webp",
+    "status": "added",
+    "sha256": "dde1d8d7a2dc374c4a32d8dfbd6c1a912fec99a55cd57ba7a986b2b33a205236"
+  },
+  {
+    "file": "public/assets/premium/hair-system-1-640.webp",
+    "status": "added",
+    "sha256": "04f02161d3c7830403930c20698cdb27f4cf271c9a39412a242020e17d197c53"
+  },
+  {
+    "file": "public/assets/premium/haircut-1-1280.webp",
+    "status": "added",
+    "sha256": "69dca25d78bbafe49bf1acc05e51190b93c374a5696db0d4ac134a1b94e7200d"
+  },
+  {
+    "file": "public/assets/premium/haircut-1-640.webp",
+    "status": "added",
+    "sha256": "6f766bc4580eec60217005350b5a2b420b0246a33609500cf067c53c6c90f6c4"
+  },
+  {
+    "file": "public/assets/premium/haircut-2-1280.webp",
+    "status": "added",
+    "sha256": "64f263d4c2e741e9a9c59376c9328155f8b1b4b67d5a4929692fca5e6c452271"
+  },
+  {
+    "file": "public/assets/premium/haircut-2-640.webp",
+    "status": "added",
+    "sha256": "9dc5e070b158e44c44ad0e10ba3e095d108a5b670957f83ab7a94e77b288f102"
+  },
+  {
+    "file": "public/assets/premium/haircut-3-1280.webp",
+    "status": "added",
+    "sha256": "1d8f730f515c1b821d66715f20b9e5a62c7f55f8d65cf8b39ab65a49982e52bb"
+  },
+  {
+    "file": "public/assets/premium/haircut-3-640.webp",
+    "status": "added",
+    "sha256": "79f27f7796450202d853672c6d705b177759229a5bf1352d3b29ca34a00984ad"
+  },
+  {
+    "file": "public/assets/premium/skin-1-1280.webp",
+    "status": "added",
+    "sha256": "ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0"
+  },
+  {
+    "file": "public/assets/premium/skin-1-640.webp",
+    "status": "added",
+    "sha256": "56d5568ef5f4db13704dc4d9953e2777d8bb117481824492df574ffe37ce63b0"
+  },
+  {
+    "file": "public/assets/premium/styling-1-1280.webp",
+    "status": "added",
+    "sha256": "f94a2e5f80f6ab0893781e0530e4ad6600d773bf80534699094f31d61f25cb67"
+  },
+  {
+    "file": "public/assets/premium/styling-1-640.webp",
+    "status": "added",
+    "sha256": "294343f1528252b382f2f7acb55c0a7ae284c8e36c4258849f3b24c8d45edcfc"
+  },
+  {
+    "file": "public/sitemap.xml",
+    "status": "modified",
+    "sha256": "8db24062496fda95248b1230ca117505a33d754a31d0a29043ef27ea34f0b12c"
+  },
+  {
+    "file": "results/index.html",
+    "status": "modified",
+    "sha256": "5a08a5e48ed04602dfd0f0c990016ed36c2d383186236bb75009da18a28a440d"
+  },
+  {
+    "file": "reviews/index.html",
+    "status": "modified",
+    "sha256": "ac5aab2582be260b45f19ff28451311e197128ce66f6e173d4f5afeead865099"
+  },
+  {
+    "file": "services/index.html",
+    "status": "modified",
+    "sha256": "207c6ba192bfd6f2f4c9e54b14b87f3cba8ec6acc1ab33cd5a730083e465a085"
+  },
+  {
+    "file": "src/admin.css",
+    "status": "modified",
+    "sha256": "9ff7f4f1e0d34dd93f2e06fa74bccc791ed138cf7e76feda249e20a9e1fa1a53"
+  },
+  {
+    "file": "src/admin.js",
+    "status": "modified",
+    "sha256": "e809c846dc8dc41a4bc3e65677c5141f42f829508c16f36fd773968427c6e052"
+  },
+  {
+    "file": "src/ai-chat.js",
+    "status": "modified",
+    "sha256": "11c4d41172dbb4674f3313906c28921495c2631598876a15204833dbb357b0c0"
+  },
+  {
+    "file": "src/login.css",
+    "status": "modified",
+    "sha256": "f110593b2815562d2eedbebf76d56545638a894d131b35f73e91159bd0e37c02"
+  },
+  {
+    "file": "src/premium-components.css",
+    "status": "modified",
+    "sha256": "487a77b039dd64642baf1fc6167dcd615a10954af1d47a33959badaaba629f3f"
+  },
+  {
+    "file": "src/premium-media.js",
+    "status": "modified",
+    "sha256": "aabe5b223ba8dce73404185f1a735b9957a984d225003b21721a8a9fe73be523"
+  },
+  {
+    "file": "src/worker.css",
+    "status": "modified",
+    "sha256": "2398f01dc385939efb5a8f6e9d104718e3f35f0f1a7698ec3a1be301bfde702e"
+  },
+  {
+    "file": "src/worker.js",
+    "status": "modified",
+    "sha256": "a0352cc1d086e9c3b4deb69d25cf94e8650abebdd624dbfeda64cbad1bf94632"
+  },
+  {
+    "file": "team/index.html",
+    "status": "modified",
+    "sha256": "bb268c16dd70776717f7e3cb5557cd9f06ccbf8a53c29b04224ed960f35a52d7"
+  },
+  {
+    "file": "tests/admin-regressions.test.mjs",
+    "status": "modified",
+    "sha256": "8be8b18a352f773338364def51e667463514441d3141f03c7731c0d779f0be43"
+  },
+  {
+    "file": "tests/phase11-1-visual.test.mjs",
+    "status": "modified",
+    "sha256": "64b4fc205bcfe7dd27a4518596ef689765d52414641c117a365a9a67104463be"
+  },
+  {
+    "file": "tests/phase11-2-visual.test.mjs",
+    "status": "added",
+    "sha256": "b9934436d5c3a16eb762c57e5ba626432fa2f74c1c27d6e5eb2bb04f18d28333"
+  },
+  {
+    "file": "worker/index.html",
+    "status": "modified",
+    "sha256": "842fe71ddbd145491f0a6ddd637ce5eb9acfe9ff2d902176ebb24e0f5d2da91d"
+  },
+  {
+    "file": "PHASE11_2_CHANGED_FILES.json",
+    "status": "added",
+    "note": "Manifest metadata; no recursive self-checksum"
+  },
+  {
+    "file": "PHASE11_2_CHANGED_FILES.md",
+    "status": "added",
+    "note": "Manifest metadata; no recursive self-checksum"
+  },
+  {
+    "file": "PHASE11_2_SOURCE_FILES.json",
+    "status": "added",
+    "note": "Manifest metadata; no recursive self-checksum"
+  }
+]

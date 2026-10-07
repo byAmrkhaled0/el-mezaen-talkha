@@ -1,0 +1,2 @@
+export function staffDestination(role) { return role === "worker" ? "/worker/" : ["admin", "manager", "cashier"].includes(role) ? "/admin/" : null; }
+export function staffRouteGuard(path, role) { if (!role) return path.startsWith("/worker") ? "/login/?mode=worker" : "/login/"; const destination=staffDestination(role); return path.startsWith("/worker") && role !== "worker" || path.startsWith("/admin") && role === "worker" ? destination : null; }

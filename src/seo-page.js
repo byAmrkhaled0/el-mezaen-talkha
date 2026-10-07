@@ -1,4 +1,5 @@
 import "./styles.css";
+import "./premium-components.css";
 import { bindSafeBack } from "./navigation.js";
 
 bindSafeBack();

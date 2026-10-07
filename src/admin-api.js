@@ -1,7 +1,8 @@
+import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
 import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { isAppCheckFailure, retryAuthenticatedCall } from "./admin-session.js";
-import { browserSessionPersistence, EmailAuthProvider, initializeAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
+import { browserPopupRedirectResolver, browserSessionPersistence, EmailAuthProvider, initializeAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, getStorage, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 
@@ -34,7 +35,7 @@ function assertBackendCompatibility(data) {
 if (configured) {
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
-    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    configureLocalAppCheck();
     appCheck = initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   // Staff identity belongs to this tab. Customer auth is initialized separately
@@ -330,3 +331,36 @@ export async function enablePush() {
   await call("registerPushToken", { token });
   return true;
 }
+
+// Uses the existing staff Auth instance and session persistence.
+export const requestWorkerAccess = () => call('registerWorkerAccess');
+export const redeemWorkerInvitation = secret => call('redeemWorkerInvitation', { secret });
+export const createWorkerInvitation = data => call('createWorkerInvitation', data);
+export const manageAccessAccount = data => call('manageAccessAccount', data);
+export async function staffGoogleLogin() {
+  if (!configured) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth');
+  if (matchMedia('(pointer: coarse)').matches) return signInWithRedirect(auth, new GoogleAuthProvider(), browserPopupRedirectResolver);
+  return signInWithPopup(auth, new GoogleAuthProvider(), browserPopupRedirectResolver);
+}
+export async function staffRedirectResult() {
+  if (!configured) return null;
+  const { getRedirectResult } = await import('firebase/auth');
+  return getRedirectResult(auth, browserPopupRedirectResolver);
+}
+export async function staffPhoneLogin(phone, elementId) {
+  if (!configured) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const [{ RecaptchaVerifier, signInWithPhoneNumber }, { normalizePhone }] = await Promise.all([import('firebase/auth'), import('../functions/src/core.js')]);
+  const verifier = new RecaptchaVerifier(auth, elementId, { size: 'normal' });
+  try { return await signInWithPhoneNumber(auth, '+2' + normalizePhone(phone), verifier); }
+  finally { verifier.clear(); }
+}
+export const markWorkerNotificationRead = id => call('markWorkerNotificationRead', { id });
+export async function watchWorkerPush(callback) {
+  if (!configured) return () => {};
+  const { getMessaging, onMessage, isSupported } = await loadMessaging();
+  if (!await isSupported()) return () => {};
+  return onMessage(getMessaging(app), callback);
+}
+
+export const getAccessAccountCenter = (data = {}) => readCall('getAccessAccountCenter', data);

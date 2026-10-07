@@ -1,5 +1,8 @@
+import { branchMedia,serviceMedia,packageMedia } from './premium-media.js';
+import './global-navigation.js';
 import { safeMediaUrl } from "./media.js";
 import "./styles.css";
+import "./premium-components.css";
 import { getCatalog, trackEvent } from "./firebase-client.js";
 import { bindSafeBack } from "./navigation.js";
 import { activeBranch, publicSubset, reconcileBranchCart } from "./public-branch.js";
@@ -29,8 +32,8 @@ function renderCatalog(catalog) {
   $("#branchOffers").innerHTML = offers.map(item => `<article class="offer-card"><div class="offer-media">${item.imageUrl ? `<img src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(item.nameAr)}" loading="lazy" decoding="async" width="800" height="600">` : '<span class="offer-media-placeholder" aria-hidden="true">✦</span>'}<span class="offer-ribbon">عرض خاص</span></div><div class="offer-body"><h3>${escapeHtml(item.nameAr)}</h3><p>${escapeHtml(item.descriptionAr || "")}</p><div class="price-row"><div>${Number(item.oldPrice) > Number(item.newPrice) ? `<del class="old-price">${money(item.oldPrice)}</del>` : ""}<strong class="price">${money(item.newPrice ?? item.price)}</strong></div></div><button class="btn btn-primary" type="button" data-book-item="${escapeHtml(item.id)}" data-kind="offer">احجز العرض</button></div></article>`).join("") || '<div class="empty-state">لا توجد عروض حالية في هذا الفرع.</div>';
   const services = publicSubset(catalog.services, branchId).slice(0, 4);
   const packages = publicSubset(catalog.packages, branchId, { now, dated: true }).slice(0, 2);
-  $("#branchServices").innerHTML = [...services.map(item => ({ ...item, kind: item.type === "product" ? "product" : "service" })), ...packages.map(item => ({ ...item, kind: "package" }))].map(item => `<article class="branch-item-card">${item.imageUrl ? `<img src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(item.nameAr)}" loading="lazy" decoding="async" width="480" height="320">` : ""}<small>${item.kind === "package" ? "باقة" : "خدمة"}</small><h3>${escapeHtml(item.nameAr)}</h3><p>${escapeHtml(item.descriptionAr || "")}</p><div><strong>${money(item.price)}</strong><button class="btn btn-ghost" type="button" data-book-item="${escapeHtml(item.id)}" data-kind="${item.kind}">احجز الآن</button></div></article>`).join("") || '<div class="empty-state">لا توجد خدمات أو باقات متاحة حاليًا.</div>';
-  $("#branchTeam").innerHTML = publicSubset(catalog.staff, branchId).slice(0, 4).map(item => `<article class="team-card">${item.imageUrl ? `<img class="team-photo" src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(item.nameAr)}" loading="lazy" decoding="async" width="220" height="220">` : ""}<h3>${escapeHtml(item.nameAr)}</h3><p>${escapeHtml(item.specialtyAr || "")}</p>${item.available === false ? '<span class="availability off">غير متاح</span>' : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeHtml(item.id)}">احجز مع هذا المتخصص</button>`}</article>`).join("") || '<div class="empty-state">لا يوجد فريق ظاهر في هذا الفرع.</div>';
+  $("#branchServices").innerHTML = [...services.map(item => ({ ...item, kind: item.type === "product" ? "product" : "service" })), ...packages.map(item => ({ ...item, kind: "package" }))].map(item => `<article class="branch-item-card"><img src="${escapeHtml(item.kind==='package'?packageMedia(item):serviceMedia(item))}" alt="${escapeHtml(item.nameAr)}" loading="lazy" decoding="async" width="480" height="320"><small>${item.kind === "package" ? "باقة" : "خدمة"}</small><h3>${escapeHtml(item.nameAr)}</h3><p>${escapeHtml(item.descriptionAr || "")}</p><div><strong>${money(item.price)}</strong><button class="btn btn-ghost" type="button" data-book-item="${escapeHtml(item.id)}" data-kind="${item.kind}">احجز الآن</button></div></article>`).join("") || '<div class="empty-state">لا توجد خدمات أو باقات متاحة حاليًا.</div>';
+  $("#branchTeam").innerHTML = publicSubset(catalog.staff, branchId).slice(0, 4).map(item => `<article class="team-card">${item.imageUrl ? `<img class="team-photo" src="${escapeHtml(safeMediaUrl(item.imageUrl))}" alt="${escapeHtml(item.nameAr)}" loading="lazy" decoding="async" width="220" height="220">` : ""}<h3>${escapeHtml(item.nameAr)}</h3><p>${escapeHtml(item.specialtyAr || "")}</p>${item.available === false ? '<span class="availability off">غير متاح</span>' : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeHtml(item.id)}">احجز مع هذا المتخصص</button>`}</article>`).join("") || '<div class="empty-state">فريق الفرع بيتحدث حاليًا. يمكنك متابعة اختيار الخدمة والحجز.</div>';
 }
 
 document.addEventListener("click", event => {
@@ -56,6 +59,8 @@ getCatalog().then(catalog => {
   if (!branch) throw new Error("branch-unavailable");
   if (!setBranchContext(catalog)) { location.href = "/#choose-branch"; return; }
   branchContextReady = true;
+  const image=document.querySelector('.branch-landing-photo');if(image){image.src=branchMedia(branch);image.alt=branch.imageUrl?branch.nameAr:`صورة تعبيرية • ${branch.nameAr}`;}
+  const hours=document.querySelector('[data-branch-hours]');if(hours)hours.textContent=`${branch.openingTime||'—'} – ${branch.closingTime||'—'}`;
   document.querySelectorAll("[data-branch-address]").forEach(el => { el.textContent = branch.addressAr; });
   document.querySelectorAll("[data-branch-phone]").forEach(el => { el.textContent = branch.phone; el.href = phoneHref(branch.phone); });
   const map = $("[data-branch-map]");

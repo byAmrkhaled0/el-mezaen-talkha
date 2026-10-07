@@ -1,4 +1,10 @@
+import { bindSafeBack } from './navigation.js';
+import './global-navigation.js';
+import { branchMedia } from './premium-media.js';
+import {bookingFaqKnowledge} from "./faq-knowledge.js";
+import { serviceMedia, packageMedia } from "./premium-media.js";
 import "./styles.css";
+import "./premium-components.css";
 import { applyStaticTranslations, getLang, t, translations } from "./i18n.js";
 import { isApprovedVideoEmbed, isVideoContent, safeMediaUrl, videoSource } from "./media.js";
 import { seedCatalog } from "./seed-data.js";
@@ -175,6 +181,7 @@ function categoryName(id) {
 function renderOffers() {
   const now = Date.now();
   const offers = publicSubset(state.catalog.offers, state.branchId, { now, dated: true });
+  $("#offers").hidden = offers.length === 0;
   $("#offersGrid").classList.toggle("is-empty", offers.length === 0);
   $("#offersGrid").innerHTML = offers.length ? offers.map(offer => {
     const price = Number(offer.newPrice ?? offer.price ?? 0);
@@ -202,12 +209,12 @@ function renderPackages() {
     const exclusiveBranch = Array.isArray(item.branchIds) && item.branchIds.length === 1 ? state.catalog.branches.find(branch => branch.id === item.branchIds[0]) : null;
     const branchOnly = exclusiveBranch ? branchName(exclusiveBranch) : "";
     return `<article class="package-card ${item.badge ? "highlight" : ""} reveal">
-      <div class="package-cover">${safeMediaUrl(item.imageUrl) ? `<img src="${escapeAttr(safeMediaUrl(item.imageUrl))}" alt="${escapeAttr(localized(item))}" loading="lazy" decoding="async" width="640" height="640" sizes="(max-width:560px) 88vw, 33vw">` : `<div class="package-media-placeholder"><img src="/assets/el-mezaen-mark-v2.webp" alt="" loading="lazy" width="90" height="106"></div>`}<span>${badge}</span></div>
+      <div class="package-cover">${packageMedia(item) ? `<img src="${escapeAttr(packageMedia(item))}" alt="${escapeAttr(localized(item))}" loading="lazy" decoding="async" width="640" height="427" sizes="(max-width:560px) 88vw, 33vw">` : `<div class="package-media-placeholder"><img src="/assets/el-mezaen-mark-v2.webp" alt="" loading="lazy" width="90" height="106"></div>`}<span>${badge}</span></div>
       <div class="card-top"><span class="card-tag">${lineIcon("sparkles", 18)} ${badge}</span>${Number(item.duration) > 0 ? `<span class="duration">${lineIcon("clock", 17)} ${item.duration} ${t("minute", state.lang)}</span>` : ""}</div>
       ${branchOnly ? `<span class="package-branch">${lineIcon("map", 17)} ${escapeHtml(branchOnly)}</span>` : ""}
       <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "description"))}</p>
       ${Array.isArray(included) && included.length ? `<ul class="package-services package-services-preview">${included.slice(0, 3).map(value => `<li>${escapeHtml(value)}</li>`).join("")}${included.length > 3 ? `<li class="more-services">+${included.length - 3} ${state.lang === "ar" ? "خدمات أخرى" : "more services"}</li>` : ""}</ul>` : ""}
-      <div class="price-row package-price"><div>${oldPrice > Number(item.price) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.price)}</strong></div></div>
+      <div class="price-row package-price"><div>${oldPrice > Number(item.newPrice ?? item.price ?? 0) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.newPrice ?? item.price)}</strong></div>${oldPrice > Number(item.newPrice ?? item.price ?? 0) ? `<span class="package-saving">وفر ${money(oldPrice - Number(item.newPrice ?? item.price ?? 0))} • ${Math.round((oldPrice - Number(item.newPrice ?? item.price ?? 0)) / oldPrice * 100)}%</span>` : ""}</div><small class="package-duration">${Number(item.duration || 0)} ${t("minute", state.lang)}</small>
       <div class="package-card-actions"><button class="btn btn-ghost" type="button" data-package-details="${escapeAttr(item.id)}">${state.lang === "ar" ? "تفاصيل الباقة" : "Package details"}</button><button class="btn btn-primary" type="button" data-add-id="${escapeAttr(item.id)}" data-kind="package">${state.lang === "ar" ? "احجز الباقة" : "Book package"}</button></div>
     </article>`;
   }).join("") || `<div class="empty-state">${state.lang === "ar" ? "لا توجد باقات متاحة في هذا الفرع الآن" : "No packages available at this branch"}</div>`;
@@ -225,7 +232,7 @@ function openPackageDetails(id) {
     <div class="package-details-copy">
       ${packageBranches.length ? `<span class="package-branch">${lineIcon("map", 17)} ${escapeHtml(packageBranches.join("، "))}</span>` : ""}
       ${localized(item, "description") ? `<p>${escapeHtml(localized(item, "description"))}</p>` : ""}
-      <div class="package-details-price">${oldPrice > Number(item.price) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.price)}</strong></div>
+      <div class="package-details-price">${oldPrice > Number(item.newPrice ?? item.price ?? 0) ? `<span class="old-price">${money(oldPrice)}</span>` : ""}<strong class="price">${money(item.newPrice ?? item.price)}</strong></div>
       ${Array.isArray(included) && included.length ? `<h3>${state.lang === "ar" ? "الخدمات داخل الباقة" : "Included services"}</h3><ul class="package-services">${included.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}
       ${(item.choiceGroups || []).length ? `<h3>${state.lang === "ar" ? "اختر خدمة واحدة من كل مجموعة" : "Choose one from each group"}</h3><div class="package-alternatives">${item.choiceGroups.map(group => `<span><b>${escapeHtml(state.lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)}:</b> ${(group.options || []).map(value => escapeHtml(state.lang === "ar" ? value.labelAr : value.labelEn || value.labelAr)).join(" / ")}</span>`).join("")}</div>` : ""}
       ${localized(item, "terms") ? `<p class="package-terms"><b>${state.lang === "ar" ? "الشروط:" : "Terms:"}</b> ${escapeHtml(localized(item, "terms"))}</p>` : ""}
@@ -262,27 +269,28 @@ function serviceIconSvg(categoryId) {
 }
 
 function renderServices() {
+  document.querySelectorAll("[data-home-media]").forEach(img=>{const url=safeMediaUrl(state.catalog.settings?.[img.dataset.homeMedia]);if(url){img.src=url;img.removeAttribute("srcset");}});
   const active = dedupeCatalogCards(publicSubset(state.catalog.services, state.branchId)).sort((a, b) => Number(b.featured === true) - Number(a.featured === true) || Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   if (state.category !== "all" && !active.some(item => item.categoryId === state.category)) state.category = "all";
   $("#categoryFilters").innerHTML = `<button class="filter-chip ${state.category === "all" ? "active" : ""}" type="button" data-category="all" role="tab">${t("all", state.lang)}</button>` + state.catalog.categories.filter(cat => cat.active !== false && cat.id !== "packages" && active.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${state.category === cat.id ? "active" : ""}" type="button" data-category="${escapeAttr(cat.id)}" role="tab">${escapeHtml(localized(cat))}</button>`).join("");
   const visible = (state.category === "all" ? active : active.filter(item => item.categoryId === state.category)).slice(0, 8);
   $("#serviceGrid").innerHTML = visible.map(item => `<article class="service-card reveal">
-    <span class="service-icon" data-service-icon="${escapeAttr(item.categoryId || "hair")}">${serviceIconSvg(item.categoryId)}</span>
+    <img class="service-image" src="${escapeAttr(serviceMedia(item))}" alt="${escapeAttr(localized(item))}" width="300" height="240" loading="lazy">
     <div class="service-meta"><span>${escapeHtml(categoryName(item.categoryId))}</span><span>${lineIcon("clock", 16)} ${item.duration} ${t("minute", state.lang)}</span></div>
     <h3>${escapeHtml(localized(item))}</h3>${localized(item, "description") ? `<p class="service-description">${escapeHtml(localized(item, "description"))}</p>` : ""}
-    <div class="price-row"><div>${item.startsFrom ? `<small>${t("from", state.lang)}</small>` : ""}<strong class="price">${money(item.price)}</strong></div>${item.type === "product" ? `<span class="type-pill">${t("product", state.lang)}</span>` : ""}</div>
+    <div class="price-row"><div>${item.startsFrom ? `<small>${t("from", state.lang)}</small>` : ""}<strong class="price">${money(item.newPrice ?? item.price)}</strong></div>${item.type === "product" ? `<span class="type-pill">${t("product", state.lang)}</span>` : ""}</div>
     <button class="btn btn-ghost" data-add-id="${escapeAttr(item.id)}" data-kind="${item.type === "product" ? "product" : "service"}">${t("addCart", state.lang)}</button>
   </article>`).join("") || `<div class="empty-state">${currentBranch() ? (state.lang === "ar" ? "لا توجد خدمات متاحة حاليًا في هذا الفرع" : "No services currently available at this branch") : (state.lang === "ar" ? "اختر فرعًا لعرض الخدمات المتاحة" : "Choose a branch to see services")}</div>`;
   observeReveals();
 }
 
 function renderTeam() {
-  $("#teamGrid").innerHTML = publicSubset(state.catalog.staff, state.branchId).slice(0, 4).map(item => `<article class="team-card reveal">
+  $("#teamGrid").innerHTML = publicSubset(state.catalog.staff, state.branchId).filter(item=>item.available !== false).slice(0, 4).map(item => `<article class="team-card reveal">
     ${safeMediaUrl(item.imageUrl) ? `<img class="team-photo" src="${escapeAttr(safeMediaUrl(item.imageUrl))}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${state.lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeAttr(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${state.lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}
     <h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p>
     <span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
-    ${item.available === false ? "" : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeAttr(item.id)}">${state.lang === "ar" ? "احجز مع هذا المتخصص" : "Book this specialist"}</button>`}
-  </article>`).join("") || `<div class="empty-state">${currentBranch() ? (state.lang === "ar" ? "لا يوجد أعضاء فريق متاحون حاليًا في هذا الفرع" : "No team members currently available at this branch") : (state.lang === "ar" ? "اختر فرعًا لعرض الفريق" : "Choose a branch to see the team")}</div>`;
+    ${item.available === false ? "" : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeAttr(item.id)}">${state.lang === "ar" ? `احجز مع ${escapeHtml(localized(item))}` : "Book this specialist"}</button>`}
+  </article>`).join("") || `<div class="empty-state">${currentBranch() ? (state.lang === "ar" ? `فريق ${branchName(currentBranch())} بيتحدث حاليًا` : "No team members currently available at this branch") : (state.lang === "ar" ? "اختر فرعًا لعرض الفريق" : "Choose a branch to see the team")}</div>`;
 }
 
 function renderContent() {
@@ -377,12 +385,12 @@ function renderSettings() {
 function renderBranchPicker() {
   const branches = state.catalog.branches.filter(item => item.active !== false);
   $("#branchPicker").innerHTML = branches.map(branch => `<article class="branch-choice ${branch.id === state.branchId ? "selected" : ""}">
-    <div class="branch-choice-top"><span class="branch-marker">${lineIcon("map", 22)}</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div>${branch.id === state.branchId ? `<b class="selected-check">✓</b>` : ""}</div>
+    <div class="branch-choice-top"><figure class="branch-generic-media"><img src="${escapeAttr(branchMedia(branch))}" alt="صورة تعبيرية لأجواء صالون حلاقة" width="160" height="160" loading="lazy"><figcaption>صورة تعبيرية</figcaption></figure><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div>${branch.id === state.branchId ? `<b class="selected-check">✓</b>` : ""}</div>
     <p>${escapeHtml(branchAddress(branch))}</p>
     <div class="branch-quick-info"><span>${lineIcon("clock", 16)} ${escapeHtml(branch.openingTime || "—")} – ${escapeHtml(branch.closingTime || "—")}</span><span>${lineIcon("phone", 16)} ${escapeHtml(branch.phone)}</span></div>
     <button class="btn btn-primary" type="button" data-select-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button>
   </article>`).join("") || `<div class="empty-state">${state.lang === "ar" ? "لا توجد فروع متاحة حاليًا" : "No branches are currently available"}</div>`;
-  $("#branchQuickGrid").innerHTML = branches.map(branch => `<article class="branch-quick-card ${branch.id === state.branchId ? "selected" : ""}">${safeMediaUrl(branch.imageUrl) ? `<img class="branch-quick-photo" src="${escapeAttr(safeMediaUrl(branch.imageUrl))}" alt="${escapeAttr(branchName(branch))}" loading="lazy" decoding="async" width="160" height="160">` : `<span class="branch-marker">${lineIcon("map", 22)}</span>`}<div><small>${branch.id === state.branchId ? t("selectedBranch", state.lang) : t("branchesNav", state.lang)}</small><h3>${escapeHtml(branchName(branch))}</h3><p>${escapeHtml(branchAddress(branch))}</p><span>${lineIcon("clock", 16)} ${escapeHtml(branch.openingTime || "—")} – ${escapeHtml(branch.closingTime || "—")}</span></div><div class="branch-quick-actions"><button class="btn btn-ghost" type="button" data-choose-inline-branch="${escapeAttr(branch.id)}">${branch.id === state.branchId ? t("selectedBranch", state.lang) : t("chooseBranch", state.lang)}</button><button class="btn btn-primary" type="button" data-book-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button></div></article>`).join("");
+  $("#branchQuickGrid").innerHTML = branches.map(branch => `<article class="branch-quick-card ${branch.id === state.branchId ? "selected" : ""}">${safeMediaUrl(branch.imageUrl) ? `<img class="branch-quick-photo" src="${escapeAttr(safeMediaUrl(branch.imageUrl))}" alt="${escapeAttr(branchName(branch))}" loading="lazy" decoding="async" width="160" height="160">` : `<figure class="branch-generic-media"><img src="${escapeAttr(branchMedia(branch))}" alt="صورة تعبيرية لأجواء صالون حلاقة" width="160" height="160" loading="lazy"><figcaption>صورة تعبيرية</figcaption></figure>`}<div><small>${branch.id === state.branchId ? t("selectedBranch", state.lang) : t("branchesNav", state.lang)}</small><h3>${escapeHtml(branchName(branch))}</h3><p>${escapeHtml(branchAddress(branch))}</p><span>${lineIcon("clock", 16)} ${escapeHtml(branch.openingTime || "—")} – ${escapeHtml(branch.closingTime || "—")}</span>${branch.phone ? `<p class="branch-phone">${lineIcon("phone",16)} <bdi>${escapeHtml(branch.phone)}</bdi></p>` : ""}</div><div class="branch-quick-actions"><button class="btn btn-ghost" type="button" data-choose-inline-branch="${escapeAttr(branch.id)}">${branch.id === state.branchId ? t("selectedBranch", state.lang) : t("chooseBranch", state.lang)}</button><button class="btn btn-primary" type="button" data-book-branch="${escapeAttr(branch.id)}">${t("bookBranch", state.lang)}</button></div></article>`).join("");
 }
 
 // A valid media URL may still point to a missing file. Keep the branch card intact.
@@ -400,7 +408,7 @@ function renderBranchFooter() {
     const wa = whatsappNumber(branch.whatsapp || branch.phone);
     const socials = [[branch.facebook, "Facebook"], [branch.instagram, "Instagram"], [branch.tiktok, "TikTok"]].filter(([url]) => url);
     return `<article class="footer-branch-card ${branch.id === state.branchId ? "selected" : ""}">
-      <header><span class="branch-marker">${lineIcon("map", 22)}</span><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div></header>
+      <header><figure class="branch-generic-media"><img src="${escapeAttr(branchMedia(branch))}" alt="صورة تعبيرية لأجواء صالون حلاقة" width="160" height="160" loading="lazy"><figcaption>صورة تعبيرية</figcaption></figure><div><small>${state.lang === "ar" ? "مزين مصر" : "El Mezaen Egypt"}</small><h3>${escapeHtml(branchName(branch))}</h3></div></header>
       <p>${escapeHtml(branchAddress(branch))}</p>
       <div class="branch-contact-numbers"><a href="${phoneHref(branch.phone)}">${socialIcons.Phone}<span>${escapeHtml(branch.phone)}</span></a>${branch.secondaryPhone ? `<a href="${phoneHref(branch.secondaryPhone)}">${socialIcons.Phone}<span>${escapeHtml(branch.secondaryPhone)}</span></a>` : ""}</div>
       <div class="contact-actions three"><a class="contact-action call" href="${phoneHref(branch.phone)}" aria-label="${t("callNow", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Phone}<span>${t("callNow", state.lang)}</span></a><a class="contact-action whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener" aria-label="WhatsApp ${escapeAttr(branchName(branch))}">${socialIcons.WhatsApp}<span>${t("whatsappBranch", state.lang)}</span></a>${safeWebUrl(branch.mapsUrl) ? `<a class="contact-action maps" href="${escapeAttr(safeWebUrl(branch.mapsUrl))}" target="_blank" rel="noopener" aria-label="${t("directions", state.lang)} ${escapeAttr(branchName(branch))}">${socialIcons.Map}<span>${t("directions", state.lang)}</span></a>` : ""}</div>
@@ -473,7 +481,7 @@ function renderDrinks() {
   $("#drinkOptions").innerHTML = drinks.map(item => {
     const qty = state.cart.find(line => line.id === item.id)?.qty || 0;
     const options = Array.isArray(item.drinkOptions) ? item.drinkOptions : [];
-    return `<article class="drink-option"><span class="drink-cup" aria-hidden="true">${lineIcon("cup", 24)}</span><div><b>${escapeHtml(localized(item))}</b><small>${money(item.price)}${qty ? ` • في الحجز: ${qty}` : ""}</small></div>${options.length ? `<label><span>التحضير</span><select data-drink-option="${escapeAttr(item.id)}">${options.map(option => `<option value="${escapeAttr(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}<button type="button" data-add-drink="${escapeAttr(item.id)}" aria-label="إضافة ${escapeAttr(localized(item))}">${lineIcon("plus", 20)} إضافة • ${money(item.price)}</button></article>`;
+    return `<article class="drink-option"><span class="drink-cup" aria-hidden="true">${lineIcon("cup", 24)}</span><div><b>${escapeHtml(localized(item))}</b><small>${money(item.newPrice ?? item.price)}${qty ? ` • في الحجز: ${qty}` : ""}</small></div>${options.length ? `<label><span>التحضير</span><select data-drink-option="${escapeAttr(item.id)}">${options.map(option => `<option value="${escapeAttr(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}<button type="button" data-add-drink="${escapeAttr(item.id)}" aria-label="إضافة ${escapeAttr(localized(item))}">${lineIcon("plus", 20)} إضافة • ${money(item.newPrice ?? item.price)}</button></article>`;
   }).join("");
 }
 
@@ -489,6 +497,7 @@ function removeFromCart(id) {
 
 function renderCart() {
   const items = cartItems();
+  $("#bookingServiceChoices").innerHTML = publicSubset(state.catalog.services,state.branchId).map(item=>`<button class="booking-service-choice" type="button" data-add-id="${escapeAttr(item.id)}" data-kind="${item.type === "product" ? "product" : "service"}"><img src="${escapeAttr(serviceMedia(item))}" alt="" width="56" height="56" loading="lazy"><span>${escapeHtml(localized(item))}<small>${money(item.newPrice ?? item.price)} • ${item.duration} ${t("minute",state.lang)}</small></span><b>＋</b></button>`).join("");
   $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line ${item.kind === "package" ? "package-cart-line" : ""}"><div><b>${escapeHtml(localized(item))}</b><small>${item.kind === "drink" ? `مشروب • ${item.qty}${item.option ? ` • ${escapeHtml(item.option)}` : ""}` : `${item.duration ?? 0} ${t("minute", state.lang)}`}</small></div>${item.kind === "drink" ? `<div class="cart-qty"><button type="button" data-cart-qty="-1" data-cart-id="${escapeAttr(item.id)}">−</button><b>${item.qty}</b><button type="button" data-cart-qty="1" data-cart-id="${escapeAttr(item.id)}">＋</button></div>` : ""}<strong class="line-price">${money(Number(item.newPrice ?? item.price ?? 0) * item.qty)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button>${item.kind === "package" && (item.choiceGroups || []).length ? `<div class="package-choice-fields">${item.choiceGroups.map(group => `<label><span>${escapeHtml(state.lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)} <b aria-hidden="true">*</b></span><select data-package-choice="${escapeAttr(item.id)}" data-choice-group="${escapeAttr(group.id)}" required><option value="">${state.lang === "ar" ? "اختر واحدًا" : "Choose one"}</option>${(group.options || []).map(option => `<option value="${escapeAttr(option.id)}" ${item.choices?.[group.id] === option.id ? "selected" : ""}>${escapeHtml(state.lang === "ar" ? option.labelAr : option.labelEn || option.labelAr)}</option>`).join("")}</select></label>`).join("")}</div>` : ""}</div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
   saveCart();
   renderDrinks();
@@ -497,7 +506,7 @@ function renderCart() {
 
 function renderStaffPicker() {
   const any = `<button class="staff-choice ${state.staffId === "any" ? "selected" : ""}" type="button" data-staff-id="any"><b>${t("anyStaff", state.lang)}</b><small>${state.lang === "ar" ? "أقرب متخصص متاح" : "Nearest available specialist"}</small></button>`;
-  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
+  $("#staffPicker").innerHTML = any + state.catalog.staff.filter(item => explicitlyAvailableAtBranch(item) && item.active !== false).map(item => `<button class="staff-choice ${state.staffId === item.id ? "selected" : ""}" type="button" data-staff-id="${escapeAttr(item.id)}" ${item.available === false ? "disabled" : ""}><img src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt="" width="56" height="56" loading="lazy"><b>${escapeHtml(localized(item))}</b><small>${escapeHtml(localized(item, "specialty"))}</small></button>`).join("");
 }
 
 function updateProductOnlyUi() {
@@ -506,10 +515,13 @@ function updateProductOnlyUi() {
   $("#productOnlyDate").classList.toggle("show", onlyProducts);
   $("#staffPicker").hidden = onlyProducts;
   $("#appointmentFields").hidden = onlyProducts;
+  $("#appointmentTimeFields").hidden = onlyProducts;
+  $("#productOnlyTime").hidden = !onlyProducts;
   if (onlyProducts) { state.staffId = "any"; state.date = ""; state.time = ""; }
 }
 
 function updateSummary() {
+  $("#mobileBookingTotal").textContent = money(total());
   const items = cartItems();
   const branch = currentBranch();
   $("#summaryBranch").textContent = branch ? branchName(branch) : t("chooseBranch", state.lang);
@@ -655,7 +667,7 @@ function closeBranchDialog() {
 
 function showBookingDialog() {
   if (!currentBranch()) { openBranchDialog(true); return; }
-  if (state.step === 5) resetBooking();
+  if (state.step === 7) resetBooking();
   $("#bookingDialog").showModal();
   document.body.style.overflow = "hidden";
   goToStep(1);
@@ -694,7 +706,7 @@ function closeBooking() {
   if (bookingSubmitting) { showToast(state.lang === "ar" ? "انتظر حتى يتم تأكيد الحجز الحالي" : "Wait until the current booking is confirmed"); return; }
   $("#bookingDialog").close();
   document.body.style.overflow = "";
-  if (state.step === 5) resetBooking();
+  if (state.step === 7) resetBooking();
 }
 
 function resetBooking() {
@@ -712,16 +724,17 @@ function resetBooking() {
 }
 
 function goToStep(step) {
-  state.step = Math.max(1, Math.min(5, step));
+  $("#bookingDialog .booking-body")?.scrollTo({top:0});
+  state.step = Math.max(1, Math.min(7, step));
   $$('.booking-step').forEach(section => section.classList.toggle("active", Number(section.dataset.step) === state.step));
   $$('#bookingProgress li').forEach((item, index) => {
     item.classList.toggle("active", index + 1 === state.step);
     item.classList.toggle("done", index + 1 < state.step);
   });
-  $("#dialogActions").hidden = state.step === 5;
-  $("#bookingSummary").hidden = state.step === 5;
+  $("#dialogActions").hidden = state.step === 7;
+  $("#bookingSummary").hidden = state.step === 7;
   $("#prevStep").style.visibility = state.step === 1 ? "hidden" : "visible";
-  $("#nextStep").textContent = state.step === 4 ? t("createBooking", state.lang) : state.step === 1 ? (state.lang === "ar" ? "متابعة الحجز" : "Continue booking") : t("next", state.lang);
+  $("#nextStep").textContent = state.step === 6 ? t("createBooking", state.lang) : state.step === 1 ? (state.lang === "ar" ? "متابعة الحجز" : "Continue booking") : t("next", state.lang);
   updateProductOnlyUi();
   updateSummary();
 }
@@ -733,16 +746,24 @@ function canAdvance() {
     const missing = cartItems().map(item => ({ item, group: packageChoiceMissing(item) })).find(value => value.group);
     if (missing) { showToast(`${state.lang === "ar" ? "اختر" : "Choose"} ${state.lang === "ar" ? missing.group.labelAr : missing.group.labelEn || missing.group.labelAr}`); document.querySelector(`[data-package-choice="${CSS.escape(missing.item.id)}"][data-choice-group="${CSS.escape(missing.group.id)}"]`)?.focus(); return false; }
   }
-  if (state.step === 3 && needsAppointment() && availabilityLoading) { showToast(state.lang === "ar" ? "جاري تحميل المواعيد المتاحة" : "Available times are still loading"); return false; }
-  if (state.step === 3 && needsAppointment() && (!state.date || !state.time)) { showToast(t("required", state.lang)); return false; }
+  if (state.step === 4 && needsAppointment() && availabilityLoading) { showToast(state.lang === "ar" ? "جاري تحميل المواعيد المتاحة" : "Available times are still loading"); return false; }
+  if (state.step === 4 && needsAppointment() && (!state.date || !state.time)) { showToast(t("required", state.lang)); return false; }
+  if (state.step === 3 && needsAppointment() && !state.date) { showToast(t("required", state.lang)); return false; }
   return true;
+}
+
+function renderFinalBookingReview() {
+  const review = $("#finalBookingReview"); review.replaceChildren();
+  const data = [ ["الفرع", currentBranch() ? branchName(currentBranch()) : "—"], ["الخدمات", cartItems().map(item => localized(item)).join(" + ")], ["العامل", $("#summaryStaff").textContent], ["الموعد", $("#summaryDate").textContent], ["العميل", `${$("#firstName").value} ${$("#lastName").value}`], ["قبل الخصم", money(subtotal())], ["الخصم", money(discountAmount())], ["الإجمالي", money(total())] ];
+  for (const [label, value] of data) { const row = document.createElement("p"); row.textContent = `${label}: ${value}`; review.append(row); }
 }
 
 async function nextStep() {
   if (bookingSubmitting) return;
   if (!canAdvance()) return;
-  if (state.step < 4) { goToStep(state.step + 1); return; }
-  if (state.step === 4) await submitBooking();
+  if (state.step === 5 && !$("#customerForm").reportValidity()) return;
+  if (state.step < 6) { if (state.step === 5) renderFinalBookingReview(); goToStep(state.step + 1); return; }
+  if (state.step === 6) await submitBooking();
 }
 
 function setDateBounds() {
@@ -908,7 +929,7 @@ async function submitBooking() {
     sessionStorage.removeItem("mz-booking-request-fingerprint");
     saveCart();
     renderCart();
-    goToStep(5);
+    goToStep(7);
   } catch (error) {
     console.debug("Booking failed", error?.message || error);
     const message = error?.message || t("loadError", state.lang);
@@ -999,6 +1020,7 @@ function escapeHtml(value) {
 }
 function escapeAttr(value) { return escapeHtml(String(value ?? "")).replaceAll('"', "&quot;"); }
 
+bindSafeBack(".booking-back");
 let observer;
 function observeReveals() {
   if (!('IntersectionObserver' in window)) { $$('.reveal').forEach(el => el.classList.add("visible")); return; }
@@ -1006,15 +1028,15 @@ function observeReveals() {
   $$('.reveal:not(.visible)').forEach(el => observer.observe(el));
 }
 
-let faqModulePromise;
-async function openFaqChat() {
-  if (!currentBranch()) { openBranchDialog(false); return; }
+async function openPersonalAssistant() {
   const button = $("[data-open-faq-chat]");
   button?.setAttribute("aria-busy", "true");
   try {
-    faqModulePromise ||= import("./faq-chatbot.js");
-    const module = await faqModulePromise;
-    module.openFaqChat({ faqs: (state.catalog.faqs || []).filter(item => availableAtBranch(item) && item.active !== false), lang: state.lang, branch: currentBranch() || state.catalog.branches.find(item => item.id === "mashaya") });
+    {
+      const ai = await import('./ai-chat.js');
+      ai.openAiChat({ faqs: [...(state.catalog.faqs || []).filter(item => availableAtBranch(item) && item.active !== false), ...bookingFaqKnowledge], lang: state.lang, branch: currentBranch(), catalog: state.catalog });
+      return;
+    }
   } finally { button?.removeAttribute("aria-busy"); }
 }
 
@@ -1042,7 +1064,7 @@ document.addEventListener("click", event => {
   if (remove) removeFromCart(remove.dataset.removeId);
   const quantity = event.target.closest("[data-cart-qty]");
   if (quantity) changeCartQty(quantity.dataset.cartId, Number(quantity.dataset.cartQty || 0));
-  if (event.target.closest("[data-open-faq-chat]")) openFaqChat();
+  if (event.target.closest("[data-open-faq-chat]")) openPersonalAssistant();
   const filter = event.target.closest("[data-category]");
   if (filter) { state.category = filter.dataset.category; renderServices(); }
   const staff = event.target.closest("[data-staff-id]");
@@ -1148,7 +1170,7 @@ async function init() {
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCatalog(true); });
   }
   if (!firebaseConfigured) document.documentElement.dataset.preview = "true";
-  if (/^\/booking(?:\/|$)/.test(location.pathname)) setTimeout(() => { void openBooking(); }, 0);
+  if (/^\/booking(?:\/|$)/.test(location.pathname) || new URLSearchParams(location.search).get("book") === "1") setTimeout(() => { void openBooking(); }, 0);
 }
 
 window.addEventListener("offline", () => updateNetworkStatus());

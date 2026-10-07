@@ -1,0 +1,4 @@
+import './styles.css';import './premium-components.css';
+import {getLang} from './i18n.js';import {activeBranch,publicSubset} from './public-branch.js';import {bookingFaqKnowledge} from './faq-knowledge.js';
+const button=document.querySelector('.faq-chat-fab');
+button?.addEventListener('click',async()=>{button.disabled=true;try{const {getCatalog}=await import("./firebase-client.js");const catalog=await getCatalog();const branch=activeBranch(catalog,localStorage.getItem('mz-branch'));const options={faqs:[...publicSubset(catalog.faqs,branch?.id),...bookingFaqKnowledge],lang:getLang(),branch,catalog};const m=await import('./ai-chat.js');m.openAiChat(options);}catch{const m=await import('./ai-chat.js');m.openAiChat({faqs:bookingFaqKnowledge,lang:getLang(),branch:null,catalog:{}});}finally{button.disabled=false;}});

@@ -1,0 +1,442 @@
+[
+  {
+    "file": "PHASE11_1_CSS_AUDIT.json",
+    "status": "added",
+    "sha256": "e973002d63cae9f5000a5d10ff1ae02d7348734c176af75bdf197e1e8861ea96"
+  },
+  {
+    "file": "PHASE11_1_CSS_CLEANUP_REPORT_AR.md",
+    "status": "added",
+    "sha256": "031db2b78140e9ff5eef58698c9085a50bc455c9d8dc2902780bfa20cfdbb0bc"
+  },
+  {
+    "file": "PHASE11_1_FINAL_VISUAL_REPORT_AR.md",
+    "status": "added",
+    "sha256": "90ca6e70c2d2031bb1e638b4c71b8fa83a17fec4b66f7d7f31f3c9b590fa5327"
+  },
+  {
+    "file": "PHASE11_1_GENERATED_ASSETS.json",
+    "status": "added",
+    "sha256": "862e405ef7328ba9f5011e5187776c0e4fd7698719b24754aee2e88763e004b7"
+  },
+  {
+    "file": "PHASE11_1_MEDIA_MANAGEMENT_AR.md",
+    "status": "added",
+    "sha256": "fc8bc915d083bc312f79d7643ead1e2c88cf81f62e76994d8400523c6ad930b7"
+  },
+  {
+    "file": "PHASE11_1_ROUTE_ROLE_AUDIT_AR.md",
+    "status": "added",
+    "sha256": "ba0d1c71709ca47ad94787ecbc797c051834f92688420ea9ea28f49065b00c31"
+  },
+  {
+    "file": "PHASE11_1_TEST_RESULTS.json",
+    "status": "added",
+    "sha256": "c0a6b23e296465fff44f8986f9bdd916f9ee2835a7101fa9169d2dc56459e590"
+  },
+  {
+    "file": "account/index.html",
+    "status": "modified",
+    "sha256": "baf714010b142c533459205a099482763e1b5370cb72d4164ad4ad057d36ec64"
+  },
+  {
+    "file": "admin/index.html",
+    "status": "modified",
+    "sha256": "969b4a6cb396d283bf985c332d201d59ace3c12d9a0c4d513c6b3939a142ff9d"
+  },
+  {
+    "file": "booking/index.html",
+    "status": "added",
+    "sha256": "54e19d5fad4db3c85e1d73e8364fa622eb35e84c83f5c343cd92c86a936fd9e6"
+  },
+  {
+    "file": "branches/mashaya/index.html",
+    "status": "modified",
+    "sha256": "6197295edcb6ec42f06126370af4a2b47ed884f68e8bb1628771a3d10dee7b02"
+  },
+  {
+    "file": "branches/talkha/index.html",
+    "status": "modified",
+    "sha256": "810c31346fdc150128c1c109771885d0cb9538823063ff50e7d8104f4fe9f1c3"
+  },
+  {
+    "file": "firebase.json",
+    "status": "modified",
+    "sha256": "e6160dc31eb9dcc0411967f5de0e97fbba5dc34891e32378f898b210ea4d24ea"
+  },
+  {
+    "file": "firestore.indexes.json",
+    "status": "modified",
+    "sha256": "72f0dbbfbb846bdd782e2251e25cba57121dfc6f2618fff19bf13bb495bb8d46"
+  },
+  {
+    "file": "functions/package-lock.json",
+    "status": "modified",
+    "sha256": "95e3e8f7f5520ca034f72ee4342a7e9535a937f4f322909cdc9cbd0d86d9de49"
+  },
+  {
+    "file": "functions/src/account-center.js",
+    "status": "added",
+    "sha256": "e88ea6e8f559fdde20e239cef676bf1aaefcca4d3a806d2b42cb0f44cea31a4c"
+  },
+  {
+    "file": "functions/src/ai-agent.js",
+    "status": "modified",
+    "sha256": "ebd6adea638f7d6ac0644a41d25463004e0c5bac94f752911111863917c0d91a"
+  },
+  {
+    "file": "functions/src/booking-help.js",
+    "status": "added",
+    "sha256": "1d0a37af89aab4ddf2619ffd513d230b8f72cc5f009ce53859f22cd7436c472c"
+  },
+  {
+    "file": "functions/src/index.js",
+    "status": "modified",
+    "sha256": "392685dfb9233bdc9f2efc2b3800a5aeb8bff5f9fddb8552feb0627e23646436"
+  },
+  {
+    "file": "functions/test/phase11-1.test.mjs",
+    "status": "added",
+    "sha256": "7fb6a1d8470dede65ada44628c52fb22a7e428ccc3f7e6a44b93816a34646515"
+  },
+  {
+    "file": "hair-systems/index.html",
+    "status": "modified",
+    "sha256": "7604eae167c8191973e4f89485fc1097c5cb092e68c3e94fcc7953d907ed1561"
+  },
+  {
+    "file": "index.html",
+    "status": "modified",
+    "sha256": "e3e88def1a8f2c2067d285c88a5daa2d6cdf8d590d877be00720a8ffdf549ff6"
+  },
+  {
+    "file": "login/index.html",
+    "status": "modified",
+    "sha256": "826f4cf9a451870b142cb912f173702e8ea6ceb63952e6313a2d03e8415d5e8c"
+  },
+  {
+    "file": "packages/index.html",
+    "status": "modified",
+    "sha256": "e2edec59809661881c68a8852536310bc7b9ebb908e8557fdb70b7eeffc6934b"
+  },
+  {
+    "file": "public/assets/premium/beard-1280.webp",
+    "status": "added",
+    "sha256": "1fcbc653fff133436f34f3cef506c1e0631a1f8e8be2a99c35ae644389d10730"
+  },
+  {
+    "file": "public/assets/premium/beard-640.webp",
+    "status": "added",
+    "sha256": "dc9dbefa615df952732b07c9ccb683cdfc92f3a875baf075a238d608cb991636"
+  },
+  {
+    "file": "public/assets/premium/booking-1280.webp",
+    "status": "added",
+    "sha256": "83dc5b363a7145f1aeaa659db4e5362b3b170e28a6223141ffe9f4aac4d80342"
+  },
+  {
+    "file": "public/assets/premium/booking-640.webp",
+    "status": "added",
+    "sha256": "47b1773cb7c912158dcfb654c296d8fdf8fab73b5edf769a89c288325fbfb29d"
+  },
+  {
+    "file": "public/assets/premium/hair-system-1280.webp",
+    "status": "added",
+    "sha256": "dde1d8d7a2dc374c4a32d8dfbd6c1a912fec99a55cd57ba7a986b2b33a205236"
+  },
+  {
+    "file": "public/assets/premium/hair-system-640.webp",
+    "status": "added",
+    "sha256": "04f02161d3c7830403930c20698cdb27f4cf271c9a39412a242020e17d197c53"
+  },
+  {
+    "file": "public/assets/premium/haircut-1280.webp",
+    "status": "added",
+    "sha256": "69dca25d78bbafe49bf1acc05e51190b93c374a5696db0d4ac134a1b94e7200d"
+  },
+  {
+    "file": "public/assets/premium/haircut-640.webp",
+    "status": "added",
+    "sha256": "6f766bc4580eec60217005350b5a2b420b0246a33609500cf067c53c6c90f6c4"
+  },
+  {
+    "file": "public/assets/premium/hero-1280.webp",
+    "status": "added",
+    "sha256": "4a3d46e1f7f9946c1a3767d688b52cf99445356e5ae806984f375f6157d68195"
+  },
+  {
+    "file": "public/assets/premium/hero-640.webp",
+    "status": "added",
+    "sha256": "53743220b55f7d0fc2984882ddb7ab2837cf37772e9c4f7e371f56189b6e28c7"
+  },
+  {
+    "file": "public/assets/premium/interior-1280.webp",
+    "status": "added",
+    "sha256": "181baa9598da0e8f351e7a9e190ec489222a7fb8ef6be4d2519d1f6255ef49ae"
+  },
+  {
+    "file": "public/assets/premium/interior-640.webp",
+    "status": "added",
+    "sha256": "79edfee963de96d504d84ce628073ea4ad193235020322295b099ba15ca7399d"
+  },
+  {
+    "file": "public/assets/premium/package-1280.webp",
+    "status": "added",
+    "sha256": "48ba48c373bafaf6c44922dfe3e3bf1befd82afca873255607848b7fc5695312"
+  },
+  {
+    "file": "public/assets/premium/package-640.webp",
+    "status": "added",
+    "sha256": "25c02b7b99761981d69377621d50fb4680c3ab592aa322f03545f3f0faa2d442"
+  },
+  {
+    "file": "public/assets/premium/skin-1280.webp",
+    "status": "added",
+    "sha256": "ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0"
+  },
+  {
+    "file": "public/assets/premium/skin-640.webp",
+    "status": "added",
+    "sha256": "56d5568ef5f4db13704dc4d9953e2777d8bb117481824492df574ffe37ce63b0"
+  },
+  {
+    "file": "public/assets/premium/styling-1280.webp",
+    "status": "added",
+    "sha256": "f94a2e5f80f6ab0893781e0530e4ad6600d773bf80534699094f31d61f25cb67"
+  },
+  {
+    "file": "public/assets/premium/styling-640.webp",
+    "status": "added",
+    "sha256": "294343f1528252b382f2f7acb55c0a7ae284c8e36c4258849f3b24c8d45edcfc"
+  },
+  {
+    "file": "public/assets/premium/tools-1280.webp",
+    "status": "added",
+    "sha256": "f606608347c7bae4087214012590647dffde82fab2d2e28ed85afd4697b12c62"
+  },
+  {
+    "file": "public/assets/premium/tools-640.webp",
+    "status": "added",
+    "sha256": "e36b2c8a79731e1b74479011f4a4d5d3ebecda4091de4bbcb82f7c344547ca3f"
+  },
+  {
+    "file": "public/robots.txt",
+    "status": "modified",
+    "sha256": "0dcbed3a5d7ef17f28cf14b705dfdad19fb93aa5bdee6c6700e970c17ed75897"
+  },
+  {
+    "file": "public/sw.js",
+    "status": "modified",
+    "sha256": "09becbc26a11bcbc5376065fe28543fe50d19d2b4cb3434a36428c3ae50075a4"
+  },
+  {
+    "file": "results/index.html",
+    "status": "modified",
+    "sha256": "8a0365f0c1ea450f8d429ec2dcfa47c84faaaf9debcbac9ae4d1f7b0837e681b"
+  },
+  {
+    "file": "reviews/index.html",
+    "status": "modified",
+    "sha256": "7407c9492238c98a0107d3bf93f940cf5ac17de9e0e63cb00b5f6928b0b5363c"
+  },
+  {
+    "file": "scripts/consolidate-public-css.mjs",
+    "status": "added",
+    "sha256": "5f340d353c10af14dcf609a143c9c8e154eec25df7b9fa84aad0cc9f4fbd6717"
+  },
+  {
+    "file": "scripts/generate-seo.mjs",
+    "status": "modified",
+    "sha256": "7a821e520c1ac759ff70a599ac9b0ae9a4898aa897846b7969f79ea90fcc2811"
+  },
+  {
+    "file": "scripts/smoke-test.mjs",
+    "status": "modified",
+    "sha256": "d7bf53eb48951662282a467a01600c1e8f892fa888433934cbbf527788700413"
+  },
+  {
+    "file": "scripts/verify-build.mjs",
+    "status": "modified",
+    "sha256": "339c104cf00fc4364f4bbbd9f166c2b3df052b00e7e276d5a3326045e518f90f"
+  },
+  {
+    "file": "services/index.html",
+    "status": "modified",
+    "sha256": "b6910ee57341a49441d2e797728cd913aa39241d64306e67d32c891770e25df8"
+  },
+  {
+    "file": "src/admin-api.js",
+    "status": "modified",
+    "sha256": "22206e83893110dcb32edfbf35c53172b83a5b5ffb74c21860dd35d3d043b23c"
+  },
+  {
+    "file": "src/admin.css",
+    "status": "modified",
+    "sha256": "e154eb027386944c3c1b5c52732f3a73aa2136a46d484b0fd69fec0908cd62af"
+  },
+  {
+    "file": "src/admin.js",
+    "status": "modified",
+    "sha256": "51eba98edc854bf687b63be0534dedaacc246ac698f22369e7f9edc5254e57e0"
+  },
+  {
+    "file": "src/ai-chat.js",
+    "status": "modified",
+    "sha256": "45810d25ee5ff2f5c7b8fd957fca4fd5ca5d4b1f06d2f8191cbabc569d4f92bc"
+  },
+  {
+    "file": "src/app.js",
+    "status": "modified",
+    "sha256": "b75016e71162f81ab0599f2bc0e1afb97569abdcd43e41076e8a7cc863e01072"
+  },
+  {
+    "file": "src/branch-page.js",
+    "status": "modified",
+    "sha256": "f96b37052dc5c5becb1875eb92bf7c03011860a4bd4acbd190ced1b944eef894"
+  },
+  {
+    "file": "src/catalog-page.js",
+    "status": "modified",
+    "sha256": "8b35849f42845efb7aea246bba615b0add16de500b3ca3cbf287172f49384adf"
+  },
+  {
+    "file": "src/faq-chatbot.js",
+    "status": "modified",
+    "sha256": "bdd1ec1aeb8427145d79437be9c99d6b27044846a07db392ade68ec0a04ae5c4"
+  },
+  {
+    "file": "src/faq-knowledge.js",
+    "status": "added",
+    "sha256": "615737928be5cbcb4eed440b40bc7c9ad186d7061b51c9f99ba07486551d138a"
+  },
+  {
+    "file": "src/i18n.js",
+    "status": "modified",
+    "sha256": "491a1668061dde235f29d2439f4029c483008c932cf1fb97032cba3e5e49d57a"
+  },
+  {
+    "file": "src/login.css",
+    "status": "modified",
+    "sha256": "4b9b64bcb80c3adb354df6fb11e3bb48a06fd22f88fd8c5ff908f3eeaaf9f4a3"
+  },
+  {
+    "file": "src/login.js",
+    "status": "modified",
+    "sha256": "1d28986dd4379f2e308a5038d2236d6d7d79aedfaea53e4832bfb153b52859ef"
+  },
+  {
+    "file": "src/media.js",
+    "status": "modified",
+    "sha256": "4de4b0c18f126e789de82687727bd9a1b847365a51b290da2b7133a471a24ba9"
+  },
+  {
+    "file": "src/premium-components.css",
+    "status": "added",
+    "sha256": "bb61502c94039d72892c0e64d1dd0695fe2b7867864727dc3b6098c1ae5c09f0"
+  },
+  {
+    "file": "src/premium-media.js",
+    "status": "added",
+    "sha256": "d8b18b7dedc7bc89eb67bce77b51e94f83201bb9fa4d4c7a38cc018fb901de9f"
+  },
+  {
+    "file": "src/public-assistant.js",
+    "status": "added",
+    "sha256": "836dc0ee3e8b04cab1d74eb18074daeae315b2ae34d1a021c439038a7841e004"
+  },
+  {
+    "file": "src/reviews-page.js",
+    "status": "modified",
+    "sha256": "2645b48e62146acd01f84ff67c08322cfb3840395561f1ff8a3b6377e296944b"
+  },
+  {
+    "file": "src/seo-page.js",
+    "status": "modified",
+    "sha256": "5c78d0fda7c2160d4307e6ececf4ab1ee6c58a38e1e1c5564684830d1640e319"
+  },
+  {
+    "file": "src/staff-routing.js",
+    "status": "added",
+    "sha256": "182b99850275f0ad20c524c675f15e50b87d595cf666dc778d57d523eff8de8a"
+  },
+  {
+    "file": "src/styles.css",
+    "status": "modified",
+    "sha256": "8fafc6da67e2990e30dcb5b6b87e40bfb7bf91c1491ba13f78dccc5735d8033d"
+  },
+  {
+    "file": "src/worker.css",
+    "status": "added",
+    "sha256": "14c31d9d06e3505e23ce9ed23c8f181a879687a7b99f9c5073cbf2327d3c84bf"
+  },
+  {
+    "file": "src/worker.js",
+    "status": "added",
+    "sha256": "b150a78952c4764cad4f6e1bde8e7522e54fc1ce0cc91efbb2d76880167a4ab6"
+  },
+  {
+    "file": "team/index.html",
+    "status": "modified",
+    "sha256": "76c939b5632394e9863ceef70a68adf9e30856913ac88f389594b70cdf24d63b"
+  },
+  {
+    "file": "tests/admin-regressions.test.mjs",
+    "status": "modified",
+    "sha256": "82ae0271edfc87dfed37e667f0baafbbf28ae7e3144982c8ae711b354654846e"
+  },
+  {
+    "file": "tests/customer-account-regressions.test.mjs",
+    "status": "modified",
+    "sha256": "0baf1aba495f4c0e91729bdee0ddec76d33ebe5c6f9fea4f8e65a1cc9e278b14"
+  },
+  {
+    "file": "tests/delta-ui-targets.test.mjs",
+    "status": "modified",
+    "sha256": "b1e41e3d942a31e9d41c53453e515bd0ac2bb5dbee4a18efa937c351cd5f817d"
+  },
+  {
+    "file": "tests/phase11-1-hosting-smoke.mjs",
+    "status": "added",
+    "sha256": "e88a4b51d42b5a7cccfcff9fbf19076623cd54c77ce1b0a88d10bffa902eb41e"
+  },
+  {
+    "file": "tests/phase11-1-visual.test.mjs",
+    "status": "added",
+    "sha256": "c5b14e0bdd96ef3838b70adf38092bcfb45e60232d75ca83f4f8e6463f2012e6"
+  },
+  {
+    "file": "tests/phase11-1.emulator.mjs",
+    "status": "added",
+    "sha256": "8bf67605d64ff2c4105d19d5ea49413d1c0fe520676b153e262dc489b04c4331"
+  },
+  {
+    "file": "tests/phase11.emulator.mjs",
+    "status": "modified",
+    "sha256": "e28e9ab51707b286407efafaddf87fa2018f5b0ee85d9888e2f7cef114ddceea"
+  },
+  {
+    "file": "vercel.json",
+    "status": "modified",
+    "sha256": "96806707fe7113cbefe82ee3529c3a2b89d7efada74d3b5d7cdf82af5181b56a"
+  },
+  {
+    "file": "vite.config.js",
+    "status": "modified",
+    "sha256": "07b63717a03a4c01c9a886d8d8b6fd02cd6f69d099dd932956405163db0b1b45"
+  },
+  {
+    "file": "worker/index.html",
+    "status": "added",
+    "sha256": "2d65869bd508b8b2ac5087ca6af8920903c4821f4199ed0452800a04c37048de"
+  },
+  {
+    "file": "PHASE11_1_CHANGED_FILES.json",
+    "status": "added",
+    "note": "change-list metadata; excludes its own checksum"
+  },
+  {
+    "file": "PHASE11_1_CHANGED_FILES.md",
+    "status": "added",
+    "note": "change-list metadata; excludes its own checksum"
+  }
+]

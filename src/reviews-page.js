@@ -1,4 +1,6 @@
+import './global-navigation.js';
 import "./styles.css";
+import "./premium-components.css";
 import { getPublishedReviews } from "./firebase-client.js";
 import { bindSafeBack } from "./navigation.js";
 

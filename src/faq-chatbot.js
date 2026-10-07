@@ -39,12 +39,13 @@ function close() {
 }
 
 function runAction(action) {
-  if (action === "book") { close(); $("[data-open-booking]")?.click(); return; }
+  if (action === "book") { close(); const button=$("[data-open-booking]"); if(button)button.click();else location.href="/booking/"; return; }
   if (action === "branch") { close(); $("[data-open-branch]")?.click(); return; }
-  if (action === "manage") { close(); $("#manage-booking")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  if (action === "manage") { close(); location.href="/account/"; return; }
   if (action === "services") { location.href = "/services/"; return; }
   if (action === "hair") { location.href = "/hair-systems/"; return; }
   if (action === "whatsapp") {
+    if (!state.branch) { location.href="/#choose-branch";return; }
     const number = whatsappNumber(state.branch?.whatsapp || state.branch?.phone || "01101006961");
     window.open(`https://wa.me/${number}`, "_blank", "noopener,noreferrer");
   }
@@ -71,7 +72,7 @@ export function openFaqChat(options = {}) {
   panel.hidden = false;
   panel.setAttribute("aria-hidden", "false");
   $("[data-open-faq-chat]")?.setAttribute("aria-expanded", "true");
-  $("#faqChatTitle").textContent = state.lang === "ar" ? "مساعد مزين مصر" : "El Mezaen Assistant";
+  $("#faqChatTitle").textContent = state.lang === "ar" ? "اسأل مزين" : "El Mezaen Assistant";
   $("#faqChatIntro").textContent = state.lang === "ar" ? "اختر سؤالًا سريعًا. لا يتم حفظ المحادثة أو أي بيانات شخصية." : "Choose a quick question. No chat or personal data is stored.";
   $("#faqChatSearch").placeholder = state.lang === "ar" ? "ابحث عن سؤال…" : "Search questions…";
   $("#faqChatSearch").value = "";

@@ -10,20 +10,28 @@
   <title>دخول إدارة مزين مصر</title>
 </head>
 <body class="login-page">
-  <main class="login-shell">
+  <main class="login-shell"><aside class="login-brand"><img src="/assets/el-mezaen-mark-v2.webp" alt="مزين مصر" width="96" height="114"><span>EL MEZAEN • منذ 1995</span><h1>كل تفاصيل يومك<br>في مكان واحد.</h1><p>مساحة فريق مزين مصر<br>حجوزاتك، مهامك وحضورك بأمان.</p></aside><div class="login-access">
     <a class="login-back" href="/" data-safe-back data-back-fallback="/"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg><span>العودة للموقع</span></a>
-    <form class="login-card" id="loginForm" novalidate>
+    <nav class="login-tabs" aria-label="نوع الدخول"><button data-login-mode="staff">الإدارة / المدير / الكاشير</button><button data-login-mode="worker">دخول العامل</button></nav><form class="login-card" id="loginForm" novalidate>
       <img src="/assets/el-mezaen-mark-v2.webp" alt="رمز مزين مصر" width="130" height="154">
-      <span>EL MEZAEN • TALKHA</span>
-      <h1>لوحة إدارة مزين مصر</h1>
-      <p>سجّل الدخول بحساب Firebase المصرح له.</p>
+      <span>حساب فريق العمل المعتمد</span>
+      <h1>دخول الإدارة / المدير / الكاشير</h1>
+      <p>ادخل بحسابك المعتمد في فريق مزين.</p>
       <label><b>البريد الإلكتروني</b><input id="email" type="email" autocomplete="username" required placeholder="admin@example.com"></label>
       <label><b>كلمة المرور</b><input id="password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
       <p class="login-error" id="loginError" role="alert"></p>
       <button class="login-button" type="submit">دخول آمن</button>
-      <small>لا يتم حفظ كلمة المرور داخل الموقع أو JavaScript.</small>
+      <small>دخول آمن لحسابك.</small>
     </form>
-  </main>
+    <section class="login-card" id="workerLoginCard" aria-labelledby="workerAccessTitle">
+      <h2 id="workerAccessTitle">دخول العامل</h2><p>حجوزاتك وحضورك ومهامك في مكان واحد.</p>
+      <button class="login-button" type="button" id="workerGoogle">المتابعة باستخدام Google</button>
+      <form id="workerPhoneForm"><label>رقم الهاتف<input name="phone" type="tel" autocomplete="tel" placeholder="01xxxxxxxxx" required></label><div id="workerRecaptcha"></div><button class="login-button">إرسال رمز التحقق</button></form>
+      <form id="workerOtpForm" hidden><label>رمز التحقق<input name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required></label><button class="login-button">تأكيد الرمز</button></form>
+      <div id="pendingActivation" class="pending-activation" hidden><h3>تم إنشاء حسابك</h3><p>الحساب في انتظار اعتماد الإدارة.</p><button id="pendingSignOut" type="button" class="login-button">تسجيل الخروج</button></div><form id="workerInviteForm" hidden><p>تم إنشاء حسابك، في انتظار اعتماد الإدارة</p><label>رمز دعوة الإدارة<input name="secret" autocomplete="off" required></label><button class="login-button">تفعيل الدعوة</button></form>
+      <p id="workerAccessStatus" role="status"></p>
+    </section>
+  </div></main>
   <script src="/firebase-config.js"></script>
   <script type="module" src="/src/login.js"></script>
 </body>
