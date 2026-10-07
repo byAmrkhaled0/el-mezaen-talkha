@@ -1,3 +1,7 @@
+import { staffBranchHealth } from './staff-data-health.js';
+import { isLocalEnvironment, localAppCheckSetup } from './local-environment.js';
+import { staffRouteGuard } from "./staff-routing.js";
+import { getAccessAccountCenter, createWorkerInvitation, manageAccessAccount, markWorkerNotificationRead, watchWorkerPush } from './admin-api.js';
 import "./admin.css";
 import { addCashMovement, adjustCustomerWallet, changeBooking, checkWhatsappMarketingRecipient, changeOwnPassword, changeUserRole, closeBusinessDay, closeCashShift, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, createWorkerTask, currentAccess, deleteEntity, enablePush, ensureAdminAppCheckReady, findCustomerByPhone, getAttendanceDashboard, getAuditEvents, getBookingCalendar, getBusinessDashboard, getBusinessReport, getCashierSnapshot, getCashOperations, getCollection, getCustomer360, getDashboard, getOwnerMobileHistory, getPosOffers, getServiceTargetsDashboard, getWorkerWorkspace, getWhatsappCampaignOptions, getWhatsappCampaignRecipients, getWhatsappCampaignStats, logout, notifyWorker, openCashShift, previewPosCoupon, previewWhatsappCampaign, rebuildBusinessReport, recordExpense, recordPayrollPayment, recordWorkerAttendance, rescheduleBooking, rotateCustomerQr, saveEntity, scanCustomerCode, secureDeleteRecord, setBranchMonthlyTarget, updateExpense, updateWorkerProfilePhoto, updateWorkerTask, upsertServiceTarget, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { cashVariance, closeShiftReasonMissing } from "./cashier-shift.js";
@@ -39,6 +43,7 @@ const hasContentWorkspace = () => Object.keys(contentGrants).some(canManageConte
 const fields = {
   branches: [
     ["id", "معرّف الفرع بالإنجليزية بدون مسافات (مثال: talkha)", "text", true], ["nameAr", "اسم الفرع بالعربية", "text", true], ["shortNameAr", "الاسم المختصر", "text", true], ["code", "رمز الفرع في كود الحجز", "text", true],
+    ["imageUrl", "صورة الفرع", "url", false, null, true], ["imageFile", "رفع صورة الفرع", "file", false, null, true],
     ["addressAr", "العنوان الكامل", "textarea", true, null, true], ["phone", "رقم الموبايل", "tel", true], ["secondaryPhone", "رقم إضافي أو أرضي", "tel"], ["whatsapp", "رقم واتساب الدولي", "tel", true],
     ["mapsUrl", "رابط خرائط Google", "url", true, null, true], ["latitude", "خط العرض GPS", "number", true], ["longitude", "خط الطول GPS", "number", true], ["attendanceRadiusMeters", "نطاق الحضور بالمتر (25–1000)", "number", true], ["monthlyRevenueTarget", "هدف مبيعات الفرع الشهري (0 = غير محدد)", "number"], ["openingTime", "بداية العمل", "time", true], ["closingTime", "نهاية العمل", "time", true], ["slotMinutes", "الفاصل بين المواعيد", "number", true],
     ["facebook", "رابط Facebook", "url", false, null, true], ["instagram", "رابط Instagram", "url", false, null, true], ["tiktok", "رابط TikTok", "url", false, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "متاح للحجز", "boolean"]
@@ -47,6 +52,7 @@ const fields = {
     ["nameAr", "اسم التصنيف", "text", true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "الحالة", "boolean"]
   ],
   services: [
+    ["imageUrl", "صورة الخدمة", "url", false, null, true], ["imageFile", "رفع صورة الخدمة", "file", false, null, true],
     ["nameAr", "اسم الخدمة", "text", true], ["categoryId", "التصنيف", "category-select", true],
     ["price", "السعر", "number", true], ["duration", "المدة بالدقائق", "number", true], ["branchIds", "تظهر في", "branch-scope", true, null, true], ["startsFrom", "السعر يبدأ من", "boolean"], ["type", "النوع", "select", true, [["service", "خدمة"], ["product", "منتج"]]], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعلة", "boolean"]
   ],
@@ -234,7 +240,7 @@ async function showSection(id, { historyMode = "push" } = {}) {
     if (id === "pos" && state.role === "cashier" && Date.now() - state.loadedAt.cash > 60_000) tasks.push(loadCashOperations(true));
   } else if (["dashboard", "bookings", "revenue", "expenses"].includes(id) && (id === "bookings" || Date.now() - state.loadedAt.dashboard > 45_000)) tasks.push(loadDashboard());
   if (["bookings", "staff"].includes(id) && (state.role === "admin" || state.permissions.has("attendance")) && Date.now() - state.loadedAt.attendance > 45_000) tasks.push(loadAttendance(true));
-  const map = { pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["users", "staff"], services: ["categories", "services"] };
+  const map = { pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["staff"], services: ["categories", "services"] };
   tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
   if (state.role === "cashier" && ["bookings", "calendar"].includes(id)) tasks.push(loadCollection("staff"));
   if (id === "pos") tasks.push(loadPosOffers());
@@ -250,7 +256,7 @@ async function showSection(id, { historyMode = "push" } = {}) {
   if (id === "revenue") renderRevenue();
   if (id === "pos") { renderPos(); setPosView("receipts"); }
   if (id === "payroll") renderServiceTargets();
-  if (id === "users") { renderUserAccounts(); syncWorkerAccountFields($("#accountRole")?.value || "cashier"); }
+  if (id === "users") { void loadAccessCenter(); renderUserAccounts(); syncWorkerAccountFields($("#accountRole")?.value || "cashier"); }
   if (id === "campaigns") { await loadCampaignOptions(); renderCampaigns(); }
   if (id === "calendar") {
     $("#calendarBranchFilter").value = $("#dashboardBranchFilter")?.value || "all";
@@ -428,8 +434,9 @@ async function submitAccessEdit(event) {
 }
 
 function renderUserAccounts() {
-  const items = state.collections.get("users") || [];
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  const statusFilter = document.querySelector("#accountStatusFilter")?.value;
+  const items = (state.collections.get("users") || []).filter(item => !statusFilter || (item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE")) === statusFilter);
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.phone || item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<p>${escapeHtml((item.authProviders || []).join(" • "))} • ${escapeHtml(item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE"))} • آخر دخول: ${escapeHtml(item.lastSignInAt ? dateTime(item.lastSignInAt) : "غير متاح")}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button" type="button" data-access-action="disable" data-uid="${escapeAttr(item.id)}">تعطيل</button><button class="small-button" type="button" data-access-action="activate" data-uid="${escapeAttr(item.id)}">تفعيل</button><button class="small-button" type="button" data-access-action="revoke" data-uid="${escapeAttr(item.id)}">إبطال الجلسات</button>${item.staffId ? `<button class="small-button" type="button" data-access-action="unlink" data-uid="${escapeAttr(item.id)}">فك الربط</button>` : ""}<button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 function workerSelectOptions(selected = "", branchId = "") {
@@ -585,6 +592,14 @@ function renderWorkerWorkspace() {
   $("#workerProfileName").textContent = staff.nameAr || state.user?.displayName || "العامل";
   $("#workerProfileBranch").textContent = (staff.branchIds || state.branchIds).map(branchLabel).join(" • ");
   $("#workerProfilePhoto").src = staff.imageUrl || "/assets/el-mezaen-mark-v2.webp";
+  const provider = state.user?.providerData?.map(p => p.providerId).join(' • ') || '—';
+  const details = document.querySelector('#workerProfileDetails');
+  if (details) details.textContent = `${staff.specialtyAr || ''} • ${staff.shiftStart || ''} – ${staff.shiftEnd || ''} • ${provider} • الإشعارات: ${({granted:'مفعلة',denied:'غير مسموحة',default:'غير مفعلة'})[globalThis.Notification?.permission] || 'غير مدعومة'}`;
+  const inbox = document.querySelector('#workerNotificationInbox');
+  if (inbox) inbox.innerHTML = (worker.notifications || []).map(n => `<button class="worker-notification ${n.read ? 'read' : ''}" type="button" data-read-worker-notification="${escapeAttr(n.id)}" data-notification-kind="${escapeAttr(n.type)}" data-notification-entity="${escapeAttr(n.entityId || "")}"><b>${escapeHtml(n.title || 'تنبيه')}</b><span>${escapeHtml(n.body || '')}</span><small>${n.read ? 'مقروء' : 'جديد'}</small></button>`).join('') || '<p>لا توجد إشعارات</p>';
+  const badge = document.querySelector('#workerUnreadCount');
+  if (badge) badge.textContent = String((worker.notifications || []).filter(n => !n.read).length);
+  const navBadge=document.querySelector('#workerNavBadge');if(navBadge)navBadge.textContent=badge?.textContent === '0' ? '' : badge?.textContent || '';
   const attendance = worker.attendance;
   $("#workerAttendanceState").textContent = attendance?.status === "PRESENT" ? "موجود في المحل" : attendance?.status === "CHECKED_OUT" ? "تم تسجيل الانصراف" : "غير مسجل اليوم";
   $("#workerAttendanceDetails").textContent = attendance ? `${branchLabel(attendance.branchId)} • ${attendance.checkInTime || dateTime(attendance.checkInAt)}` : "اضغط عند وصولك للفرع وسنطابق موقعك.";
@@ -596,9 +611,9 @@ function renderWorkerWorkspace() {
   $("#workerTargetTotal").textContent = money(target.target);
   $("#workerTargetAchieved").textContent = money(target.achieved);
   $("#workerTargetRemaining").textContent = money(target.remaining);
-  $("#workerBookings").innerHTML = (worker.bookings || []).map(item => `<article class="worker-booking-card"><time>${escapeHtml(item.bookingDate || "")} • ${escapeHtml(item.bookingTime || "")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${escapeHtml(statusLabel(item.status))} • ${escapeHtml(branchLabel(item.branchId))}</small></article>`).join("") || '<div class="empty-state">لا توجد مواعيد قادمة.</div>';
+  $("#workerBookings").innerHTML = (worker.bookings || []).map(item => `<article class="worker-booking-card" data-worker-booking="${escapeAttr(item.id || item.code)}"><time>${escapeHtml(item.bookingDate || "")} • ${escapeHtml(item.bookingTime || "")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${escapeHtml(statusLabel(item.status))} • ${escapeHtml(branchLabel(item.branchId))}</small></article>`).join("") || '<div class="empty-state">لا توجد مواعيد قادمة.</div>';
   const notifications = (worker.notifications || []).map(item => ({ ...item, id: item.id, title: item.title || "تنبيه", details: item.body || "", assigneeNameAr: staff.nameAr, status: item.read ? "SEEN" : "NEW", priority: item.type === "alert" ? "urgent" : "normal" }));
-  $("#workerTaskGrid").innerHTML = [...notifications.map(item => renderTaskCard(item, false, false)), ...(worker.tasks || []).map(item => renderTaskCard(item, true))].join("") || '<div class="empty-state">لا توجد مهام أو تنبيهات.</div>';
+  $("#workerTaskGrid").innerHTML = (worker.tasks || []).map(item => renderTaskCard(item, true)).join("") || '<div class="empty-state">لا توجد مهام أو تنبيهات.</div>';
   const branchSelect = $("#workerAttendanceBranch");
   if (branchSelect) {
     [...branchSelect.options].forEach(option => { option.hidden = !state.branchIds.includes(option.value); });
@@ -2277,8 +2292,10 @@ function entityCard(collection, item, readonly = false) {
     ${(item.choiceGroups || []).map(group => `<p class="admin-package-choice"><b>${escapeHtml(group.labelAr || "اختيار مطلوب")}:</b> ${(group.options || []).map(option => escapeHtml(option.labelAr || option.id)).join(" أو ")}</p>`).join("")}
     ${item.termsAr ? `<small>${escapeHtml(item.termsAr)}</small>` : ""}
   </div>` : "";
+  const health=collection==='staff'?staffBranchHealth(item,state.collections.get('branches')?.length?state.collections.get('branches').map(b=>b.id):undefined):null;
+  const staffHealth=health?`<div class="staff-data-health"><p>نشط: ${health.active?'نعم':'لا'} • متاح: ${health.available?'نعم':'لا'}</p><p>الفروع: ${escapeHtml(health.branchIds.join('، ')||'غير مربوط بفرع')}</p>${health.missing?'<b class="stock-warning">غير مربوط بفرع</b>':''}${health.invalid.length?'<b class="stock-warning">ربط فرع غير صالح</b>':''}<p>الحساب المرتبط: ${escapeHtml(health.linkedUid||'غير مربوط')}</p><p>الصورة: ${health.photo?'مرفوعة':'لم تُرفع بعد'}</p>${state.role==='admin'?`<button data-edit-collection="staff" data-edit-id="${escapeAttr(item.id)}">تحديد فروع العامل</button>`:''}</div>`:'';
   const actions = collection === "branches" ? `<footer><button data-edit-collection="branches" data-edit-id="${escapeAttr(item.id)}">تعديل الموقع والنطاق</button></footer>` : `<footer>${collection === "offers" ? `${state.permissions.has("campaigns") || state.role === "admin" ? `<button data-offer-campaign="${escapeAttr(item.id)}">إرسال العرض للعملاء</button>` : ""}${(state.permissions.has("campaigns") && state.permissions.has("customers")) || state.role === "admin" ? `<button class="offer-send" data-prepare-offer-messages="${escapeAttr(item.id)}">إرسال للعملاء يدويًا</button>` : ""}` : ""}${collection === "offers" ? `<button data-preview-offer="${escapeAttr(item.id)}">معاينة</button><button data-book-offer="${escapeAttr(item.id)}">احجز العرض</button>` : ""}${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`;
-  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p>${packageDetails}${collection === "coupons" ? `<p>استخدام: ${Number(item.usageCount || 0)} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${Number(item.bookingCount || 0)} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : actions}</article>`;
+  return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3>${staffHealth}<p>${escapeHtml(detail)}</p>${packageDetails}${collection === "coupons" ? `<p>استخدام: ${Number(item.usageCount || 0)} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${Number(item.bookingCount || 0)} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : actions}</article>`;
 }
 
 function activityCard(item) {
@@ -2739,6 +2756,7 @@ async function saveSettingsForm(event) {
   if (button?.disabled) return;
   if (button) button.disabled = true;
   const payload = Object.fromEntries(new FormData(event.currentTarget));
+  try { for(const field of ["hero", "hairSystem"]){ const file=payload[`${field}ImageFile`];delete payload[`${field}ImageFile`];if(file?.size)payload[`${field}ImageUrl`]=await uploadImage(file,"homepage");} } catch(error){toast(error.message,true);if(button)button.disabled=false;return;}
   const existing = (state.collections.get("settings") || [])[0] || {};
   if (payload.businessNameAr != null) payload.businessNameEn = existing.businessNameEn || payload.businessNameAr;
   if (payload.aboutAr != null) payload.aboutEn = existing.aboutEn || payload.aboutAr;
@@ -3317,7 +3335,7 @@ $("#serviceTargetForm")?.addEventListener("submit", submitServiceTarget);
 $("#exportPayroll").addEventListener("click", () => exportCsv(`el-mezaen-payroll-${state.business.month}.csv`, ["العامل", "الإيراد", "التارجت", "الأساسي", "نسبة الزيادة", "الزيادة", "الراتب", "الحالة"], (state.business.payroll || []).map(item => [item.nameAr, item.revenue, item.monthlyTarget, item.baseSalary, item.targetBonusPercent, item.bonus, item.payment?.netSalary ?? item.netSalary, item.payment ? "تم الصرف" : "لم يصرف"])));
 $("#accountRole").addEventListener("change", event => { renderPermissionPicker(event.target.value); syncWorkerAccountFields(event.target.value); });
 $("#userAccountForm").addEventListener("submit", submitUserAccount);
-$("#refreshUsers").addEventListener("click", async () => { await loadCollection("users", true); renderUserAccounts(); });
+$("#refreshUsers").addEventListener("click", () => loadAccessCenter(true));
 $("#refreshAttendance")?.addEventListener("click", event => withButtonBusy(event.currentTarget, () => loadAttendance()));
 $("#retryDashboard")?.addEventListener("click", event => withButtonBusy(event.currentTarget, () => loadDashboard()));
 $("#attendanceDate")?.addEventListener("change", () => loadAttendance());
@@ -3382,6 +3400,7 @@ async function bootstrapAdmin(user) {
   if (!user) { location.replace("/login/"); return; }
   try {
     const access = await currentAccess(user);
+    const destination=staffRouteGuard(location.pathname,access.role); if(destination){location.replace(destination);return;}
     if (!["admin", "manager", "cashier", "worker"].includes(access.role) || (access.role !== "admin" && !access.branchIds?.length)) {
       await logout();
       location.replace("/login/?reason=access");
@@ -3396,6 +3415,7 @@ async function bootstrapAdmin(user) {
     $("#workspaceRoleName").textContent = `${roleName} • ${state.branchIds.map(branchLabel).join(" / ")}`;
     $("#headerUserName").textContent = userName;
     $("#headerUserRole").textContent = roleName;
+    $("#visualRoleBadge").textContent = roleName;
     $(".header-user-avatar").textContent = String(userName).trim().charAt(0) || "م";
     $("#headerBranchLabel").textContent = state.branchIds.length > 1 ? "طلخا والمشاية" : branchLabel(state.branchIds[0]);
     $("#cashierBranchLabel").textContent = state.branchIds.map(branchLabel).join(" / ") || "الفرع";
@@ -3404,6 +3424,14 @@ async function bootstrapAdmin(user) {
     $("#logoutButton").dataset.avatar = String(userName).trim().charAt(0) || "م";
     renderRoleShell();
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
+    if (state.role === 'worker') {
+      document.documentElement.dataset.theme = 'dark';
+      void watchWorkerPush(() => loadWorkerWorkspace(true));
+      document.querySelector('#workerMobileNav').hidden = false;
+      const linked = new URLSearchParams(location.search).get('workerEvent');
+      if (linked) { await loadWorkerWorkspace(); setTimeout(() => document.querySelector('#workerNotificationInbox')?.scrollIntoView({ block: 'center' }), 100); }
+    }
+
     applyAccess();
     if (state.role === "cashier" && state.branchIds.length === 1) {
       $("#dashboardBranchFilter").value = state.branchIds[0];
@@ -3418,7 +3446,7 @@ async function bootstrapAdmin(user) {
     syncDashboardTargetBranchOptions();
     syncPushButtons();
     if ("Notification" in window && Notification.permission === "granted") void connectAdminPush().then(() => { pushRegistrationReady = true; syncPushButtons(); }).catch(error => console.debug("Push token refresh deferred", error?.message || error));
-    const desktopInitialSection = access.role === "cashier" ? ["calendar", "bookings", "pos"].find(canOpenSection) : (access.role === "admin" && adminMobileViewport.matches) || (matchMedia("(min-width: 1024px)").matches && access.role !== "worker") ? ["dashboard", "pos", "bookings", "attendance", "customers"].find(canOpenSection) : "";
+    const desktopInitialSection = access.role === "worker" ? "worker" : access.role === "cashier" ? ["calendar", "bookings", "pos"].find(canOpenSection) : (access.role === "admin" && adminMobileViewport.matches) || (matchMedia("(min-width: 1024px)").matches && access.role !== "worker") ? ["dashboard", "pos", "bookings", "attendance", "customers"].find(canOpenSection) : "";
     const requestedSection = new URLSearchParams(location.hash.slice(1)).get("admin");
     const initialSection = requestedSection && canOpenSection(requestedSection) ? requestedSection : desktopInitialSection;
     if (initialSection) {
@@ -3432,7 +3460,7 @@ async function bootstrapAdmin(user) {
       if (access.role !== "worker" && (state.role === "admin" || state.permissions.has("dashboard") || state.permissions.has("revenue") || state.permissions.has("pos"))) void loadDashboard(true);
     }
     clearInterval(dashboardRefreshTimer);
-    dashboardRefreshTimer = setInterval(() => {
+    dashboardRefreshTimer = state.role === "worker" ? null : setInterval(() => {
       if (document.hidden) return;
       if (state.section === "pos" || (state.section === "bookings" && state.role === "cashier")) loadCashierDashboard(true);
       else if (state.section === "calendar") loadCalendar(true);
@@ -3456,9 +3484,69 @@ async function bootstrapAdmin(user) {
       try { await ensureAdminAppCheckReady(true); await bootstrapAdmin(user); }
       catch (retryError) { message.textContent = retryError?.message || "تعذر التحقق. حاول مرة أخرى."; retry.disabled = false; retry.textContent = "إعادة المحاولة"; }
     });
-    loading.append(message, retry);
+    loading.classList.add('branded-auth-error');
+    const logo=document.createElement('img');logo.src='/assets/el-mezaen-mark-v2.webp';logo.alt='مزين مصر';logo.width=68;logo.height=80;
+    const title=document.createElement('h1');title.textContent=isLocalEnvironment()?'تعذر فتح لوحة الإدارة محليًا':'تعذر فتح لوحة الإدارة';
+    loading.append(logo,title,message,retry);
+    if(isLocalEnvironment())loading.append(localAppCheckSetup());
     $("#adminApp").hidden = true;
   }
 }
 watchAuth(bootstrapAdmin);
 window.addEventListener("beforeunload", () => clearInterval(dashboardRefreshTimer), { once: true });
+
+
+document.querySelector('#createWorkerInviteButton').addEventListener('click', async event => {
+  const button = event.currentTarget; if (button.disabled) return; button.disabled = true;
+  try {
+    const password = prompt('أدخل كلمة مرور الأدمن لتأكيد إنشاء الدعوة'); if (!password) return;
+    await verifyAdminPassword(password);
+    const result = await createWorkerInvitation({ staffId: document.querySelector('#inviteStaffId').value.trim(), email: document.querySelector('#inviteEmail').value.trim(), phone: document.querySelector('#invitePhone').value.trim(), hours:48 });
+    document.querySelector('#workerInviteSecret').textContent = result.secret;
+  } catch (error) { toast(error.message, true); } finally { button.disabled = false; }
+});
+document.addEventListener('click', async event => {
+  const access = event.target.closest('[data-access-action]');
+  if (access && !access.disabled) {
+    access.disabled = true;
+    try { const password = prompt('أدخل كلمة مرور الأدمن لتوثيق تغيير الحساب'); if (!password) return; await verifyAdminPassword(password); await manageAccessAccount({ uid:access.dataset.uid, action:access.dataset.accessAction }); await loadCollection('users',true);renderUserAccounts(); }
+    catch(error){toast(error.message,true);}finally{access.disabled=false;}
+  }
+  const notification = event.target.closest('[data-read-worker-notification]');
+  if (notification && !notification.disabled) {
+    notification.disabled = true;
+    try { await markWorkerNotificationRead(notification.dataset.readWorkerNotification); const kind=notification.dataset.notificationKind, entity=notification.dataset.notificationEntity; await loadWorkerWorkspace(); const target=kind === 'task' ? document.querySelector(`[data-task-id="${CSS.escape(entity)}"]`) : document.querySelector(`[data-worker-booking="${CSS.escape(entity)}"]`); (target || document.querySelector(kind === 'task' ? '#workerTaskGrid' : '#workerBookings'))?.scrollIntoView({block:'center'}); }
+    catch(error){toast(error.message,true);}finally{notification.disabled=false;}
+  }
+  const nav = event.target.closest('[data-worker-target]');
+  if(nav){await showSection('worker');document.querySelector(nav.dataset.workerTarget)?.scrollIntoView({block:'start'});}
+});
+
+let accessCenterRequest=0;
+const accessPagination={cursor:null,next:null,history:[],category:'staff'};
+async function loadAccessCenter(reset=false) {
+  const version=++accessCenterRequest;
+  if(reset){accessPagination.cursor=null;accessPagination.history=[];}
+  const button=document.querySelector('#accountNext'); if(button)button.disabled=true;
+  try {
+    const result=await getAccessAccountCenter({category:accessPagination.category,cursor:accessPagination.cursor||'',limit:25,branchId:document.querySelector('#accountBranchFilter').value,search:document.querySelector('#accountSearch').value.trim()});
+    if(version!==accessCenterRequest)return;
+    state.collections.set('users',result.staff||[]);renderUserAccounts();accessPagination.next=result.nextCursor||null;
+    document.querySelector('#accountNext').disabled=!accessPagination.next;document.querySelector('#accountPrevious').disabled=!accessPagination.history.length;
+    document.querySelector('#accountPageStatus').textContent=`صفحة ${accessPagination.history.length+1} • ${(result.staff||[]).length+(result.customers||[]).length} حساب`;
+    document.querySelector('#customerAccessList').innerHTML=(result.customers||[]).map(c=>`<article class="entity-card"><h3>${escapeHtml(c.name||c.phone)}</h3><p>${escapeHtml(c.phone||c.email)} • ${c.linked?(c.active?'فعال':'معطل'):'غير مرتبط بحساب دخول'}</p><p>عدد الحجوزات: ${Number(c.bookingCount||0)}</p>${c.linked?`<div class="entity-actions"><button class="small-button" data-access-action="${c.active?'disable':'activate'}" data-uid="${escapeAttr(c.id)}">${c.active?'تعطيل':'تفعيل'}</button><button class="small-button" data-access-action="revoke" data-uid="${escapeAttr(c.id)}">إبطال الجلسات</button></div>`:''}</article>`).join('');
+  }catch(error){toast(error.message,true);}
+}
+document.querySelectorAll('[data-account-category]').forEach(button=>button.addEventListener('click',()=>{accessPagination.category=button.dataset.accountCategory;document.querySelectorAll('[data-account-category]').forEach(b=>b.setAttribute('aria-selected',String(b===button)));void loadAccessCenter(true);}));
+document.querySelector('#accountSearchForm').addEventListener('submit',e=>{e.preventDefault();void loadAccessCenter(true);});
+document.querySelector('#accountNext').addEventListener('click',()=>{if(!accessPagination.next)return;accessPagination.history.push(accessPagination.cursor);accessPagination.cursor=accessPagination.next;void loadAccessCenter();});
+document.querySelector('#accountPrevious').addEventListener('click',()=>{if(!accessPagination.history.length)return;accessPagination.cursor=accessPagination.history.pop();void loadAccessCenter();});
+
+const workerClockTimer = setInterval(() => {
+  if (state.role !== 'worker' || document.hidden) return;
+  const clock = document.querySelector('#workerClock');
+  if (clock) clock.textContent = new Intl.DateTimeFormat('ar-EG',{timeZone:'Africa/Cairo',hour:'numeric',minute:'2-digit'}).format(new Date());
+},1000);
+window.addEventListener('beforeunload',()=>clearInterval(workerClockTimer),{once:true});
+
+document.querySelector("#accountStatusFilter")?.addEventListener("change",renderUserAccounts);

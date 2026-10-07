@@ -1,3 +1,7 @@
+import { readAccountPage } from "./account-center.js";
+import { aiAgentHandlers } from './ai-agent.js';
+import { cairoAppointmentMillis, reminderVersion, reminderEligible } from './worker-reminders.js';
+import { workerAccessHandlers } from './worker-access.js';
 import { createHash, randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { AggregateField, FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -5,7 +9,7 @@ import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 import { getFunctions as getAdminFunctions } from "firebase-admin/functions";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
@@ -41,7 +45,7 @@ const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", s
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
 const DRINK_TYPES = ["hot", "cold", "soft-drink", "other"];
-const PUBLIC_SETTING_KEYS = ["businessNameAr", "businessNameEn", "openingTime", "closingTime", "slotMinutes", "facebook", "instagram", "tiktok", "aboutAr", "aboutEn", "currency"];
+const PUBLIC_SETTING_KEYS = ["businessNameAr", "businessNameEn", "openingTime", "closingTime", "slotMinutes", "facebook", "instagram", "tiktok", "aboutAr", "aboutEn", "currency", "aiAgentEnabled", "heroImageUrl", "hairSystemImageUrl"];
 const CATALOG_CACHE_MS = Math.max(15_000, Math.min(300_000, Number(process.env.CATALOG_CACHE_MS || 60_000)));
 let catalogCache = null;
 let catalogCacheExpiresAt = 0;
@@ -270,6 +274,11 @@ function claimedStaffId(request) {
 }
 
 async function linkedStaffId(request) {
+  if (request.auth?.token?.role === "worker") {
+    const { getAuth } = await import("firebase-admin/auth");
+    const [live, account] = await Promise.all([getAuth().getUser(request.auth.uid), db.doc(`users/${request.auth.uid}`).get()]);
+    if (live.disabled || live.customClaims?.role !== "worker" || account.data()?.active === false || live.customClaims?.staffId !== request.auth.token.staffId || JSON.stringify([...(live.customClaims?.branchIds || [])].sort()) !== JSON.stringify([...(request.auth.token.branchIds || [])].sort()) || (live.tokensValidAfterTime && Number(request.auth.token.auth_time) * 1000 < Date.parse(live.tokensValidAfterTime))) throw new HttpsError("permission-denied", "الحساب غير فعال أو الجلسة انتهت؛ سجل الدخول مجددًا");
+  }
   const claimed = claimedStaffId(request);
   if (claimed) return claimed;
   const profile = await db.doc(`users/${request.auth.uid}`).get();
@@ -284,8 +293,8 @@ async function sendWorkerPush(staffId, { title, body, type, entityId }) {
   const response = await getMessaging().sendEachForMulticast({
     tokens,
     notification: { title, body },
-    webpush: { fcmOptions: { link: "/admin/" }, notification: { icon: "/assets/el-mezaen-logo.jpeg", badge: "/assets/el-mezaen-logo.jpeg", tag: `${type}_${entityId}`, renotify: true } },
-    data: { type, entityId: String(entityId || ""), staffId }
+    webpush: { fcmOptions: { link: `/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId || "")}` }, notification: { icon: "/assets/el-mezaen-logo.jpeg", badge: "/assets/el-mezaen-logo.jpeg", tag: `${type}_${entityId}`, renotify: true } },
+    data: { type, entityId: String(entityId || ""), staffId, link: `/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId || "")}` }
   });
   const deletes = [];
   response.responses.forEach((result, index) => {
@@ -888,7 +897,7 @@ export const getCustomerBooking = onCall(publicOptions, async request => {
   const snapshot = await db.doc(`bookings/${code}`).get();
   if (!snapshot.exists || snapshot.data().phoneHash !== identity.customerId) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك بهذا الكود");
   const booking = cleanDoc(snapshot);
-  return { booking: { code: booking.code, branchId: booking.branchId, branchNameAr: booking.branchNameAr, branchWhatsapp: booking.branchWhatsapp, serviceNamesAr: booking.serviceNamesAr || [], staffNameAr: booking.staffNameAr, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, subtotal: booking.subtotal, discountAmount: booking.discountAmount, couponCode: booking.couponCode, total: booking.total, status: booking.status, paymentStatus: booking.paymentStatus, canCancel: ["pending", "confirmed"].includes(booking.status) && booking.paymentStatus !== "paid" } };
+  return { booking: { code: booking.code, staffId: booking.staffId, items: (booking.items || []).filter(item => ["service", "package", "offer", "product"].includes(item.kind)).map(item => ({ id: item.id, kind: item.kind, qty: item.qty || 1, choices: Object.fromEntries((Array.isArray(item.choices) ? item.choices : []).map(choice => [choice.groupId, choice.optionId])) })), branchId: booking.branchId, branchNameAr: booking.branchNameAr, branchWhatsapp: booking.branchWhatsapp, serviceNamesAr: booking.serviceNamesAr || [], staffNameAr: booking.staffNameAr, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, subtotal: booking.subtotal, discountAmount: booking.discountAmount, couponCode: booking.couponCode, total: booking.total, status: booking.status, paymentStatus: booking.paymentStatus, canCancel: ["pending", "confirmed"].includes(booking.status) && booking.paymentStatus !== "paid" } };
 });
 
 export const cancelCustomerBooking = onCall(publicOptions, async request => {
@@ -1277,7 +1286,7 @@ function normalizeAdminPayload(collection, raw) {
   delete payload.createdAt;
   delete payload.updatedAt;
   ["price", "originalPrice", "oldPrice", "newPrice", "duration", "sortOrder", "slotMinutes", "value", "maxDiscount", "minSubtotal", "totalUsageLimit", "perPhoneLimit", "baseSalary", "monthlyTarget", "monthlyRevenueTarget", "targetBonusPercent", "costPrice", "sellingPrice", "stockQty", "minStock", "rating", "pointsRate", "cashbackPercent", "rewardsMinimumSpend", "minimumRedemption", "maximumRedemptionPercent", "latitude", "longitude", "attendanceRadiusMeters"].forEach(key => { if (key in payload) payload[key] = Number(payload[key] || 0); });
-  ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "cashDrawerEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
+  ["active", "available", "showCountdown", "startsFrom", "closed", "featured", "loyaltyEnabled", "walletRedemptionEnabled", "customerQrEnabled", "cashDrawerEnabled", "whatsappReceiptsEnabled", "whatsappCampaignsEnabled", "aiAgentEnabled"].forEach(key => { if (key in payload) payload[key] = payload[key] === true || payload[key] === "true" || payload[key] === 1 || payload[key] === "1"; });
   ["branchIds", "serviceIds", "includedServiceIds", "linkedPackageIds", "applicableItemIds", "workDays", "breaks", "whatsappTestCustomerIds", "includedItemsAr", "includedItemsEn", "actions", "keywords"].forEach(key => { if (typeof payload[key] === "string") payload[key] = payload[key].split(/[\n،,]/).map(item => item.trim()).filter(Boolean); });
   if (["services", "packages", "offers", "staff", "content", "faqs"].includes(collection)) {
     payload.branchIds = [...new Set((Array.isArray(payload.branchIds) ? payload.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => ["talkha", "mashaya"].includes(value)))];
@@ -1419,6 +1428,12 @@ export const adminUpsert = onCall(adminOptions, async request => {
       if (!path || (request.auth.token.role !== "admin" && !payload.branchIds.some(id => path.startsWith(`public/content/${payload.type}/${id}/`))))
         throw new HttpsError("invalid-argument", "ارفع الوسائط إلى مساحة المحتوى والفرع المصرح بهما");
     }
+  }
+  const mediaFields = collection === 'settings' ? ['heroImageUrl','hairSystemImageUrl'] : ['services','branches'].includes(collection) ? ['imageUrl'] : [];
+  for (const field of mediaFields) {
+    const value=payload[field];if(!value || value === before.data()?.[field])continue;
+    const path=managedStoragePath(value),folder=collection === 'settings'?'homepage':collection;
+    if(request.auth.token.role !== 'admin' || !path.startsWith(`public/${folder}/`))throw new HttpsError('invalid-argument','ارفع الصورة من مساحة الوسائط المعتمدة');
   }
   if (collection === "offers" && payload.imageUrl && payload.imageUrl !== before.data()?.imageUrl && !managedStoragePath(payload.imageUrl)) throw new HttpsError("invalid-argument", "ارفع صورة العرض عبر مساحة التخزين المعتمدة");
   if (request.auth.token.role !== "admin" && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), { ...(before.exists ? before.data() : {}), ...payload })) throw new HttpsError("permission-denied", "حدد فرعًا مصرحًا له بالسجل");
@@ -1766,6 +1781,7 @@ export const updateWorkerTask = onCall(adminOptions, async request => {
     if (!transitions[task.status || "NEW"]?.includes(status)) throw new HttpsError("failed-precondition", "لا يمكن الانتقال إلى هذه الحالة");
     const now = FieldValue.serverTimestamp();
     transaction.update(ref, { status, ...(status === "SEEN" ? { readAt: now } : {}), ...(status === "DONE" ? { completedAt: now } : {}), updatedAt: now, updatedBy: request.auth.uid });
+    transaction.set(db.doc(`workerNotifications/task_update_${taskId}_${status}`), { staffId: task.assigneeStaffId, branchId: task.branchId, type: "task", entityId: taskId, title: "تم تحديث المهمة", body: `${task.title} • ${status}`, read: false, createdAt: now });
     transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "update-worker-task", collection: "workerTasks", entityId: taskId, staffId: task.assigneeStaffId, branchId: task.branchId, status, userId: request.auth.uid, createdAt: now });
     return { ok: true, idempotent: false, status };
   });
@@ -3535,7 +3551,7 @@ export const notifyAdminsOnBooking = onDocumentCreated({ region, document: "book
   const booking = event.data?.data();
   if (!booking) return;
   const snapshot = await db.collection("pushTokens").limit(500).get();
-  const tokens = snapshot.docs.map(doc => doc.data()).filter(item => item.token && (item.role === "admin" || (Array.isArray(item.branchIds) && item.branchIds.includes(booking.branchId)))).map(item => item.token);
+  const tokens = snapshot.docs.map(doc => doc.data()).filter(item => item.token && (item.role === "admin" || (["manager", "cashier"].includes(item.role) && Array.isArray(item.branchIds) && item.branchIds.includes(booking.branchId)))).map(item => item.token);
   if (!tokens.length) return;
   const response = await getMessaging().sendEachForMulticast({
     tokens,
@@ -3546,4 +3562,113 @@ export const notifyAdminsOnBooking = onDocumentCreated({ region, document: "book
   const deletes = [];
   response.responses.forEach((result, index) => { if (!result.success && ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(result.error?.code)) deletes.push(db.doc(`pushTokens/${hash(tokens[index])}`).delete()); });
   await Promise.all(deletes);
+});
+
+const workerAccess = workerAccessHandlers({ db, requireLiveAdmin, requireRecentAdmin, rateLimit: enforceRateLimit });
+export const registerWorkerAccess = onCall(adminOptions, workerAccess.registerWorkerAccess);
+export const createWorkerInvitation = onCall(adminOptions, workerAccess.createWorkerInvitation);
+export const redeemWorkerInvitation = onCall(adminOptions, workerAccess.redeemWorkerInvitation);
+export const manageAccessAccount = onCall(adminOptions, workerAccess.manageAccessAccount);
+
+// One indexed queue document per booking. No scan of the bookings collection.
+export const syncWorkerBookingNotifications = onDocumentWritten({ region, document: "bookings/{bookingId}", retry: true }, async event => {
+  const id = event.params.bookingId;
+  const ref = db.doc(`bookings/${id}`);
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after || (before && reminderVersion(before) === reminderVersion(after) && before.status === after.status)) return;
+  const version = reminderVersion(after);
+  const eventKey = hash(`${id}|${version}|${after.status}`);
+  let notification = null;
+  await db.runTransaction(async tx => {
+    notification = null;
+    const live = await tx.get(ref);
+    const booking = live.data();
+    if (!booking || reminderVersion(booking) !== version || booking.status !== after.status) return; // stale/out-of-order event
+    const queueRef = db.doc(`workerBookingReminders/${id}`);
+    const noteRef = db.doc(`workerNotifications/booking_${eventKey}`);
+    const existing = await tx.get(noteRef);
+    const previousQueue = await tx.get(queueRef);
+    if (reminderEligible(booking) && !(previousQueue.data()?.version === version && previousQueue.data()?.state === "SENT")) tx.set(queueRef, { bookingId: id, version, dueAt: Timestamp.fromMillis(cairoAppointmentMillis(booking.bookingDate, booking.bookingTime) - 900000), expiresAt: Timestamp.fromMillis(cairoAppointmentMillis(booking.bookingDate, booking.bookingTime) + 86400000), state: 'PENDING' });
+    else if (!reminderEligible(booking)) tx.delete(queueRef);
+    if (!existing.exists && booking.staffId && !['any', 'none'].includes(booking.staffId)) {
+      const title = booking.status === 'cancelled' || booking.status === 'rejected' ? 'تم إلغاء الحجز' : before ? 'تم تحديث الحجز' : 'حجز جديد';
+      notification = { staffId: booking.staffId, branchId: booking.branchId, type: 'booking', entityId: id, title, body: `${booking.bookingDate || ''} • ${booking.bookingTime || ''}`, read: false, createdAt: FieldValue.serverTimestamp() };
+      tx.create(noteRef, notification);
+    }
+    if (before?.staffId && before.staffId !== booking.staffId && !['any', 'none'].includes(before.staffId)) tx.set(db.doc(`workerNotifications/reassigned_${eventKey}`), { staffId: before.staffId, branchId: before.branchId, type: 'booking', entityId: id, title: 'تم تغيير العامل المسؤول عن الحجز', body: '', read: false, createdAt: FieldValue.serverTimestamp() });
+  });
+  if (notification) await sendWorkerPush(notification.staffId, { ...notification, type: 'worker_booking' });
+});
+
+export const remindWorkersBeforeBooking = onSchedule({ region, schedule: '* * * * *', timeZone: 'Africa/Cairo', timeoutSeconds: 60, maxInstances: 1 }, async () => {
+  const now = Date.now();
+  const due = await db.collection('workerBookingReminders').where('state', '==', 'PENDING').where('dueAt', '<=', Timestamp.fromMillis(now)).orderBy('dueAt').limit(100).get();
+  for (const row of due.docs) {
+    let notification = null;
+    await db.runTransaction(async tx => {
+      notification = null;
+      const queue = await tx.get(row.ref);
+      const data = queue.data();
+      if (data?.state !== 'PENDING') return;
+      const booking = (await tx.get(db.doc(`bookings/${row.id}`))).data();
+      if (!reminderEligible(booking, Date.now()) || reminderVersion(booking) !== data.version) { tx.delete(row.ref); return; }
+      const noteRef = db.doc(`workerNotifications/reminder_${row.id}_${data.version}`);
+      const note = await tx.get(noteRef);
+      tx.update(row.ref, { state: 'SENT', sentAt: FieldValue.serverTimestamp() });
+      if (note.exists) return;
+      notification = { staffId: booking.staffId, branchId: booking.branchId, type: 'booking', entityId: row.id, title: 'عندك حجز بعد 15 دقيقة', body: `${booking.bookingTime} • ${booking.branchNameAr || ''}`, read: false, createdAt: FieldValue.serverTimestamp() };
+      tx.create(noteRef, notification);
+    });
+    if (notification) await sendWorkerPush(notification.staffId, { ...notification, type: 'worker_reminder' });
+  }
+});
+
+export const markWorkerNotificationRead = onCall(adminOptions, async request => {
+  requireRole(request, ['worker']);
+  const staffId = await linkedStaffId(request);
+  const id = String(request.data?.id || '');
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) throw new HttpsError('invalid-argument', 'الإشعار غير صحيح');
+  const ref = db.doc(`workerNotifications/${id}`);
+  await db.runTransaction(async tx => {
+    const note = await tx.get(ref);
+    if (!note.exists || note.data().staffId !== staffId || !canAccessBranch(request, note.data().branchId)) throw new HttpsError('permission-denied', 'الإشعار غير متاح');
+    tx.update(ref, { read: true, readAt: FieldValue.serverTimestamp() });
+  });
+  return { ok: true };
+});
+
+const aiAgentKey = defineSecret("AI_AGENT_API_KEY");
+const ai = aiAgentHandlers({ db, apiKey: () => aiAgentKey.value(), rateLimit: enforceRateLimit, catalog: () => getCatalog.run({}), available: request => getAvailableSlots.run(request), price: fetchPricedItems, create: request => createBooking.run(request), portal: request => getCustomerPortal.run(request), lookup: request => getCustomerBooking.run(request), cancel: request => cancelCustomerBooking.run(request), reschedule: request => rescheduleBooking.run(request), identity: authenticatedCustomer });
+export const customerAiAgent = onCall({ ...publicOptions, secrets: [aiAgentKey], maxInstances: 10, timeoutSeconds: 30 }, ai.agent);
+export const confirmAiAction = onCall(publicOptions, ai.confirm);
+
+export const getAccessAccountCenter = onCall(adminOptions, async request => {
+  await requireLiveAdmin(request);
+  await enforceRateLimit(request, 'access-center', 30, 600000, request.auth.uid);
+  const page = await readAccountPage(db, request.data);
+  const { getAuth } = await import('firebase-admin/auth');
+  const ids = [...new Set(page.docs.map(d => page.category === 'customer' ? d.data().authUid : d.id).filter(Boolean))];
+  const records = ids.length ? (await getAuth().getUsers(ids.map(uid=>({uid})))).users : [];
+  const metadata = new Map(records.map(user => [user.uid, { phone:user.phoneNumber || '', email:user.email || '', authProviders:user.providerData.map(p=>p.providerId), active:!user.disabled, lastSignInAt:user.metadata.lastSignInTime || null }]));
+  const staff = page.category === 'customer' ? [] : page.docs.map(d=>({id:d.id,...Object.fromEntries(["name","email","phone","role","branchIds","staffId","permissions","accountStatus","active","authProviders"].filter(k=>d.data()[k]!==undefined).map(k=>[k,d.data()[k]])),...(metadata.get(d.id)||{}),accountStatus:metadata.get(d.id)?.active===false?'DISABLED':d.data().accountStatus||'ACTIVE'}));
+  const customers = page.category !== 'customer' ? [] : page.docs.map(d=>({id:d.data().authUid || '',customerId:d.id,name:[d.data().firstName,d.data().lastName].filter(Boolean).join(' '),phone:d.data().phone || '',bookingCount:Number(d.data().bookingCount||0),...(metadata.get(d.data().authUid)||{}),linked:Boolean(metadata.has(d.data().authUid))}));
+  return {staff,customers,nextCursor:page.nextCursor,category:page.category};
+});
+
+export const notifyWorkersOnTaskUpdate = onDocumentWritten({ region, document: 'workerTasks/{taskId}', retry: true }, async event => {
+  const before = event.data?.before?.data(), after = event.data?.after?.data();
+  if (!before || !after || before.status === after.status) return;
+  let payload = null;
+  await db.runTransaction(async tx => {
+    payload = null;
+    const current = await tx.get(db.doc(`workerTasks/${event.params.taskId}`));
+    if (!current.exists || current.data().status !== after.status) return;
+    const noteRef = db.doc(`workerNotifications/task_update_${event.params.taskId}_${after.status}`);
+    const note = await tx.get(noteRef);
+    if (!note.exists || note.data().pushAttemptedAt) return;
+    tx.update(noteRef, { pushAttemptedAt: FieldValue.serverTimestamp() });
+    payload = { staffId:current.data().assigneeStaffId, title:'تم تحديث المهمة', body:current.data().title || '', type:'worker_task', entityId:event.params.taskId };
+  });
+  if (payload) await sendWorkerPush(payload.staffId,payload);
 });

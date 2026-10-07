@@ -80,8 +80,8 @@ test("missing package artwork uses the brand mark without assigning another pack
 test("public gallery App Check debug mode is constrained to local development hosts", async () => {
   for (const path of ["src/results.js", "src/hair-systems.js"]) {
     const source = await read(path);
-    assert.match(source, /\["localhost", "127\.0\.0\.1"\]\.includes\(globalThis\.location\?\.hostname\)/);
-    assert.match(source, /FIREBASE_APPCHECK_DEBUG_TOKEN = true/);
+    assert.match(source, /configureLocalAppCheck\(\)/);
+    assert.match(await read("src/local-environment.js"), /if \(!isLocalEnvironment\(\)\) return/);
   }
 });
 
@@ -104,7 +104,7 @@ test("homepage empty messages and filters follow the selected branch after switc
   assert.match(app, /state\.branchId = branch\.id;\s*state\.category = "all"/);
   assert.match(app, /function renderServices\(\)[\s\S]*?if \(state\.category !== "all" && !active\.some\(item => item\.categoryId === state\.category\)\) state\.category = "all"/);
   assert.match(app, /function renderServices\(\)[\s\S]*?currentBranch\(\) \? \(state\.lang === "ar" \? "لا توجد خدمات متاحة حاليًا في هذا الفرع"/);
-  assert.match(app, /function renderTeam\(\)[\s\S]*?currentBranch\(\) \? \(state\.lang === "ar" \? "لا يوجد أعضاء فريق متاحون حاليًا في هذا الفرع"/);
+  assert.match(app, /function renderTeam\(\)[\s\S]*?فريق \$\{branchName\(currentBranch\(\)\)\} بيتحدث حاليًا/);
   assert.match(app, /#branchQuickGrid"\)\.addEventListener\("error"[\s\S]*?event\.target\.replaceWith\(fallback\)/);
 });
 

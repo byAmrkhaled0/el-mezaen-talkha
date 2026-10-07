@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {serviceMedia} from '../src/premium-media.js';
+const read=p=>fs.readFile(new URL('../'+p,import.meta.url),'utf8');
+test('Service fallback consistently maps canonical identity across loads',()=>{for(let i=0;i<100;i++){const service={id:'hair-'+i,nameAr:'حلاقة شعر'};assert.equal(serviceMedia(service),serviceMedia({...service}));}});
+test('Haircut and beard fallback catalogs have distinct deterministic variants',()=>{for(const [category,count]of[['haircut',3],['beard',2]]){const sources=new Set(Array.from({length:100},(_,i)=>serviceMedia({id:'service-'+i,categoryId:category})));assert.equal(sources.size,count);}});
+test('Admin custom service imagery remains first priority',()=>assert.equal(serviceMedia({id:'x',categoryId:'haircut',imageUrl:'https://example.test/admin-service.webp'}),'https://example.test/admin-service.webp'));
+test('Every required distinct service asset is a nonempty WebP',async()=>{for(const asset of ['haircut-1','haircut-2','haircut-3','beard-1','beard-2','skin-1','styling-1','hair-system-1']){const bytes=await fs.readFile(new URL('../public/assets/premium/'+asset+'-640.webp',import.meta.url));assert.ok(bytes.length>1000);assert.equal(bytes.toString('ascii',0,4),'RIFF');assert.equal(bytes.toString('ascii',8,12),'WEBP');}});
+test('Desktop booking shell uses desktop width while retaining seven-step frame',async()=>{const css=await read('src/premium-components.css');assert.match(css,/width:min\(1400px,calc\(100vw - 48px\)\)/);assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(300px,34%\)/);assert.match(css,/grid-template-columns:repeat\(7/);});
+test('AI launcher contains identifiable robot and chat bubble',async()=>{const html=await read('index.html');const fab=html.match(/<button[^>]*class="faq-chat-fab"[\s\S]*?<\/button>/)?.[0];assert.ok(fab);assert.match(fab,/<svg/);assert.match(fab,/مساعدك الشخصي/);assert.match(fab,/M16 3v4/);});
+test('AI has starter cards, distinct bubbles, loading and selectable server slots',async()=>{const js=await read('src/ai-chat.js');assert.match(js,/ai-welcome/);assert.match(js,/message\(value,'user'\)/);assert.match(js,/مزين بيراجع طلبك/);assert.match(js,/for\(const slot of result.slots\)/);assert.match(js,/confirmed:true/);});
+test('Worker photo control is hidden and attendance timeline uses existing evidence',async()=>{const html=await read('worker/index.html'),js=await read('src/worker.js');assert.match(html,/<input id="photo"[^>]* hidden/);assert.match(html,/for="photo"/);assert.match(js,/a\?\.locationEvidence\?\.distanceMeters/);assert.match(js,/updateWorkerProfilePhoto\(url\)/);assert.doesNotMatch(html,/Choose File|No file chosen/);});

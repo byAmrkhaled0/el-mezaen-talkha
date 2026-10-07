@@ -1,3 +1,5 @@
+import './global-navigation.js';
+import { configureLocalAppCheck } from './local-environment.js';
 import { safeMediaUrl } from "./media.js";
 import "./seo-page.js";
 import { initializeApp } from "firebase/app";
@@ -70,7 +72,7 @@ async function load() {
   if (!config.projectId || String(config.projectId).includes("YOUR_")) return render();
   const app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
-    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    configureLocalAppCheck();
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   const response = await httpsCallable(getFunctions(app, "europe-west1"), "getCatalog", { timeout: 20000 })();

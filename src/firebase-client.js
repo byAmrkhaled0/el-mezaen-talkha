@@ -1,3 +1,4 @@
+import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
@@ -26,7 +27,7 @@ function assertBackendCompatibility(data) {
 if (firebaseConfigured) {
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
-    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    configureLocalAppCheck();
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   functions = getFunctions(app, "europe-west1");
@@ -242,3 +243,6 @@ export async function submitReview(payload) {
   localStorage.setItem("mz-preview-reviews", JSON.stringify(saved.slice(0, 30)));
   return { ok: true, preview: true };
 }
+
+export const askCustomerAgent = payload => firebaseConfigured ? callFunction('customerAiAgent', payload, 30000) : Promise.resolve({ fallback: true });
+export const confirmCustomerAgent = payload => callFunction('confirmAiAction', payload, 30000);

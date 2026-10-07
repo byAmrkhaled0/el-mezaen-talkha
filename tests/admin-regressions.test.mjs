@@ -76,7 +76,7 @@ test("package cards open complete details and add to cart before booking", async
   assert.match(app, /if \(added && \["offer", "package"\]\.includes\(add\.dataset\.kind\)\) void openBooking\(add\)/);
   assert.match(html, /class="package-grid" id="packageGrid"/);
   assert.doesNotMatch(html, /class="package-grid horizontal-cards"/);
-  assert.match(css, /\.package-card\{height:auto;align-self:start\}/);
+  assert.match(await read("src/premium-components.css"), /\.package-card\{[^}]*display:flex;flex-direction:column/);
 });
 
 test("role portals, worker attendance and worker commands are server-authorized", async () => {
@@ -198,16 +198,16 @@ test("admin can safely install only missing fixed-id packages and inspect full d
   assert.match(css, /\.admin-package-details/);
 });
 
-test("public service cards use real SVG icons and daylight-specific surfaces", async () => {
+test("public service cards support photographs and daylight-specific surfaces", async () => {
   const [app, catalog, css, accountCss, loginCss, themeInit] = await Promise.all([read("src/app.js"), read("src/catalog-page.js"), read("src/styles.css"), read("src/account.css"), read("src/login.css"), read("public/theme-init.js")]);
   assert.match(app, /function serviceIconSvg/);
-  assert.match(app, /data-service-icon=/);
+  assert.match(app, /class="service-image"[^>]*serviceMedia\(item\)/);
   assert.match(catalog, /const serviceIconSvg/);
   assert.doesNotMatch(catalog, /class="service-icon">✂/);
   assert.match(css, /html\[data-theme="light"\] body\{background:/);
   assert.match(css, /html\[data-theme="light"\] \.site-header/);
-  assert.match(css, /\.service-icon svg\{display:block/);
+  assert.match(await read("src/premium-components.css"), /\.service-image\{[^}]*object-fit:cover/);
   assert.match(accountCss, /html\[data-theme="light"\] \.account-card/);
-  assert.match(loginCss, /html\[data-theme="light"\] \.login-card/);
+  assert.match(loginCss, /\.login-card\{[^}]*background:#082330/);
   assert.match(themeInit, /const fallback = admin \? "light" : "dark"/);
 });

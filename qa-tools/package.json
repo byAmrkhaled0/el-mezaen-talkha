@@ -1,0 +1,9 @@
+{
+  "name": "el-mezaen-local-visual-qa",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.62.1",
+    "@sparticuz/chromium": "153.0.0"
+  }
+}

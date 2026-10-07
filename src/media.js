@@ -1,4 +1,5 @@
 const safeUrl = value => {
+  if (!String(value || "").trim()) return null;
   try {
     const url = new URL(String(value || "").trim(), globalThis.location?.origin || "https://example.com");
     return ["http:", "https:"].includes(url.protocol) ? url : null;

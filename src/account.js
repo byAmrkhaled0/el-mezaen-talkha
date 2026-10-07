@@ -1,3 +1,4 @@
+import './global-navigation.js';
 import { safeMediaUrl } from "./media.js";
 import "./account.css";
 import "./account-favorite.css";

@@ -1,0 +1,187 @@
+{
+  "generated": true,
+  "genericMarketingImages": true,
+  "notActualStaffOrBranches": true,
+  "assets": [
+    {
+      "name": "hero",
+      "variants": [
+        "/assets/premium/hero-640.webp",
+        "/assets/premium/hero-1280.webp"
+      ],
+      "generationPrompt": "Egyptian MENA barber clipping seated man, editorial hero. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/hero-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/hero-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "haircut",
+      "variants": [
+        "/assets/premium/haircut-640.webp",
+        "/assets/premium/haircut-1280.webp"
+      ],
+      "generationPrompt": "precise taper haircut finishing with scissors. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/haircut-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/haircut-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "beard",
+      "variants": [
+        "/assets/premium/beard-640.webp",
+        "/assets/premium/beard-1280.webp"
+      ],
+      "generationPrompt": "beard grooming with straight razor and towel. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/beard-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/beard-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "skin",
+      "variants": [
+        "/assets/premium/skin-640.webp",
+        "/assets/premium/skin-1280.webp"
+      ],
+      "generationPrompt": "men facial care, brush applying facial mask. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/skin-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/skin-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "styling",
+      "variants": [
+        "/assets/premium/styling-640.webp",
+        "/assets/premium/styling-1280.webp"
+      ],
+      "generationPrompt": "hair styling with dryer and round brush. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/styling-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/styling-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "hair-system",
+      "variants": [
+        "/assets/premium/hair-system-640.webp",
+        "/assets/premium/hair-system-1280.webp"
+      ],
+      "generationPrompt": "realistic hair-system installation and hairline care. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/hair-system-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/hair-system-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "package",
+      "variants": [
+        "/assets/premium/package-640.webp",
+        "/assets/premium/package-1280.webp"
+      ],
+      "generationPrompt": "grooming package still life, comb towel razor amber bottle. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/package-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/package-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "tools",
+      "variants": [
+        "/assets/premium/tools-640.webp",
+        "/assets/premium/tools-1280.webp"
+      ],
+      "generationPrompt": "sanitised barber preparation tools. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/tools-640.webp": [
+          640,
+          426
+        ],
+        "/assets/premium/tools-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "interior",
+      "variants": [
+        "/assets/premium/interior-640.webp",
+        "/assets/premium/interior-1280.webp"
+      ],
+      "generationPrompt": "empty premium barbershop chairs and mirrors. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/interior-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/interior-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    },
+    {
+      "name": "booking",
+      "variants": [
+        "/assets/premium/booking-640.webp",
+        "/assets/premium/booking-1280.webp"
+      ],
+      "generationPrompt": "customer relaxed before barber appointment. Photorealistic premium Egyptian/MENA men barbershop. Deep navy atmosphere, controlled cyan lighting, subtle warm gold. Natural skin and real equipment. No text, logos or watermarks. Generic marketing image.",
+      "dimensions": {
+        "/assets/premium/booking-640.webp": [
+          640,
+          427
+        ],
+        "/assets/premium/booking-1280.webp": [
+          1280,
+          853
+        ]
+      }
+    }
+  ]
+}

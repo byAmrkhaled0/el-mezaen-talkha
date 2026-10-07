@@ -1,3 +1,5 @@
+import './global-navigation.js';
+import { configureLocalAppCheck } from './local-environment.js';
 import "./seo-page.js";
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
@@ -12,7 +14,7 @@ async function renderHairMedia() {
   if (!config.projectId || String(config.projectId).includes("YOUR_")) return;
   const app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
-    if (["localhost", "127.0.0.1"].includes(globalThis.location?.hostname)) globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    configureLocalAppCheck();
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   const result = await httpsCallable(getFunctions(app, "europe-west1"), "getCatalog", { timeout: 20000 })();

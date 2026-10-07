@@ -63,10 +63,10 @@ test("App Check is probed once for startup and retried from Admin error UI witho
   assert.match(api, /appCheck = initializeAppCheck\(/);
   assert.match(api, /appCheckReadiness \|\|= getToken\(appCheck, forceRefresh\)/);
   assert.match(api, /await ensureAdminAppCheckReady\(\);/);
-  assert.match(api, /FIREBASE_APPCHECK_DEBUG_TOKEN = true/);
+  assert.match(api, /configureLocalAppCheck\(\)/);
   assert.match(api, /App Check غير مصرح لهذه البيئة المحلية/);
   assert.doesNotMatch(api, /FIREBASE_APPCHECK_DEBUG_TOKEN\s*=\s*["'][\w-]+["']/);
-  assert.match(admin, /loading\.append\(message, retry\)/);
+  assert.match(admin, /loading\.append\(logo,title,message,retry\)/);
   assert.match(admin, /ensureAdminAppCheckReady\(true\); await bootstrapAdmin\(user\)/);
   assert.match(admin, /if \(isInvalidAuthSession\(error\)\)/);
   assert.match(login, /signOut|logout|location\.replace\("\/admin\/"\)/);

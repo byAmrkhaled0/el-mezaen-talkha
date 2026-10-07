@@ -1,0 +1,6 @@
+{
+  "removedSupersededComponentSelectors": 321,
+  "mergedExactContextSelectorRules": 129,
+  "canonicalComponents": "src/premium-components.css",
+  "preserved": "base, forms, cart, fallback, content viewers and bilingual/light support"
+}

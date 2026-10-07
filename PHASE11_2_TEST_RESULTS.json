@@ -1,0 +1,46 @@
+{
+  "automatedTests": 413,
+  "failures": 0,
+  "suites": {
+    "frontend": {
+      "tests": 214,
+      "pass": 214,
+      "fail": 0
+    },
+    "functions": {
+      "tests": 84,
+      "pass": 84,
+      "fail": 0
+    },
+    "v10": {
+      "tests": 43,
+      "pass": 43,
+      "fail": 0
+    },
+    "phase11": {
+      "tests": 42,
+      "pass": 42,
+      "fail": 0
+    },
+    "phase11_1": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0
+    },
+    "rules": {
+      "tests": 18,
+      "pass": 18,
+      "fail": 0
+    }
+  },
+  "publicLayoutChecks": 168,
+  "workspaceChecks": 63,
+  "roleProofs": 51,
+  "bookingFrameChecks": 12,
+  "mobileCollisionChecks": 6,
+  "screenshots": 93,
+  "fixturesOnlyVisualQA": true,
+  "noPush": true,
+  "noDeploy": true,
+  "noProductionMutation": true
+}
