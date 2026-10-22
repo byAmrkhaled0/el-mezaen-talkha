@@ -24,9 +24,9 @@ const publicCard = row => {
   for(const key of ['imageUrl','photoUrl','mapsUrl'])if(typeof row[key]==='string' && (/^https:\/\//.test(row[key])||/^\/assets\//.test(row[key])) && row[key].length<1500)card[key]=row[key];
   return card;
 };
-export function aiAgentHandlers({ db, apiKey, rateLimit, catalog, available, price, coupon, create, portal, lookup, cancel, reschedule, identity }) {
+export function aiAgentHandlers({ db, emulator = false, apiKey, rateLimit, catalog, available, price, coupon, create, portal, lookup, cancel, reschedule, identity }) {
   const invoke = (handler, request, data) => handler({ ...request, data });
-  const enabled = async () => (await db.doc('settings/public').get()).data()?.aiAgentEnabled === true;
+  const enabled = async () => !emulator && (await db.doc('settings/public').get()).data()?.aiAgentEnabled === true;
   async function prepare(plan, request) {
     const { tool, args } = plan;
     const business = await catalog();

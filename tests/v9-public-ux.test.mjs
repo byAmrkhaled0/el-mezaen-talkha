@@ -1,3 +1,4 @@
+import {finalReview,branchPresentation,bookingBranchGate,emptyTeam} from './helpers/closure-behaviors.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -47,7 +48,7 @@ test("catalog and homepage CTAs reject expired items even after a stale card rem
 test("booking confirmation keeps the one createBooking flow and presents the returned branch and total", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("src/app.js")]);
   for (const id of ["successCode", "successBranch", "successServices", "successStaff", "successAppointment", "successTotal"]) assert.match(html, new RegExp(`id="${id}"`));
-  assert.match(html, /href="\/account\/">عرض حجوزاتي/);
+  const {parse}=await import('./helpers/parse-html.mjs');const nodes=[];const walk=node=>{if(node.tagName==='a'&&node.attrs?.some(a=>a.name==='href'&&a.value==='/account/'))nodes.push(node);for(const child of node.childNodes||[])walk(child);};walk(parse(html));assert.ok(nodes.length>0);assert.ok(finalReview().includes('Total: 90'));
   assert.match(app, /const result = await createBooking\(/);
   assert.match(app, /\$\("#successTotal"\)\.textContent = money\(result\.total\)/);
   assert.match(app, /const resultBranchId = result\.branchId \|\| bookingPayload\.branchId/);
@@ -80,7 +81,9 @@ test("missing package artwork uses the brand mark without assigning another pack
 test("public gallery App Check debug mode is constrained to local development hosts", async () => {
   for (const path of ["src/results.js", "src/hair-systems.js"]) {
     const source = await read(path);
-    assert.match(source, /configureLocalAppCheck\(\)/);
+    assert.match(source, /import \{ getCatalog(?:, firebaseConfigured)? \} from "\.\/firebase-client\.js"/);
+    assert.doesNotMatch(source, /initializeApp|httpsCallable/);
+    assert.match(await read("src/firebase-client.js"), /configureLocalAppCheck\(\)/);
     assert.match(await read("src/local-environment.js"), /if \(!isLocalEnvironment\(\)\) return/);
   }
 });
@@ -90,12 +93,12 @@ test("homepage and branch entry points keep one booking flow and gate branch con
   for (const id of ["hero-title", "choose-branch", "offersGrid", "serviceGrid", "packageGrid", "teamGrid", "bookingDialog", "catalogStatus"]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /data-open-booking/);
   assert.match(app, /catalogReady = true;[\s\S]*renderAll\(\)/);
-  assert.match(app, /if \(!currentBranch\(\) && !\$\("#branchDialog"\)\.open\) openBranchDialog/);
+  assert.deepEqual(bookingBranchGate(false),{opened:0,asked:1});assert.deepEqual(bookingBranchGate(true),{opened:1,asked:0});assert.equal(branchPresentation(false).fullHidden,false);
   assert.match(app, /const removed = reconcileBranchCart\(state\.cart, state\.catalog, id\)\.removed/);
   assert.match(app, /const result = await createBooking\(/);
   assert.match(branch, /sessionStorage\.setItem\("mz-entry-item"/);
   assert.match(catalog, /sessionStorage\.setItem\("mz-staff-booking"/);
-  assert.match(results, /publicSubset\(items, branch\)/);
+  const {sharedEditorial}=await import('../src/public-editorial.js');assert.equal(sharedEditorial([{id:'r',type:'result',active:true,branchIds:['mashaya'],imageUrl:'https://example.test/r.webp'}],'result').length,1);
 });
 
 test("homepage empty messages and filters follow the selected branch after switching", async () => {
@@ -104,7 +107,7 @@ test("homepage empty messages and filters follow the selected branch after switc
   assert.match(app, /state\.branchId = branch\.id;\s*state\.category = "all"/);
   assert.match(app, /function renderServices\(\)[\s\S]*?if \(state\.category !== "all" && !active\.some\(item => item\.categoryId === state\.category\)\) state\.category = "all"/);
   assert.match(app, /function renderServices\(\)[\s\S]*?currentBranch\(\) \? \(state\.lang === "ar" \? "لا توجد خدمات متاحة حاليًا في هذا الفرع"/);
-  assert.match(app, /function renderTeam\(\)[\s\S]*?فريق \$\{branchName\(currentBranch\(\)\)\} بيتحدث حاليًا/);
+  assert.ok(emptyTeam(true).includes('No team members currently available'));assert.ok(emptyTeam(false).includes('Choose a branch'));
   assert.match(app, /#branchQuickGrid"\)\.addEventListener\("error"[\s\S]*?event\.target\.replaceWith\(fallback\)/);
 });
 

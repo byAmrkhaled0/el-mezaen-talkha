@@ -1,10 +1,21 @@
+import {execFileSync} from 'node:child_process';
 import { readFile, writeFile } from "node:fs/promises";
 
 const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.vercel.app").replace(/\/$/, "");
 const escaped = siteUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const origin = new URL(siteUrl).origin;
-const lastmod = new Date().toISOString().slice(0, 10);
+const contentDate = path => {
+  const file = (path || '/') === '/' ? 'index.html' : `${path.replace(/^\//,'')}index.html`;
+  try {
+    if(execFileSync('git',['status','--porcelain','--',file],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim()) return new Date().toISOString().slice(0,10);
+    return execFileSync('git',['log','-1','--format=%cs','--',file],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim() || undefined;
+  } catch { return undefined; } // Omit unknown dates; do not invent daily modifications.
+};
 const urls = [
+  ["/about/", "عن المزين"],
+  ["/gallery/", "معرض مزين مصر"],
+  ["/news/", "أخبار مزين مصر"],
+  ["/celebrities/", "ضيوف مزين مصر"],
   ["", "واجهة مزين مصر للحلاقة الرجالية"],
   ["/services/", "خدمات وأسعار مزين مصر"],
   ["/packages/", "باقات مزين مصر"],
@@ -16,12 +27,13 @@ const urls = [
   ["/branches/mashaya/", "مزين مصر فرع المشاية"]
 ];
 
-await writeFile("public/robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /worker/\nDisallow: /login/\nDisallow: /account/\n\nSitemap: ${siteUrl}/sitemap.xml\n`, "utf8");
+const robotsGroup = agent => `User-agent: ${agent}\nAllow: /\nDisallow: /admin\nDisallow: /admin/\nDisallow: /worker\nDisallow: /worker/\nDisallow: /login\nDisallow: /login/\nDisallow: /account\nDisallow: /account/\n`;
+await writeFile('public/robots.txt', `${robotsGroup('*')}\n${robotsGroup('OAI-SearchBot')}\nSitemap: ${siteUrl}/sitemap.xml\n`, 'utf8');
 await writeFile("public/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.map(([path, title]) => `  <url>
     <loc>${escaped}${path}</loc>
-    <lastmod>${lastmod}</lastmod>
+    ${contentDate(path) ? `<lastmod>${contentDate(path)}</lastmod>` : ''}
     <image:image>
       <image:loc>${origin}/assets/hero-barbershop-cyan.webp</image:loc>
       <image:title>${title}</image:title>
@@ -37,11 +49,14 @@ await writeFile("public/llms.txt", `# مزين مصر | El Mezaen Egypt
 - النشاط: حلاقة وعناية رجالية وتركيب وصيانة شبكية الشعر.
 - الخبرة: يعمل مزين مصر منذ 1995.
 - فرع طلخا: تقسيم بهاء الشربيني، أمام محل LONDONE للملابس. هاتف 01093008896.
-- فرع المشاية: المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع، المنصورة. هاتف 01101006961.
+- فرع المشاية: المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع، المنصورة. هاتف 01093008896.
 - مواعيد العمل الحالية: يوميًا من 11:00 صباحًا إلى 11:00 مساءً.
 - الخدمات والأسعار قابلة للتحديث وتعرض في صفحة الخدمات الرسمية.
 
 ## الصفحات الأساسية
+- [المعرض](${siteUrl}/gallery/): الصور والفيديوهات المنشورة بحسب الفرع.
+- [الأخبار](${siteUrl}/news/): منشورات الفروع.
+- [ضيوفنا](${siteUrl}/celebrities/): صور الضيوف المنشورة.
 - [الرئيسية](${siteUrl}/): نظرة عامة على مزين مصر والحجز المباشر.
 - [الخدمات والأسعار](${siteUrl}/services/): قائمة خدمات الحلاقة والعناية الرجالية والأسعار الحالية.
 - [الباقات](${siteUrl}/packages/): كل الباقات الحالية مع الفرع والخدمات والأسعار.

@@ -1,0 +1,67 @@
+@import './closure-ui.css';
+.worker-app{--panel:#fff;--bg2:#f2f6f9;--text:#183448;--muted:#526b7a;--line:#d5e1e9;--cyan:#087e99;--worker-line:var(--line);background:var(--bg2);color:var(--text);font-size:15px}
+html[data-theme=dark] .worker-app{--panel:#102b3b;--bg2:#091f2d;--text:#edf6fb;--muted:#b8cbd7;--line:#375464;--cyan:#53d5df}
+.worker-app :is(.worker-header,.worker-intro,.worker-panel,.attendance-card,.profile-photo-card,#profileDetails,.worker-nav,.worker-context){background:var(--panel);color:var(--text);border-color:var(--line);box-shadow:none}
+.worker-app :is(.worker-intro p,.worker-header small,.worker-panel small,.worker-panel time,.gps-indicator,.worker-overview span,.attendance-timeline p,.push-explanation){color:var(--muted)}
+.worker-app .worker-intro small,.worker-app .worker-intro time{color:var(--cyan)}
+.worker-app .worker-header{position:sticky;top:0;z-index:30;padding:12px max(16px,calc((100vw - 1120px)/2));gap:10px;flex-wrap:nowrap}
+.worker-app .worker-header>a{flex:1;font-size:18px}
+.worker-app #workerThemeToggle:not([hidden]){display:inline-flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:44px;padding:8px}
+.worker-app #workerThemeToggle span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.worker-app .worker-header>[data-view=notifications]{position:relative;display:flex;align-items:center;gap:5px;padding:10px;min-width:48px}
+.worker-app button{border-color:var(--line);background:var(--bg2);color:var(--text);min-height:44px;font:inherit;line-height:1.5}
+.worker-app :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.worker-app :is(input:not([type=checkbox]),textarea,select){box-sizing:border-box;font:inherit;color:var(--text);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;min-width:0;max-width:100%;min-height:44px}
+.worker-app textarea{min-height:88px;resize:vertical}
+.worker-app label{display:grid;gap:7px;min-width:0}
+.worker-app .worker-actions button,.worker-app button[type=submit]{background:var(--cyan);color:#fff;font-weight:700}
+html[data-theme=dark] .worker-app :is(.worker-actions button,button[type=submit]){color:#082331}
+.worker-app #workerMain{max-width:1120px;padding:20px 16px 110px}
+.worker-app .worker-intro{padding:16px;border-radius:16px;gap:14px;margin-bottom:16px}
+.worker-app .worker-intro h1{font-size:22px}
+.worker-app .worker-intro img{width:58px;height:64px;object-fit:contain;border-radius:12px;border:1px solid var(--line)}
+.worker-app .worker-panel,.worker-app .attendance-card{padding:18px;border-radius:16px}
+.worker-app .worker-screen:not([hidden]){grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.worker-app .worker-screen[data-screen=profile]{max-width:none;grid-template-columns:1fr}
+.worker-app .worker-screen[data-screen=profile]>*{min-width:0}
+.worker-app .worker-screen>h2{font-size:19px;margin:8px 0}
+.worker-app .worker-context{border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px}
+.worker-app .worker-context p{margin:0;line-height:1.7}
+.worker-app .worker-overview button{background:var(--panel);border-color:var(--line);padding:14px}
+.worker-app .worker-overview b{font-size:23px;color:var(--cyan)}
+.worker-app .request-center form{display:grid;grid-template-columns:1fr;gap:14px}
+.worker-app .request-center [data-request-toolbar]{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.worker-app .request-center [data-request-toolbar] label{flex:1;min-width:130px}
+.worker-app .request-center [data-advance-info]{padding:10px;border:1px solid var(--line);background:var(--bg2);border-radius:10px;line-height:1.8;font-size:13px}
+.worker-app #profileDetails{white-space:normal;padding:16px}
+.worker-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0}
+.worker-profile-grid>div{padding:12px;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere}
+.worker-profile-grid dt{font-size:12px;color:var(--muted)}.worker-profile-grid dd{margin:7px 0 0;font-weight:700}
+.worker-profile-progress{border-top:1px solid var(--line);margin-top:16px;padding-top:8px;line-height:1.8}
+.worker-profile-progress h3{font-size:16px}
+.worker-app .worker-nav{gap:10px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.worker-app .worker-nav button{display:grid;justify-items:center;gap:5px;border:0;min-width:75px;padding:8px 12px;font-size:12px}
+.worker-app .worker-nav svg{width:20px;height:20px}
+.worker-app .worker-nav button::before{display:none}
+.worker-app .worker-nav button[aria-current=page]{background:var(--cyan);color:#fff}
+.worker-app .notification{color:var(--text);border-inline-start-color:var(--cyan)!important;padding:16px}
+.worker-app .notification.read{opacity:1;border-inline-start-color:var(--line)!important}
+.worker-app #workerLoadRetry{margin-bottom:16px}.worker-app #status{color:var(--cyan);line-height:1.8}
+.worker-app .profile-photo-card{padding:16px;align-items:start;flex-wrap:wrap}
+.worker-app .photo-controls{flex:1;display:grid;gap:10px;min-width:180px}
+.worker-app .photo-controls .worker-actions{margin:0}
+.worker-app .worker-screen[data-screen=profile] .monthly-target-panel{padding:0}
+.worker-app .monthly-target-panel[data-target-view=workers] .monthly-target-card{grid-template-columns:1fr 1fr}
+.worker-app .monthly-target-panel[data-target-view=workers] .monthly-target-card dl{grid-column:1/-1}
+@media(max-width:720px){
+ .worker-app #workerMain{padding:14px 12px 115px}
+ .worker-app .worker-screen:not([hidden]),.worker-app .worker-screen>#tasks,.worker-app .worker-screen>#bookings,.worker-app .worker-screen>#notifications{grid-template-columns:1fr}
+ .worker-app .worker-intro{padding:12px;flex-wrap:nowrap;gap:10px}.worker-app .worker-intro h1{font-size:18px}.worker-app .worker-intro time{display:none}
+ .worker-app .worker-nav{gap:2px;justify-content:space-around}.worker-app .worker-nav button{min-width:0;flex:1;font-size:11px;padding:7px 3px}
+ .worker-app .worker-nav svg{width:19px;height:19px}
+ .worker-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.worker-profile-grid>div{padding:10px}.worker-profile-grid dd{font-size:13px}
+ .worker-app .worker-panel,.worker-app .attendance-card{padding:14px}
+ .worker-app .worker-header{padding:10px 12px;min-height:64px}
+ .worker-app .worker-header small{font-size:11px}
+ .worker-app .worker-overview{gap:6px}.worker-app .worker-overview button{padding:10px}.worker-app .worker-overview span{font-size:11px}
+}

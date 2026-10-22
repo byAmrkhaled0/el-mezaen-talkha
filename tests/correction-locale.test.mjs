@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {translations} from '../src/i18n.js';
+test('first paint English copy stays identical to the runtime dictionary',()=>{const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');let count=0;for(const m of html.matchAll(/data-initial-en="([^"]*)" data-i18n="([^"]+)"/g)){const decoded=m[1].replaceAll('&quot;','"').replaceAll('&lt;','<').replaceAll('&amp;','&');assert.equal(decoded,translations.en[m[2]],m[2]);count++;}assert.ok(count>=12);});

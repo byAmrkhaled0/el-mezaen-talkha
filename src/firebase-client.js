@@ -1,18 +1,20 @@
+import {readPublicCatalogCache, savePublicCatalogCache, purgeLegacyCatalogCache, projectCatalogStaff} from './catalog-cache.js';
+import {applySiteMedia} from './site-media.js';
 import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
-import { getAuth } from "firebase/auth";
 import { normalizePhone } from "../functions/src/core.js";
 import { seedCatalog } from "./seed-data.js";
+import {createLocalDemoCatalog,assertDemoWorkerScope} from "./local-demo-catalog.js";
 import { availableAtBranch } from "./branch-availability.js";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
-export const firebaseConfigured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
+export const firebaseConfigured = !globalThis.__OFFLINE_DEMO__ && Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
 let functions;
 let app;
 let analyticsPromise;
-const CATALOG_CACHE_KEY = "mz-public-catalog-v4";
+purgeLegacyCatalogCache();
 const CATALOG_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const FRONTEND_VERSION = "2.0.0";
 
@@ -44,21 +46,11 @@ export async function trackEvent(name, params = {}) {
 }
 
 function localCatalog() {
-  return structuredClone(seedCatalog);
+  return firebaseConfigured ? structuredClone(seedCatalog) : createLocalDemoCatalog();
 }
 
-function readCatalogCache() {
-  try {
-    const cached = JSON.parse(localStorage.getItem(CATALOG_CACHE_KEY) || "null");
-    if (!cached?.data || Date.now() - Number(cached.savedAt || 0) > CATALOG_CACHE_MAX_AGE) return null;
-    return structuredClone(cached.data);
-  } catch { return null; }
-}
-
-function saveCatalogCache(data) {
-  try { localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data })); }
-  catch (error) { console.debug("Catalog cache is unavailable", error?.message || error); }
-}
+function readCatalogCache() { return readPublicCatalogCache(); }
+function saveCatalogCache(data) { savePublicCatalogCache(data); }
 
 async function callFunction(name, payload = {}, timeout = 30000) {
   try { const data = (await httpsCallable(functions, name, { timeout })(payload)).data; assertBackendCompatibility(data); return data; }
@@ -66,18 +58,27 @@ async function callFunction(name, payload = {}, timeout = 30000) {
     if (error?.code === "BACKEND_VERSION_MISMATCH") throw error;
     const code = String(error?.code || "").replace(/^functions\//, "");
     const original = String(error?.message || "");
-    if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw new Error(original, { cause: error });
+    if (/[\u0600-\u06ff]/.test(original) && !/^Firebase:/.test(original)) throw Object.assign(new Error(original, { cause: error }), { code });
     const messages = { unauthenticated: "انتهت الجلسة؛ حدّث الصفحة", "permission-denied": "تعذر التحقق من حماية الموقع؛ حدّث الصفحة ثم حاول مرة أخرى", "invalid-argument": "راجع البيانات المدخلة", "failed-precondition": "لا يمكن تنفيذ الطلب بهذه البيانات", "not-found": "لم يتم العثور على البيانات المطلوبة", "already-exists": "تم إرسال هذا الطلب من قبل", "resource-exhausted": "محاولات كثيرة؛ انتظر قليلًا ثم حاول مرة أخرى", unavailable: "الخدمة غير متاحة مؤقتًا", "deadline-exceeded": "الاتصال بطيء؛ تحقق من النتيجة قبل إعادة المحاولة", internal: "حدث خطأ في الخادم؛ حاول مرة أخرى لاحقًا" };
-    throw new Error(messages[code] || "تعذر الاتصال بالخدمة الآن", { cause: error });
+    throw Object.assign(new Error(messages[code] || "تعذر الاتصال بالخدمة الآن", { cause: error }), { code });
   }
 }
 
+let catalogRequest;
 export async function getCatalog() {
+  // Share only concurrent reads; a later refresh still reaches the server.
+  if (!catalogRequest) catalogRequest = loadCatalog().finally(() => { catalogRequest = null; });
+  const data = structuredClone(await catalogRequest);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mz:catalog", { detail: data }));
+  return data;
+}
+
+async function loadCatalog() {
   if (!firebaseConfigured) return { ...localCatalog(), preview: true };
   const cached = readCatalogCache();
-  if (navigator.onLine === false && cached) return { ...cached, offline: true, cached: true };
+  if (navigator.onLine === false && cached) { if(typeof document!=='undefined')applySiteMedia(cached.settings); return { ...cached, offline: true, cached: true }; }
   try {
-    const remote = await callFunction("getCatalog", {}, 15000) || {};
+    const remote = projectCatalogStaff(await callFunction("getCatalog", {}, 15000) || {});
     const fallback = localCatalog();
     const fallbackStaff = new Map(fallback.staff.map(item => [item.id, item]));
     const fallbackContent = new Map(fallback.content.map(item => [item.id, item]));
@@ -88,25 +89,27 @@ export async function getCatalog() {
       services: Array.isArray(remote.services) ? remote.services : [],
       packages: Array.isArray(remote.packages) ? remote.packages : [],
       staff: Array.isArray(remote.staff) ? remote.staff.map(item => ({ ...item, imageUrl: item.imageUrl || fallbackStaff.get(item.id)?.imageUrl || "" })) : [],
-      offers: Array.isArray(remote.offers) ? remote.offers : fallback.offers,
+      offers: Array.isArray(remote.offers) ? remote.offers : [],
       drinks: Array.isArray(remote.drinks) ? remote.drinks : [],
-      content: remote.content?.length ? remote.content.map(item => ({ ...item, imageUrl: item.imageUrl || fallbackContent.get(item.id)?.imageUrl || "" })) : fallback.content,
+      content: Array.isArray(remote.content) ? remote.content.map(item => ({ ...item, imageUrl: item.imageUrl || fallbackContent.get(item.id)?.imageUrl || "" })) : [],
       faqs: remote.faqs?.length ? remote.faqs : fallback.faqs,
       reviews: Array.isArray(remote.reviews) ? remote.reviews : [],
       translations: Array.isArray(remote.translations) ? remote.translations : [],
       settings: { ...fallback.settings, ...(remote.settings || {}) },
       preview: false
     };
+    if(typeof document!=='undefined')applySiteMedia(catalog.settings);
     saveCatalogCache(catalog);
     return catalog;
   } catch (error) {
     if (error?.code === "BACKEND_VERSION_MISMATCH") throw error;
-    if (cached) {
+    if (cached && !["unauthenticated", "permission-denied"].includes(error?.code)) {
       console.debug("Using the last saved catalog until the connection returns.", error?.code || error?.message || error);
+      if(typeof document!=='undefined')applySiteMedia(cached.settings);
       return { ...cached, offline: true, cached: true };
     }
     console.debug("Firebase catalog is not available yet.", error?.code || error?.message || error);
-    return { ...localCatalog(), branches: [], services: [], packages: [], offers: [], staff: [], drinks: [], offline: true };
+    throw error;
   }
 }
 
@@ -121,6 +124,7 @@ export async function getAvailableSlots(payload) {
   if (firebaseConfigured) return await callFunction("getAvailableSlots", payload, 20000);
 
   const catalog = localCatalog();
+  assertDemoWorkerScope(catalog,payload);
   const branch = catalog.branches.find(item => item.id === payload.branchId && item.active !== false);
   if (!branch) throw new Error("اختر الفرع أولًا");
   const indexed = new Map([...catalog.services.map(item => [item.id, { ...item, kind: item.type === "product" ? "product" : "service" }]), ...catalog.packages.map(item => [item.id, { ...item, kind: "package" }]), ...catalog.offers.map(item => [item.id, { ...item, kind: "offer" }])]);
@@ -181,6 +185,7 @@ export async function createBooking(payload) {
     return await callFunction("createBooking", payload, 30000);
   }
   const catalog = localCatalog();
+  assertDemoWorkerScope(catalog,payload);
   const branch = catalog.branches.find(item => item.id === payload.branchId && item.active !== false);
   if (!branch) throw new Error("اختر الفرع أولًا");
   const indexed = new Map([...catalog.services.map(item => [item.id, item]), ...catalog.packages.map(item => [item.id, item]), ...catalog.offers.map(item => [item.id, item]), ...(catalog.drinks || []).map(item => [item.id, { ...item, kind: "drink" }])]);
@@ -193,6 +198,7 @@ export async function createBooking(payload) {
   const coupon = payload.couponCode && discountableIds.length ? await validateCoupon({ code: payload.couponCode, branchId: branch.id, subtotal: discountableSubtotal, phone: payload.customer.phone, itemIds: discountableIds }) : { valid: false, discountAmount: 0 };
   const total = Math.max(0, subtotal - Number(coupon.discountAmount || 0));
   const items = resolvedLines.map(({ item }) => item);
+  assertDemoWorkerScope(catalog,payload);
   const code = `MZ-${branch.code || "BR"}-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
   const record = { ...payload, code, subtotal, discountAmount: coupon.discountAmount || 0, total, status: "pending", paymentStatus: "unpaid", branchNameAr: branch.nameAr, branchWhatsapp: branch.whatsapp, serviceNamesAr: items.map(item => item.nameAr), createdAt: new Date().toISOString() };
   const saved = JSON.parse(localStorage.getItem("mz-preview-bookings") || "[]");
@@ -203,6 +209,7 @@ export async function createBooking(payload) {
 
 export async function signedInCustomer() {
   if (!firebaseConfigured) return null;
+  const { getAuth } = await import("firebase/auth");
   const auth = getAuth(app);
   await auth.authStateReady();
   const user = auth.currentUser;

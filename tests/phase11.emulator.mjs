@@ -14,6 +14,7 @@ const call=(name,a,data={})=>h[name].run({auth:a,data,rawRequest});
 const admin=actor('p11-admin','admin');
 let secret;
 test('Phase11 create isolated verified Auth fixtures',async()=>{
+ await auth.createUser({uid:'p11-cashier'});await auth.setCustomUserClaims('p11-cashier',{role:'cashier',branchIds:['talkha']});
  await auth.createUser({uid:'p11-admin',email:'p11-admin@example.test',emailVerified:true});await auth.setCustomUserClaims('p11-admin',{role:'admin'});
  await auth.createUser({uid:'p11-phone',phoneNumber:'+201011234567'});
  await auth.createUser({uid:'p11-google',email:'p11-worker@example.test',emailVerified:true});
@@ -91,10 +92,21 @@ test('AI malicious model confirmation injection fails closed to FAQ',async()=>{n
 test('AI input/output limits reject oversized requests before provider',async()=>{await assert.rejects(agent(customer,'x'.repeat(1201)));});
 test('AI restore language provider and disable test feature',async()=>{globalThis.fetch=realFetch;await db.doc('settings/public').set({aiAgentEnabled:false},{merge:true});});
 
-test('AI request rate limit is enforced before any language provider request',async()=>{
+test('AI production-mode request rate limit is enforced before provider access, with demo DB only',async()=>{
  await db.doc('settings/public').set({aiAgentEnabled:true},{merge:true});
- const request={data:{message:'x'.repeat(1201)},rawRequest:{ip:'203.0.113.111',headers:{}}};
- for(let index=0;index<20;index++)await assert.rejects(h.customerAiAgent.run(request),error=>error.code==='invalid-argument');
- await assert.rejects(h.customerAiAgent.run(request),error=>error.code==='resource-exhausted');
- await db.doc('settings/public').set({aiAgentEnabled:false},{merge:true});
+ try {
+  const {spawnSync}=await import('node:child_process');
+  const script=`import assert from 'node:assert/strict';
+   assert.equal(process.env.GCLOUD_PROJECT,'demo-el-mezaen-gate');
+   assert.match(process.env.FIRESTORE_EMULATOR_HOST,/^127\\.0\\.0\\.1:/);
+   globalThis.fetch=()=>{throw Error('External/provider access forbidden in this test');};
+   const h=await import('./functions/src/index.js');
+   const request={data:{message:'x'.repeat(1201)},rawRequest:{ip:'203.0.113.111',headers:{}}};
+   for(let index=0;index<20;index++)await assert.rejects(h.customerAiAgent.run(request),e=>e.code==='invalid-argument');
+   await assert.rejects(h.customerAiAgent.run(request),e=>e.code==='resource-exhausted');
+   const {createRequire}=await import('node:module');const require=createRequire(new URL('./functions/package.json',import.meta.url));
+   await require('firebase-admin/firestore').getFirestore().terminate();`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8',timeout:60000,env:{...process.env,FUNCTIONS_EMULATOR:'false',ENFORCE_APP_CHECK:'true'}});
+  assert.equal(child.status,0,child.stderr||child.stdout||String(child.error));
+ }finally{await db.doc('settings/public').set({aiAgentEnabled:false},{merge:true});}
 });

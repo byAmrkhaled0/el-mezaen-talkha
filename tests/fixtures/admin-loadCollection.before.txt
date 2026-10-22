@@ -1,0 +1,14 @@
+let collectionRequestEpoch=0;
+async function loadCollection(collection, refresh = false) {
+  const epoch=collectionRequestEpoch, branchId=$("#headerBranchFilter").value;
+  if (!refresh && state.collections.has(collection)) return renderCollection(collection);
+  try {
+    const result = await getCollection(collection, 100, "", branchId);
+    if(epoch!==collectionRequestEpoch)return;
+    state.collections.set(collection, result.items || []);
+    state.collectionCursors.set(collection, result.nextCursor || null);
+    renderCollection(collection);
+    $$(`[data-load-more="${CSS.escape(collection)}"]`).forEach(button => { button.hidden = !result.nextCursor; });
+  } catch (error) { toast(`تعذر تحميل ${collection}: ${error.message}`, true); }
+}
+

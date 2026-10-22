@@ -1,0 +1,352 @@
+{
+  "checkedAt": "2026-10-22",
+  "project": "el-mezaen-talkha",
+  "region": "europe-west1",
+  "productionFunctions": 70,
+  "localFunctions": 117,
+  "missingFunctions": [
+    "acceptCashHandover",
+    "activateWorkerLeave",
+    "adminBusinessAssistant",
+    "cancelWorkerAvailability",
+    "changeWorkerPassword",
+    "checkWorkerLeaveConflicts",
+    "checkWorkerTargetsOnAssignment",
+    "checkWorkerTargetsOnRevenue",
+    "confirmAdminTargetAction",
+    "confirmAiAction",
+    "createWorkerInvitation",
+    "customerAiAgent",
+    "disburseWorkerAdvance",
+    "extendWorkerService",
+    "finishWorkerService",
+    "getAccessAccountCenter",
+    "getAdminBusinessInsights",
+    "getBranchWorkRequests",
+    "getCashHandover",
+    "getCashHandoverHistory",
+    "getMonthlyTargetProgress",
+    "getReadyWorkerAdvances",
+    "getTargetAchievementNotifications",
+    "getWorkerAdvanceBalance",
+    "getWorkerAdvancePolicy",
+    "getWorkerAvailability",
+    "getWorkerLeaderboard",
+    "getWorkerRequests",
+    "getWorkerServiceSessions",
+    "manageAccessAccount",
+    "markTargetAchievementNotificationsRead",
+    "markWorkerNotificationRead",
+    "notifyWorkersOnTaskUpdate",
+    "prepareAdminTargetAction",
+    "redeemWorkerInvitation",
+    "registerWorkerAccess",
+    "remindWorkersBeforeBooking",
+    "resolveCashHandover",
+    "setWorkerAdvancePolicy",
+    "setWorkerAvailability",
+    "setWorkerMonthlyTarget",
+    "startWorkerService",
+    "submitBranchWorkRequest",
+    "submitWorkerRequest",
+    "syncWorkerBookingNotifications",
+    "updateBranchWorkRequest",
+    "updateWorkerRequest"
+  ],
+  "productionOnlyFunctions": [],
+  "existingFunctionCodeParity": "not established by function-name listing",
+  "localIndexDefinitions": 158,
+  "productionIndexDefinitions": 142,
+  "localDefinitionsAbsentOnProduction": 13,
+  "productionDefinitionsAbsentLocally": 0,
+  "aiLiveKey": "owner reported not configured",
+  "publishingPerformed": false,
+  "indexComparison": "Logical index keys exclude implicit __name__ and default density returned by server; state readiness not verified",
+  "missingLogicalIndexes": [
+    {
+      "collectionGroup": "branchWorkRequests",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "group",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "cashHandovers",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "cashHandovers",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fromUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "cashHandovers",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "toUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerLeaves",
+      "fields": [
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateKey",
+          "order": "ASCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "integrationStatus",
+          "order": "ASCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "advancePostingVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "advanceRemainingCents",
+          "order": "ASCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestData.startDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestData.endDate",
+          "order": "ASCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "workerRequests",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    }
+  ],
+  "productionOnlyLogicalIndexes": [],
+  "customerSignupUpdate20261022": {
+    "newFunction": "saveCustomerProfile",
+    "updatedFunction": "getCustomerPortal",
+    "localFunctionCount": 118,
+    "remoteCountFromEarlierInventory": 70,
+    "missingByNameIfRemoteUnchanged": 48,
+    "deploymentExecuted": false,
+    "rulesOrIndexesChanged": false
+  },
+  "adminWorkerUpdate20261022": {
+    "newFunctions": [
+      "listBranchWorkerAccounts",
+      "createBranchWorkerAccount"
+    ],
+    "localFunctionCount": 120,
+    "addedAggregateIndexDefinitions": 34,
+    "productionDeploymentPerformed": false,
+    "verifiedPreflight404": [
+      "getMonthlyTargetProgress",
+      "getWorkerServiceSessions",
+      "getWorkerAvailability",
+      "getTargetAchievementNotifications",
+      "getWorkerLeaderboard",
+      "getCashHandover"
+    ],
+    "verifiedPreflight204": [
+      "getOwnerMobileHistory",
+      "notifyWorker"
+    ],
+    "productionHistoryError": "FAILED_PRECONDITION: query requires aggregate index; confirmed by read-only logs",
+    "notifyWorker400Cause": "not established; needs post-deployment response inspection",
+    "rootTests": 766,
+    "functionsUnitTests": 143,
+    "workerAccountsEmulatorTests": 8,
+    "syntheticAccountsCreated": 300,
+    "simultaneous300UsersTested": false,
+    "browserCashierAccountCreation": "PASS demo only"
+  }
+}

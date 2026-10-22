@@ -42,12 +42,13 @@ test("dashboard shows only existing server values and loaded bookings or attenda
   assert.match(html, /data-dashboard-attendance/);
 });
 
-test("v4.1 forces the reference light shell and preserves responsive navigation", async () => {
+test("admin restores a selectable theme and preserves responsive navigation", async () => {
   const [html, css, theme, admin] = await Promise.all([read("admin/index.html"), read("src/admin.css"), read("public/theme-init.js"), read("src/admin.js")]);
   assert.match(html, /data-theme="light"/);
   assert.match(theme, /const fallback = admin \? "light" : "dark"/);
   assert.match(theme, /admin \? "light" : saved/);
-  assert.match(admin, /setTheme\("light"\)/);
+  assert.match(admin, /setTheme\(sessionStorage\.getItem\("mz-admin-theme"\)/);
+  assert.doesNotMatch(admin, /theme = "light"; \/\/ Admin v4/);
   assert.match(admin, /setSidebarCollapsed\(false, \{ persist: false \}\)/);
   for (const token of ["--admin-bg", "--admin-primary", "--admin-surface", "--admin-border", "--admin-shadow"]) assert.ok(css.includes(token));
   assert.match(css, /--admin-bg:#f5f8fb/);

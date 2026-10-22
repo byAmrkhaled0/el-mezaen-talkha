@@ -1,0 +1,25 @@
+/* New internal request screens reuse desktop components; refinement is mobile only. */
+@media(max-width:720px){
+ .request-center:not([hidden]){min-width:0}
+ .request-center :is(form,[data-request-list]){display:grid;gap:14px;min-width:0}
+ .request-center :is(label,.request-card-head){display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+ .request-center label{flex-direction:column;align-items:stretch}
+ .request-center :is(input:not([type=checkbox]),select,textarea){width:100%;min-width:0;max-width:100%;min-height:44px;padding:10px;border:1px solid var(--worker-line,var(--line));border-radius:12px;background:var(--panel,#103847);color:inherit;font:inherit}
+ .request-center :is(button,summary){min-width:44px;min-height:44px;cursor:pointer}
+ .request-center summary{padding:10px 0}
+ .request-center form button[type=submit]{min-height:48px}
+ .request-center :is(button,input,select,textarea,summary):focus-visible{outline:2px solid currentColor;outline-offset:3px}
+ .request-center .request-card{border-radius:18px;padding:18px;min-width:0;overflow-wrap:anywhere;box-shadow:none}
+ .request-card-head h3{font-size:17px;margin:0;flex:1;min-width:0}
+ .request-card-head>svg{box-sizing:content-box;flex:none;padding:10px;border-radius:12px;background:#dff0f8;color:#245873}
+ .request-badge{padding:5px 9px;border-radius:12px;font-size:12px;background:#fff3dd;color:#704e09}
+ .request-badge[data-status=APPROVED]{background:#ddf3e9;color:#165d3c}
+ .request-badge:is([data-status=REJECTED],[data-status=CANCELLED]){background:#fbe7df;color:#943b2b}
+ .request-center .request-actions{display:flex;gap:8px;flex-wrap:wrap}
+ .request-center .request-actions button{flex:1}
+ .request-center [data-request-toolbar]{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+ .request-center :is(p,small,li){line-height:1.8;overflow-wrap:anywhere}
+ .request-center input[type=checkbox]{width:24px;height:24px}
+ .request-center label:has(input[type=checkbox]){flex-direction:row;align-items:center;min-height:44px}
+ html:not([data-theme=dark]) .worker-app .request-center :is(input,select,textarea){background:#fff;color:#245873;border-color:#e6edf3}
+}

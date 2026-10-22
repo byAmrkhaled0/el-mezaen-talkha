@@ -8,16 +8,17 @@ bindSafeBack();
 
 const form = document.querySelector("#loginForm");
 const errorBox = document.querySelector("#loginError");
+let workerAuthenticating=false;
 if (new URLSearchParams(location.search).get("reason") === "access") errorBox.textContent = "الحساب غير مصرح له بدخول اللوحة أو غير مرتبط بفرع. تواصل مع الإدارة.";
 
 if (!configured) errorBox.textContent = "أضف إعدادات Firebase في public/firebase-config.js أولًا.";
 
 watchAuth(async user => {
-  if (!user) return;
+  if (!user || workerAuthenticating) return;
   try {
     const role = await currentRole(user);
     if (role) location.replace(staffDestination(role));
-    else { await requestWorkerAccess(); document.querySelector("#workerInviteForm").hidden = false; document.querySelector("#pendingActivation").hidden = false;showLoginMode("worker");document.querySelector("#workerGoogle").hidden=true;document.querySelector("#workerPhoneForm").hidden=true;document.querySelector("#workerOtpForm").hidden=true; errorBox.textContent = "تم إنشاء حسابك، في انتظار اعتماد الإدارة"; }
+    else { await logout(); errorBox.textContent = "الحساب غير معتمد؛ تواصل مع الإدارة"; return; /* legacy pending flow: await requestWorkerAccess(); document.querySelector("#workerInviteForm").hidden = false; document.querySelector("#pendingActivation").hidden = false;showLoginMode("worker");document.querySelector("#workerGoogle").hidden=true;document.querySelector("#workerPhoneForm").hidden=true;document.querySelector("#workerOtpForm").hidden=true; errorBox.textContent = "تم إنشاء حسابك، في انتظار اعتماد الإدارة"; */ }
   } catch {
     errorBox.textContent = "تم تسجيل الدخول، لكن تعذر التحقق من صلاحية الحساب الآن. أعد المحاولة.";
   }
@@ -44,31 +45,16 @@ form.addEventListener("submit", async event => {
 });
 
 
-import { requestWorkerAccess, redeemWorkerInvitation, staffGoogleLogin, staffPhoneLogin, staffRedirectResult, logout } from './admin-api.js';
-let phoneConfirmation;
+import {requestWorkerAccess, loginWorkerUsername, logout} from './admin-api.js';
 const workerStatus = document.querySelector('#workerAccessStatus');
-async function workerAction(button, action) {
-  if (button.disabled) return;
-  button.disabled = true; workerStatus.textContent = 'جارٍ التحقق…';
-  try { await action(); workerStatus.textContent = ''; }
-  catch (error) { workerStatus.textContent = error.message || 'تعذر الدخول؛ حاول مرة أخرى'; }
-  finally { button.disabled = false; }
-}
-document.querySelector('#workerGoogle').addEventListener('click', event => workerAction(event.currentTarget, staffGoogleLogin));
-document.querySelector('#workerPhoneForm').addEventListener('submit', event => {
-  event.preventDefault(); const form = event.currentTarget;
-  void workerAction(form.querySelector('button'), async () => { phoneConfirmation = await staffPhoneLogin(form.elements.phone.value, 'workerRecaptcha'); document.querySelector('#workerOtpForm').hidden = false; });
+document.querySelector('#workerUsernameForm').addEventListener('submit', async event => {
+  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
+  const button = form.querySelector('button'); if (button.disabled) return;
+  button.disabled = true; workerAuthenticating=true; workerStatus.textContent = 'جارٍ التحقق…';
+  try { await loginWorkerUsername(form.elements.username.value, form.elements.password.value); location.replace("/worker/"); }
+  catch { workerStatus.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة، أو الحساب غير متاح.'; }
+  finally { workerAuthenticating=false; button.disabled = false; form.elements.password.value = ''; }
 });
-document.querySelector('#workerOtpForm').addEventListener('submit', event => {
-  event.preventDefault(); const form = event.currentTarget;
-  void workerAction(form.querySelector('button'), async () => { await phoneConfirmation.confirm(form.elements.otp.value); form.hidden = true; });
-});
-document.querySelector('#workerInviteForm').addEventListener('submit', event => {
-  event.preventDefault(); const form = event.currentTarget;
-  void workerAction(form.querySelector('button'), async () => { await redeemWorkerInvitation(form.elements.secret.value.trim()); await logout(); form.hidden = true; workerStatus.textContent = 'تم اعتماد حسابك؛ سجل الدخول مجددًا'; });
-});
-void staffRedirectResult().catch(error => { workerStatus.textContent = error.message; });
-
 const workerMode = new URLSearchParams(location.search).get("mode") === "worker";
 function showLoginMode(mode) { document.querySelector("#loginForm").hidden = mode === "worker"; document.querySelector("#workerLoginCard").hidden = mode !== "worker"; document.querySelectorAll("[data-login-mode]").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.loginMode===mode))); }
 document.querySelectorAll("[data-login-mode]").forEach(b=>b.addEventListener("click",()=>showLoginMode(b.dataset.loginMode)));

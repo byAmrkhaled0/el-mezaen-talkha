@@ -1,0 +1,57 @@
+/* Shared internal mobile refinement. All visual rules stay inside the existing 720px breakpoint. */
+@media (max-width:720px) {
+  .admin-app,.worker-app{--mz-icon-home:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221.5%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221.5%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221.5%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221.5%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-sales:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%204v16h16M8%2015v-4m5%204V7m5%208v-5%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-calendar:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%224%22%20y%3D%225%22%20width%3D%2216%22%20height%3D%2216%22%20rx%3D%223%22%2F%3E%3Cpath%20d%3D%22M8%203v4m8-4v4M4%2010h16m-12%204h2m4%200h2m-8%203h2%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-wallet:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M19%208V5H6a3%203%200%200%200%200%206h14v9H6a3%203%200%200%201-3-3V8%22%2F%3E%3Cpath%20d%3D%22M20%2012h-5v5h5m-3-2.5h.1%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-team:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%229%22%20cy%3D%228%22%20r%3D%223%22%2F%3E%3Cpath%20d%3D%22M3%2021v-3a6%206%200%200%201%2012%200v3m1-16a3%203%200%200%201%200%206m2%204a5%205%200%200%201%203%205%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-tasks:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%225%22%20y%3D%224%22%20width%3D%2214%22%20height%3D%2217%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M9%203h6v3H9zm-1%209%202%202%205-5m-6%209h7%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-more:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%225%22%20cy%3D%2212%22%20r%3D%221%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%221%22%2F%3E%3Ccircle%20cx%3D%2219%22%20cy%3D%2212%22%20r%3D%221%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-user:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%228%22%20r%3D%224%22%2F%3E%3Cpath%20d%3D%22M4%2021v-2a8%208%200%200%201%2016%200v2%22%2F%3E%3C%2Fsvg%3E");}
+  .admin-app,.worker-app{--mz-icon-content:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%223%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%229%22%20r%3D%221.5%22%2F%3E%3Cpath%20d%3D%22m3%2017%205-5%204%204%204-6%205%206%22%2F%3E%3C%2Fsvg%3E");}
+  html[data-admin-role][data-theme="light"] {--admin-bg:#f8fafc;--admin-surface:#fff;--admin-text:#245873;--admin-muted:#64748b;--admin-border:#e6edf3;--admin-primary:#245873;--bg:#f8fafc;--bg2:#f8fafc;--panel:#fff;--panel-solid:#fff;--text:#245873;--muted:#64748b;--line:#e6edf3;--cyan:#245873;--shadow:0 2px 8px rgb(36 88 115 / 4%);}
+  .admin-app,.worker-app {--mz-radius:18px;--mz-blue:#dff0f8;--mz-green:#ddf3e9;--mz-peach:#fbe7df;--mz-purple:#eee3f8;line-height:1.6;}
+  html[data-admin-role][data-theme="light"] .admin-main {background:var(--bg);}
+  .admin-app :is(.admin-panel,.metric-card,.mobile-content-card,.team-now-card,.owner-list-card) {border-radius:var(--mz-radius);box-shadow:none;min-width:0;}
+  .admin-app :is(.metric-card strong,.owner-list-card b,.mobile-content-card h3) {overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
+  .admin-app :is(.small-button,.primary-button,.header-icon-button),.admin-app :is(.toolbar,.settings-form,.editor-fields,.payroll-actions) :is(input,select),.admin-app .editor-shell footer button {min-height:44px;border-radius:12px;line-height:1.5;}
+  .admin-app .header-icon-button {min-width:44px;}
+  .admin-app .header-scope select {min-height:44px;font-size:12px;}
+  .admin-app .header-title h1,.worker-app .worker-intro h1 {font-size:22px;line-height:1.5;}
+  .admin-app .panel-head h2,.worker-app .worker-screen>h2 {font-size:19px;line-height:1.6;}
+  .admin-app :is(.primary-button,button[type="submit"]) {min-height:48px;}
+  .admin-app :is(.mobile-admin-menu,.mobile-quick-actions) svg {width:24px;height:24px;stroke-width:1.8;}
+  html[data-theme="light"] .mobile-menu-icon.sales,html[data-theme="light"] .mobile-menu-icon.bookings,html[data-theme="light"] .mobile-menu-icon.staff {background:var(--mz-blue);color:#245873;}
+  html[data-theme="light"] .mobile-menu-icon.expenses {background:var(--mz-peach);color:#9b462b;}
+  html[data-theme="light"] .mobile-menu-icon.shifts {background:var(--mz-purple);color:#7049a1;}
+  html[data-theme="light"] :is(.mobile-menu-icon.attendance,.mobile-menu-icon.payroll,.mobile-menu-icon.inventory) {background:var(--mz-green);color:#176c57;}
+  .admin-app .mobile-admin-menu button {min-width:0;padding:12px 8px;line-height:1.6;}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button:not([hidden]),.worker-app .worker-nav button:not([hidden]) {min-width:0;min-height:52px;white-space:normal;font-size:11px;line-height:1.4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button::before,.worker-app .worker-nav button::before {content:"";display:block;width:24px;height:24px;margin-inline:auto;background:currentColor;mask:var(--mz-icon, var(--mz-icon-more)) center/contain no-repeat;}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button>svg {display:none;}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button[data-section="dashboard"],.worker-nav button[data-view="home"] {--mz-icon:var(--mz-icon-home);}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button:is([data-section="revenue"],[data-section="pos"]) {--mz-icon:var(--mz-icon-sales);}
+  .admin-app :is(.owner-mobile-nav,.cashier-mobile-nav) button[data-section="bookings"],.worker-nav button:is([data-view="bookings"],[data-view="attendance"]) {--mz-icon:var(--mz-icon-calendar);}
+  .admin-app .owner-mobile-nav button[data-section="expenses"] {--mz-icon:var(--mz-icon-wallet);}
+  .admin-app .cashier-mobile-nav button:is([data-cashier-jump="team"],[data-section="attendance"]) {--mz-icon:var(--mz-icon-team);}
+  .admin-app .cashier-mobile-nav button[data-cashier-jump="tasks"],.worker-nav button[data-view="tasks"] {--mz-icon:var(--mz-icon-tasks);}
+  .admin-app .cashier-mobile-nav button[data-section="mobileContent"] {--mz-icon:var(--mz-icon-content);}
+  .worker-nav button[data-view="profile"] {--mz-icon:var(--mz-icon-user);}
+  .admin-app button:focus-visible,.worker-app :is(button,input,select,.upload-label):focus-visible {outline:2px solid currentColor;outline-offset:3px;}
+  .admin-app button:disabled,.worker-app button:disabled {cursor:not-allowed;opacity:.55;}
+  /* Worker keeps its existing dark appearance when explicitly selected. */
+  html:not([data-theme="dark"]) .worker-app {--worker-line:#e6edf3;--worker-panel:#fff;background:#f8fafc;color:#245873;}
+  html:not([data-theme="dark"]) .worker-app :is(.worker-header,.worker-intro,.worker-panel,.attendance-card,.profile-photo-card,#profileDetails,.worker-nav) {background:#fff;border-color:var(--worker-line);color:#245873;box-shadow:none;}
+  html:not([data-theme="dark"]) .worker-app :is(.worker-intro p,.worker-intro small,.worker-intro time,.worker-panel small,.worker-panel time,.gps-indicator,.attendance-timeline p,.worker-overview span,.worker-header small) {color:#64748b;}
+  html:not([data-theme="dark"]) .worker-app :is(button,.upload-label,select,#workerPasswordForm input) {background:#fff;border-color:#e6edf3;color:#245873;}
+  html:not([data-theme="dark"]) .worker-app :is(.worker-actions button,.upload-label) {background:#245873;color:#fff;}
+  html:not([data-theme="dark"]) .worker-app .worker-nav button[aria-current="page"] {background:#dff0f8;color:#245873;}
+  html:not([data-theme="dark"]) .worker-app .worker-overview button {background:#dff0f8;color:#245873;}
+  html:not([data-theme="dark"]) .worker-app :is(.worker-overview b,.attendance-timeline strong,#status) {color:#245873;}
+  .worker-app :is(.worker-panel,.attendance-card,.worker-intro,.profile-photo-card) {border-radius:var(--mz-radius);padding:18px;}
+  .worker-app :is(h1,h2,h3,p,small),.admin-app :is(.panel-head h2,.owner-list-card small) {overflow-wrap:anywhere;}
+  .worker-app button,.worker-app .upload-label {min-height:48px;min-width:44px;line-height:1.5;}
+  .worker-app .worker-nav:not([hidden]) {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;padding:8px 5px calc(8px + env(safe-area-inset-bottom));}
+  .worker-app .worker-nav button {padding:4px 1px;border:0;}
+  .worker-app .worker-overview {gap:8px;}
+}

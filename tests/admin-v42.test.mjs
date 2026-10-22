@@ -64,7 +64,7 @@ test("original 293 IDs, 102 data bindings, and 33 sections remain alongside cash
   fixture.ids.forEach(id => assert.ok(ids.includes(id), id));
   fixture.dataBindings.forEach(([attr, value]) => assert.ok(html.includes(value === null ? ` ${attr}` : `${attr}="${value}"`), `${attr}=${value}`));
   const sections = [...html.matchAll(/<section class="admin-section(?: active)?[^>]*\bid="([^"]+)"/g)].map(match => match[1]);
-  assert.equal(sections.filter(id => !["workspaceHome", "cashierGoals", "mobileContent"].includes(id)).length, 33);
+  assert.equal(sections.filter(id => !["workspaceHome", "cashierGoals", "mobileContent", "workerRequests", "websiteContent", "adminAssistant", "workerTargets"].includes(id)).length, 33);
   assert.ok(sections.includes("cashierGoals"));
 });
 

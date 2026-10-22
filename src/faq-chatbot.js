@@ -46,7 +46,7 @@ function runAction(action) {
   if (action === "hair") { location.href = "/hair-systems/"; return; }
   if (action === "whatsapp") {
     if (!state.branch) { location.href="/#choose-branch";return; }
-    const number = whatsappNumber(state.branch?.whatsapp || state.branch?.phone || "01101006961");
+    const number = whatsappNumber(state.branch?.whatsapp || state.branch?.phone || "01093008896");
     window.open(`https://wa.me/${number}`, "_blank", "noopener,noreferrer");
   }
 }

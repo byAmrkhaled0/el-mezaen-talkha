@@ -55,7 +55,7 @@ test("sensitive role changes revoke refresh tokens and fail visibly before succe
   const roleHandler = code.slice(code.indexOf("export const setUserRole ="), code.indexOf("export const createAdminUser ="));
   assert.match(roleHandler, /replaceClaimsAndRevoke\(getAuth\(\), uid,/);
   assert.match(roleHandler, /throw new HttpsError\("unavailable"/);
-  assert.ok(roleHandler.indexOf("replaceClaimsAndRevoke") < roleHandler.indexOf("await batch.commit()"));
+  assert.ok(roleHandler.indexOf("replaceClaimsAndRevoke") < roleHandler.indexOf("// Commit canonical role"));
   assert.match(await source("functions/src/privilege-change.js"), /revokeRefreshTokens\(uid\)/);
   for (const name of ["adminSecureDelete", "setUserRole", "createAdminUser"]) {
     const handler = code.slice(code.indexOf(`export const ${name} =`));

@@ -17,7 +17,7 @@ test("cashier shell renders only five operational entries and moves the live bel
 test("cashier direct routes cannot open admin attendance, tasks, customers or workspace", async () => {
   const js = await read("src/admin.js");
   const gate = js.slice(js.indexOf("const cashierSections ="), js.indexOf("function sectionHub("));
-  assert.match(gate, /new Set\(\["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses"\]\)/);
+  assert.match(gate, /new Set\(\["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses", "workerTargets"\]\)/);
   for (const id of ["attendance", "tasks", "customers", "users", "settings"]) assert.doesNotMatch(gate.slice(0, gate.indexOf("  if (id === \"workspaceHome\")")), new RegExp(`"${id}"`));
   assert.match(js, /if \(!canOpenSection\(id\)\) return toast\("لا تملك صلاحية هذا القسم"/);
   assert.match(js, /if \(section === "workspaceHome" \|\| !canOpenSection\(section\)\) return state\.role === "cashier" \? void showSection\("calendar"/);
@@ -54,5 +54,5 @@ test("legacy selector inventory and admin sections survive the presentation chan
   assert.equal(fixture.dataBindings.length, 102);
   for (const id of fixture.ids) assert.ok(ids.has(id), `missing ID ${id}`);
   for (const [attr, value] of fixture.dataBindings) assert.ok(html.includes(value === null ? ` ${attr}` : `${attr}="${value}"`), `missing binding ${attr}=${value}`);
-  assert.equal([...html.matchAll(/class="admin-section" id="([^"]+)"/g)].filter(match => !["workspaceHome", "cashierGoals", "mobileContent"].includes(match[1])).length, 33);
+  assert.equal([...html.matchAll(/class="admin-section" id="([^"]+)"/g)].filter(match => !["workspaceHome", "cashierGoals", "mobileContent", "workerRequests", "websiteContent", "adminAssistant", "workerTargets"].includes(match[1])).length, 33);
 });

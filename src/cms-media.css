@@ -1,0 +1,25 @@
+/* Phase12.4B.1: scoped content-workspace UI; ERP layouts unchanged. */
+#websiteContent{min-width:0}#websiteContent .cms-workspace-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}#websiteContent button{min-height:44px;white-space:normal;overflow-wrap:anywhere}#websiteContent .cms-settings-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}#websiteContent fieldset{min-width:0;border:1px solid var(--line,#34505c);border-radius:14px;padding:16px}#websiteContent legend{font-weight:700}#websiteContent input{max-width:100%;min-width:0}#websiteContent .cms-preview-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}#websiteContent figure{margin:0;min-width:0}#websiteContent img{width:100%;height:170px;object-fit:contain;background:repeating-conic-gradient(#66788820 0% 25%,transparent 0% 50%) 0/18px 18px;border-radius:10px}#websiteContent figcaption,#websiteContent small{display:block;font-size:12px;overflow-wrap:anywhere}#websiteContent [data-settings-feedback],#websiteContent .cms-media-notice{grid-column:1/-1;overflow-wrap:anywhere}#websiteContent [data-settings-feedback]{min-height:1.5em}#websiteContent [data-settings-feedback]:empty{display:none}#websiteContent .cms-settings-form>button{justify-self:start}#websiteContent article{scroll-margin-top:90px}#websiteContent label{display:grid;gap:8px;margin-block:14px}@media(max-width:1024px){#websiteContent .cms-workspace-nav{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:768px){#websiteContent .cms-settings-form{grid-template-columns:1fr}#websiteContent .cms-workspace-nav{grid-template-columns:repeat(2,minmax(0,1fr))}#websiteContent{padding-bottom:calc(90px + env(safe-area-inset-bottom))}}@media(max-width:359px){#websiteContent img{height:120px}#websiteContent fieldset{padding:10px}}
+
+#websiteContent .cms-composition-tools{display:flex;flex-wrap:wrap;gap:8px;margin-block:12px}
+#websiteContent .cms-composition-tools [aria-pressed=true]{outline:2px solid var(--cyan,#00cbe8);outline-offset:2px}
+#websiteContent .cms-slot-location code{direction:ltr;unicode-bidi:isolate;overflow-wrap:anywhere}
+#websiteContent .cms-media-slot[data-composition=desktop] .cms-preview-pair img{aspect-ratio:16/9;height:auto;object-fit:cover}
+#websiteContent .cms-media-slot[data-composition=mobile] .cms-preview-pair img{aspect-ratio:3/4;height:auto;max-height:340px;object-fit:cover}
+#websiteContent .cms-media-slot[data-composition=original] .cms-preview-pair img{height:220px;object-fit:contain}
+
+/* Content controls use the same theme tokens as the rest of administration. */
+:is(#websiteContent,#mobileContent) button{border:1px solid var(--ui-control-border,var(--line));background:var(--ui-control-bg,var(--panel));color:var(--ui-control-text,var(--text));padding:9px 12px;font-weight:700;line-height:1.5;min-width:0;max-width:100%;box-shadow:none}
+:is(#websiteContent,#mobileContent) button:hover:not(:disabled){border-color:var(--cyan);background:var(--bg2)}
+:is(#websiteContent,#mobileContent) button:disabled{opacity:.55;cursor:not-allowed}
+#websiteContent .cms-workspace-nav button{display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px}
+#websiteContent .cms-composition-tools button{padding:7px 12px;font-size:12px;min-height:44px}
+#websiteContent .cms-composition-tools button[aria-pressed=true]{background:var(--ui-action,#245b7b);color:#fff;border-color:var(--ui-action,#245b7b);outline:0}
+#websiteContent :is([data-reset-media],[data-cancel-media]){margin-block:4px;font-size:12px}
+#websiteContent input[type=file]::file-selector-button{min-height:40px;border:0;border-radius:8px;background:var(--ui-action,#245b7b);color:#fff;padding:7px 12px;margin-inline-end:8px;font:inherit}
+#mobileContent .mobile-content-card{overflow:hidden;min-width:0}
+#mobileContent .entity-media{display:flex;align-items:center;justify-content:center;background:var(--bg2);min-width:0;overflow:hidden}
+#mobileContent .entity-media img{width:100%;height:170px;object-fit:contain}
+#mobileContent .mobile-content-card footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px}
+#mobileContent [data-delete-collection]{color:var(--danger)}
+@media(max-width:600px){#websiteContent .cms-workspace-nav{gap:8px}#websiteContent .cms-preview-pair{gap:8px}#websiteContent fieldset{padding:12px}#websiteContent .cms-slot-location{font-size:11px}#websiteContent .cms-media-slot :is([data-reset-media],[data-cancel-media]){width:100%}#mobileContent .entity-media img{height:140px}}

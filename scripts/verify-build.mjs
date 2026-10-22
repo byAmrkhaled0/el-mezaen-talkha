@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["index.html", "worker/index.html", "booking/index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "packages/index.html", "reviews/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "favicon.ico", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["about/index.html", "gallery/index.html", "news/index.html", "celebrities/index.html", "index.html", "worker/index.html", "booking/index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "packages/index.html", "reviews/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "favicon.ico", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -80,7 +80,7 @@ assert.match(functionsSource, /export const createAdminUser/);
 assert.match(functionsSource, /concurrency:\s*80/);
 assert.match(functionsSource, /review_v2/);
 assert.match(worker, /addEventListener\("push"/);
-assert.match(worker, /const VERSION = "v11-1"/);
+assert.match(worker, /const VERSION = "final-closure-2"/);
 const messagingWorker = await readFile(join("dist", "firebase-messaging-sw.js"), "utf8");
 assert.match(messagingWorker, /importScripts\("\/sw\.js"\)/, "Firebase Messaging worker must reuse the app service worker");
 assert.match(worker, /sensitiveNavigation/);
@@ -120,3 +120,18 @@ for (const file of mainScripts) {
 }
 assert.ok((await stat("dist/assets/el-mezaen-mark-v2.webp")).size < 40 * 1024, "Optimized logo is unexpectedly large");
 console.log("Build verification passed: routes, local assets, PWA, SEO, noindex, responsive breakpoints and bundle budgets.");
+
+// Every HTML entry must contain a real stylesheet, including about and auth pages.
+for (const page of required.filter(file => file.endsWith('.html'))) {
+  const html = await readFile(join('dist', page), 'utf8');
+  if (page === '404.html') continue;
+  const styles = [...html.matchAll(/<link\b[^>]*>/g)].filter(match => /rel="stylesheet"/.test(match[0])).map(match => match[0].match(/href="([^"?#]+)"/)?.[1]);
+  assert.ok(styles.length, `${page} has no render-blocking stylesheet`);
+  for (const file of styles) {
+    assert.ok(file?.startsWith('/assets/') && file.endsWith('.css'), `${page} has an invalid stylesheet ${file}`);
+    const css = await readFile(join('dist',file), 'utf8');
+    assert.ok(css.length > 500 && !/^\s*<!doctype html/i.test(css), `${page} stylesheet is empty or HTML`);
+    for (const url of css.matchAll(/url\((?:["'])?(\/assets\/[^)"']+)(?:["'])?\)/g)) await access(join('dist', url[1]));
+  }
+}
+console.log('Stylesheet gate passed for every built HTML entry and its local CSS assets.');

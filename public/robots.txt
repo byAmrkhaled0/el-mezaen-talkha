@@ -1,8 +1,23 @@
 User-agent: *
 Allow: /
+Disallow: /admin
 Disallow: /admin/
+Disallow: /worker
 Disallow: /worker/
+Disallow: /login
 Disallow: /login/
+Disallow: /account
+Disallow: /account/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /worker
+Disallow: /worker/
+Disallow: /login
+Disallow: /login/
+Disallow: /account
 Disallow: /account/
 
 Sitemap: https://el-mezaen-talkha.vercel.app/sitemap.xml

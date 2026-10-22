@@ -3,3 +3,25 @@
 @media(max-width:560px){.worker-screen:not([hidden]){grid-template-columns:1fr}.worker-screen>#bookings,.worker-screen>#tasks,.worker-screen>#notifications{grid-template-columns:1fr}.worker-nav{gap:3px;justify-content:space-between}.worker-nav button{border:0;background:none;padding:8px 5px;font-size:12px;flex:1}.worker-intro{gap:12px;flex-wrap:wrap;padding:18px}.worker-intro h1{font-size:23px}.worker-intro img{width:68px;height:80px}.worker-panel,.attendance-card{padding:20px}.worker-header{padding:12px 18px}.worker-overview button{padding:12px}.worker-overview b{font-size:23px}.worker-overview span{font-size:11px}.worker-intro time{font-size:12px}.attendance-card h2{font-size:28px}}
 
 .global-back{display:inline-flex;align-items:center;padding:9px 14px;margin:10px 16px;color:#f0f8fa;background:#092b36;border:1px solid #24505c;border-radius:12px;text-decoration:none}.scroll-top{position:fixed;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:65;width:42px;height:42px;color:#44d4df;background:#092b36;border:1px solid #24505c;border-radius:50%;cursor:pointer}.scroll-top[hidden]{display:none}
+
+#passwordGate{max-width:520px;margin:24px auto}#workerPasswordForm{display:grid;gap:16px}#workerPasswordForm label{display:grid;gap:8px}#workerPasswordForm input{padding:14px;background:var(--worker-panel,#102a3b);color:white;border:1px solid #315364;border-radius:12px;min-width:0}
+
+#workerThemeToggle{display:none}
+@media(max-width:720px){.worker-app #workerThemeToggle:not([hidden]){display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:48px;font-size:12px;padding:8px 10px}.worker-header{gap:8px;flex-wrap:wrap}}
+
+/* Hidden context must not inherit the grid's display rule. */
+.worker-layout[hidden]{display:none}
+@media(max-width:720px){
+ .worker-context{margin:0 0 18px;padding:16px;border:1px solid var(--worker-line);border-radius:18px}
+ .worker-context label:not([hidden]),.photo-controls{display:grid;gap:10px;min-width:0}
+ .worker-context p{margin:8px 0;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+ .worker-app #workerThemeToggle{gap:6px}
+ .worker-app #workerThemeToggle svg{flex:none}
+ .worker-app .profile-photo-card{flex-wrap:wrap;gap:14px;align-items:start}
+ .photo-controls{flex:1 1 180px}
+ .photo-controls label{font-weight:700}
+ .photo-controls small,.photo-controls p{font-size:13px;line-height:1.7;overflow-wrap:anywhere;margin:0}
+ .worker-app #photoPreview:not([hidden]){width:104px;height:104px;object-fit:cover}
+ .worker-app :is(#workingBranch,#choosePhoto):focus-visible{outline:2px solid currentColor;outline-offset:3px}
+ html:not([data-theme="dark"]) .worker-app .worker-context{background:#fff;border-color:#e6edf3;color:#245873}
+}

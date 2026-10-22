@@ -1,0 +1,1 @@
+Owner supplied EL_MEZAEN_PUBLIC_UI_APPROVED_REFERENCES.zip. Approved use: EL MEZAEN only. Studio suit: hero; car: About. Original JPEGs retained; WebP resized with Pillow, no alteration of appearance. Third-party reference images are not redistributed. CMS-managed images retain priority.

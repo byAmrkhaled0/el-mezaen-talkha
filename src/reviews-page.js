@@ -1,3 +1,6 @@
+import {getLang} from './i18n.js';
+import {publicDataStatus,publicStatusText} from './public-status.js';
+const label=(ar,en)=>getLang()==='en'?en:ar;
 import './global-navigation.js';
 import "./styles.css";
 import "./premium-components.css";
@@ -13,11 +16,11 @@ let loading = false;
 
 function reviewDate(value) {
   const date = new Date(value || "");
-  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium" }).format(date) : "";
+  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(getLang()==="en"?"en-GB":"ar-EG", { dateStyle: "medium" }).format(date) : "";
 }
 
 function render() {
-  $("#reviewsGrid").innerHTML = reviews.map(item => { const rating = Math.max(1, Math.min(5, Number(item.rating || 5))); return `<article class="published-review panel ${item.featured ? "featured" : ""}"><header><div class="review-avatar">${escapeHtml(String(item.name || "ع").trim().charAt(0) || "ع")}</div><div><h3>${escapeHtml(item.name || "عميل مزين مصر")}</h3><span aria-label="${rating} من 5">${"★".repeat(rating)}${"☆".repeat(5 - rating)}</span></div>${item.verified ? '<b class="verified-review">حجز موثّق</b>' : ""}</header><p>${escapeHtml(item.comment || "")}</p>${item.createdAt ? `<time>${escapeHtml(reviewDate(item.createdAt))}</time>` : ""}${item.adminReply ? `<div class="review-reply"><b>رد مزين مصر</b><span>${escapeHtml(item.adminReply)}</span></div>` : ""}</article>`; }).join("") || '<div class="empty-state">لا توجد تقييمات منشورة حاليًا.</div>';
+  $("#reviewsGrid").innerHTML = reviews.map(item => { const rating = Math.max(1, Math.min(5, Number(item.rating || 5))); return `<article class="published-review panel ${item.featured ? "featured" : ""}"><header><div class="review-avatar">${escapeHtml(String(item.name || "ع").trim().charAt(0) || "ع")}</div><div><h3>${escapeHtml(item.name || "عميل مزين مصر")}</h3><span aria-label="${rating} ${label("من 5","out of 5")}">${"★".repeat(rating)}${"☆".repeat(5 - rating)}</span></div>${item.verified ? `<b class="verified-review">${label('حجز موثّق','Verified booking')}</b>` : ""}</header><p>${escapeHtml(item.comment || "")}</p>${item.createdAt ? `<time>${escapeHtml(reviewDate(item.createdAt))}</time>` : ""}${item.adminReply ? `<div class="review-reply"><b>${label("رد مزين مصر","El Mezaen reply")}</b><span>${escapeHtml(item.adminReply)}</span></div>` : ""}</article>`; }).join("") || `<div class="empty-state">${label('لا توجد تقييمات منشورة حاليًا.','No published reviews yet.')}</div>`;
   $("#loadMoreReviews").hidden = !cursor;
 }
 
@@ -26,11 +29,12 @@ async function loadMore() {
   loading = true;
   const button = $("#loadMoreReviews");
   button.disabled = true; button.setAttribute("aria-busy", "true");
+  const oldError=document.querySelector("#reviewLoadError");oldError?.remove();
   try {
     const result = await getPublishedReviews(12, cursor);
     reviews.push(...(result.items || [])); cursor = result.nextCursor || ""; render();
   } catch (error) {
-    if (!reviews.length) $("#reviewsGrid").innerHTML = '<div class="empty-state">تعذر تحميل التقييمات الآن. حاول مرة أخرى لاحقًا.</div>';
+    const status=publicDataStatus(error);const errorNode=document.createElement('p');errorNode.id='reviewLoadError';errorNode.className='empty-state';errorNode.setAttribute('role','status');errorNode.textContent=publicStatusText(status,getLang());button.before(errorNode);button.hidden=false;button.textContent=label('إعادة المحاولة','Retry');
   } finally { loading = false; button.disabled = false; button.removeAttribute("aria-busy"); }
 }
 

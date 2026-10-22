@@ -29,7 +29,7 @@ test("booking and cash resource IDs are checked against stored branch on the ser
 
 test("website branch choices and bundled services are validated by canonical IDs", async () => {
   const [backend, site] = await Promise.all([read("functions/src/index.js"), read("src/app.js")]);
-  assert.match(site, /state\.branchId \? itemAvailableAtBranch\(item, state\.branchId, allowGlobalDrink\) : hasBranchScope\(item, allowGlobalDrink\)/);
+  const {publicSubset,reconcileBranchCart}=await import('../src/public-branch.js');const rows=[{id:'t',active:true,branchIds:['talkha']},{id:'m',active:true,branchIds:['mashaya']},{id:'none',active:true}];assert.deepEqual(publicSubset(rows,'talkha').map(x=>x.id),['t']);assert.deepEqual(publicSubset(rows,'mashaya').map(x=>x.id),['m']);assert.deepEqual(publicSubset(rows,''),[]);assert.equal(reconcileBranchCart([{id:'t'}],{services:rows},'mashaya').kept.length,0);
   assert.match(backend, /branchIds\.some\(branchId => !Array\.isArray\(snapshot\.data\(\)\?\.branchIds\)/);
   assert.match(backend, /!Array\.isArray\(serviceBranches\) \|\| !serviceBranches\.includes\(branchId\)/);
   assert.match(endpoint(backend, "createBooking"), /const bookingRef = db\.doc\(`bookings\/\$\{code\}`\)/);

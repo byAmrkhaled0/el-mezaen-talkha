@@ -1,0 +1,10 @@
+<Configuration>
+  <Networking>Disable</Networking>
+  <VGpu>Disable</VGpu>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <MemoryInMB>8192</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder><HostFolder>C:\ELMEZAEN-QA\input</HostFolder><SandboxFolder>C:\QAInput</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder>
+    <MappedFolder><HostFolder>C:\ELMEZAEN-QA\output</HostFolder><SandboxFolder>C:\QAOutput</SandboxFolder><ReadOnly>false</ReadOnly></MappedFolder>
+  </MappedFolders>
+</Configuration>

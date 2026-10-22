@@ -1,4 +1,4 @@
-const VERSION = "v11-1";
+const VERSION = "final-closure-2";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
 const CORE = [
@@ -7,8 +7,17 @@ const CORE = [
   "/assets/icon-maskable-512.png", "/assets/apple-touch-icon.png", "/assets/premium/hero-640.webp"
 ];
 
+function compatibleResponse(request, response) {
+  if (!response?.ok || response.type === "opaque") return false;
+  const path = new URL(request.url || request, self.location.origin).pathname;
+  const type = (response.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  if (request.destination === "style" || path.endsWith(".css")) return type === "text/css";
+  if (request.destination === "script" || /\.(?:js|mjs)$/.test(path)) return /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)$/.test(type);
+  return true;
+}
+
 async function put(cacheName, request, response) {
-  if (!response?.ok || response.type === "opaque") return;
+  if (!compatibleResponse(request, response)) return;
   const copy = response.clone();
   const cache = await caches.open(cacheName);
   await cache.put(request, copy);
@@ -33,7 +42,8 @@ self.addEventListener("fetch", event => {
 
   const sensitiveNavigation = request.mode === "navigate" && (url.pathname.startsWith("/admin") || url.pathname.startsWith("/worker") || url.pathname.startsWith("/login") || url.pathname.startsWith("/account"));
   if (sensitiveNavigation) {
-    event.respondWith(fetch(request).catch(() => new Response('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>غير متصل</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#020811;color:#f4fbff;font-family:system-ui;text-align:center}main{max-width:420px}a{color:#22d3ee}</style><main><h1>الاتصال بالإنترنت مطلوب</h1><p>لوحة الإدارة والعمليات المالية لا تعرض بيانات محفوظة قديمة أثناء انقطاع الإنترنت.</p><a href="/admin/">إعادة المحاولة</a></main>', { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } })));
+    const retryPath = url.pathname.startsWith("/worker") ? "/worker/" : url.pathname.startsWith("/account") ? "/account/" : url.pathname.startsWith("/login") ? "/login/" : "/admin/";
+    event.respondWith(fetch(request).catch(() => new Response(`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>غير متصل</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#020811;color:#f4fbff;font-family:system-ui;text-align:center}main{max-width:420px}a{color:#22d3ee}</style><main><h1>الاتصال بالإنترنت مطلوب</h1><p>هذه الصفحة تحتاج اتصالًا آمنًا بالإنترنت لعرض بيانات حسابك الحالية.</p><a href="${retryPath}">إعادة المحاولة</a></main>`, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } })));
     return;
   }
 
@@ -51,7 +61,10 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(caches.match(request).then(async cached => {
-    if (cached) return cached;
+    if (cached && compatibleResponse(request, cached)) return cached;
+    if (cached) {
+      for (const name of await caches.keys()) await (await caches.open(name)).delete(request);
+    }
     try {
       const response = await fetch(request);
       await put(RUNTIME_CACHE, request, response);

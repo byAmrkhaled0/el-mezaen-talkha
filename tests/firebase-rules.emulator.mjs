@@ -41,6 +41,8 @@ before(async () => {
       name: "عميل الاختبار",
     });
     await setDoc(doc(context.firestore(), "users/customer-2"), { name: "عميل آخر" });
+    await setDoc(doc(context.firestore(), "users/worker-uid"),{role:'worker',staffId:'worker-1',branchIds:['talkha'],active:true,mustChangePassword:false});
+    await setDoc(doc(context.firestore(), "staff/worker-1"),{userUid:'worker-uid',active:true,branchIds:['talkha']});
     for (const branchId of ["talkha", "mashaya"]) {
       await setDoc(doc(context.firestore(), `bookings/${branchId}-booking`), { branchId, phoneHash: "customer-1" });
       await setDoc(doc(context.firestore(), `cashShifts/${branchId}-shift`), { branchId, status: "OPEN" });
@@ -191,7 +193,7 @@ test("V9.4 content uploads require matching content grant and branch, including 
 });
 
 test("Storage permits a worker to update only their own validated profile photo", async () => {
-  const worker = auth("worker-uid", { role: "worker", staffId: "worker-1" }).storage();
+  const worker = auth("worker-uid", { role: "worker", staffId: "worker-1", branchIds:["talkha"] }).storage();
   await assertSucceeds(uploadBytes(ref(worker, "public/staff/worker-1/profile.webp"), image(), { contentType: "image/webp" }));
   await assertFails(uploadBytes(ref(worker, "public/staff/worker-2/profile.webp"), image(), { contentType: "image/webp" }));
   await assertFails(uploadBytes(ref(worker, "public/staff/worker-1/profile.html"), image(), { contentType: "text/html" }));
@@ -209,4 +211,22 @@ test("Storage allows authorized delete and denies cashier delete", async () => {
   const cashier = auth("cashier-1", { role: "cashier" }).storage();
   await assertFails(deleteObject(ref(cashier, "public/existing.webp")));
   await assertSucceeds(deleteObject(ref(admin, "public/existing.webp")));
+});
+
+
+test("Storage denies temporary-password worker photo upload",async()=>{
+ const worker=auth('worker-uid',{role:'worker',staffId:'worker-1',branchIds:['talkha'],mustChangePassword:true}).storage();
+ await assertFails(uploadBytes(ref(worker,'public/staff/worker-1/gated.webp'),image(),{contentType:'image/webp'}));
+});
+test("Storage denies stale worker claims while canonical credentials are changing",async()=>{
+ await rules.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),'users/worker-uid'),{active:false,mustChangePassword:true,accessOperation:{action:'username'}},{merge:true}));
+ const worker=auth('worker-uid',{role:'worker',staffId:'worker-1',branchIds:['talkha'],mustChangePassword:false}).storage();
+ try {await assertFails(uploadBytes(ref(worker,'public/staff/worker-1/stale.webp'),image(),{contentType:'image/webp'}));}
+ finally {await rules.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),'users/worker-uid'),{role:'worker',staffId:'worker-1',branchIds:['talkha'],active:true,mustChangePassword:false}));}
+});
+test("Storage rejects forged branch and unlinked staff ownership",async()=>{
+ const worker=auth('worker-uid',{role:'worker',staffId:'worker-1',branchIds:['mashaya']}).storage();
+ await assertFails(uploadBytes(ref(worker,'public/staff/worker-1/foreign.webp'),image(),{contentType:'image/webp'}));
+ const unknown=auth('unknown-uid',{role:'worker',staffId:'worker-1',branchIds:['talkha']}).storage();
+ await assertFails(uploadBytes(ref(unknown,'public/staff/worker-1/unlinked.webp'),image(),{contentType:'image/webp'}));
 });

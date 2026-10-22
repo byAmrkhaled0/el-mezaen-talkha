@@ -67,7 +67,8 @@ test('cashier and worker mobile navigation reuse guarded sections and in-page pa
   assert.match(ui, /data-worker-jump="attendance"/);
   assert.match(ui, /data-worker-jump="bookings"/);
   assert.match(ui, /data-worker-jump="tasks"/);
-  assert.match(css, /html\[data-admin-role="cashier"\] \.cashier-mobile-nav,html\[data-admin-role="worker"\] \.cashier-mobile-nav\{display:grid!important/);
+  assert.match(css, /html\[data-admin-role="cashier"\] \.cashier-mobile-nav:not\(\[hidden\]\)\{display:grid!important/);
+  assert.doesNotMatch(css, /html\[data-admin-role="worker"\] \.cashier-mobile-nav[^{}]*\{display:grid!important/);
   assert.match(css, /#bookingsTable tr,#cashierTransactionsTable tr\{display:grid/);
 });
 

@@ -8,6 +8,8 @@ function hasSafeInternalHistory() {
 
 export function bindSafeBack(selector = "[data-safe-back]", defaultFallback = "/") {
   document.querySelectorAll(selector).forEach(control => {
+    if (control.dataset.safeBackBound) return;
+    control.dataset.safeBackBound = "true";
     control.addEventListener("click", event => {
       event.preventDefault();
       if (hasSafeInternalHistory()) history.back();

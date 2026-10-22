@@ -12,7 +12,7 @@ function localConfig(req,res,next) {
   res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','no-store');
   res.end(typeof token==='string'&&/^[a-zA-Z0-9_-]{20,200}$/.test(token)?`globalThis.__LOCAL_APPCHECK_DEBUG_TOKEN__=${JSON.stringify(token)};`:'');
 }
-const entries = new Set(["admin", "worker", "login", "account", "booking", "services", "packages", "team", "reviews", "results", "hair-systems", "branches/talkha", "branches/mashaya"]);
+const entries = new Set(["admin", "worker", "login", "account", "booking", "services", "packages", "team", "reviews", "results", "about", "hair-systems", "branches/talkha", "branches/mashaya", "gallery", "news", "celebrities"]);
 function normalizeRoute(req, res, next) {
   const url = new URL(req.url, "http://localhost");
   if (entries.has(url.pathname.slice(1))) {
@@ -39,7 +39,18 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
+      output: {
+        // Keep the lazy Auth/Analytics boundaries. Group only dependency peers
+        // already required for public catalog reads, avoiding tiny serial chunks.
+        manualChunks(id) {
+          if (/\/src\/(seed-data|package-definitions)\.js$/.test(id)) return "catalog-data";
+          if (/\/node_modules\/(?:firebase\/(?:app|app-check|functions)\/|@firebase\/(?:app|app-check|functions|component|util|logger)\/)/.test(id)) return "firebase-catalog";
+        }
+      },
       input: {
+        gallery: resolve(import.meta.dirname, "gallery/index.html"),
+        news: resolve(import.meta.dirname, "news/index.html"),
+        celebrities: resolve(import.meta.dirname, "celebrities/index.html"),
         worker: resolve(import.meta.dirname, "worker/index.html"),
         booking: resolve(import.meta.dirname, "booking/index.html"),
         main: resolve(import.meta.dirname, "index.html"),
@@ -49,6 +60,7 @@ export default defineConfig({
         ,packages: resolve(import.meta.dirname, "packages/index.html")
         ,reviews: resolve(import.meta.dirname, "reviews/index.html")
         ,team: resolve(import.meta.dirname, "team/index.html")
+        ,about: resolve(import.meta.dirname, "about/index.html")
         ,branchTalkha: resolve(import.meta.dirname, "branches/talkha/index.html")
         ,branchMashaya: resolve(import.meta.dirname, "branches/mashaya/index.html")
         ,hairSystems: resolve(import.meta.dirname, "hair-systems/index.html")

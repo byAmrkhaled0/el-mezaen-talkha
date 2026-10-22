@@ -1,0 +1,127 @@
+/* Final internal layout layer: preserve behavior, isolate scrolling and reduce density. */
+.sidebar{height:calc(100dvh - var(--qa-clearance,0px));overflow:hidden!important}
+.sidebar>.admin-brand,.sidebar>.sidebar-footer{flex:0 0 auto}
+.sidebar>nav{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding-block-end:12px}
+.sidebar>nav>*{flex-shrink:0}
+.sidebar .sidebar-more{min-height:auto;flex-shrink:0}
+.sidebar .sidebar-workspaces{position:static;min-height:max-content;flex-shrink:0;order:5}
+.sidebar .sidebar-footer{position:static;background:var(--panel);padding:10px 0}
+.sidebar .admin-workspace-group{min-height:max-content;overflow:visible}
+.sidebar :is(button,summary){overflow-wrap:anywhere}
+.admin-app .admin-section :is(form,label,.toolbar,.panel-head){min-width:0}
+.admin-app .admin-section :is(input,select,textarea){box-sizing:border-box;min-width:0;max-width:100%;font:inherit}
+.admin-app .admin-section textarea{min-height:88px}
+.admin-app :is(button,summary){touch-action:manipulation}
+.admin-app :is(button,input,select,textarea,summary):focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.admin-app #adminTheme{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
+.admin-header .header-scope{min-width:140px;flex:0 1 175px}
+.admin-header .header-scope select{max-width:none;width:100%;font-size:13px}
+.admin-app #pushButton{min-height:44px;min-width:44px}
+.admin-app #tasks .split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.admin-app #tasks form{display:grid;gap:14px;min-width:0}
+.admin-app #tasks label{display:grid;gap:7px;min-width:0}
+.admin-app #tasks :is(input,select,textarea){width:100%;min-height:44px}
+.admin-app :is(.booking-board-card,.booking-board-empty,.admin-alert-item,.admin-alert-body){background:var(--panel);color:var(--text);border-color:var(--line)}
+.admin-app .booking-board-card-main{background:transparent;color:var(--text)}
+.admin-app .booking-board-card :is(span,small,time),.admin-app .admin-alert-item :is(span,small){color:var(--muted)}
+.admin-app .booking-board-items{min-height:0}
+.admin-app .booking-board-empty{padding:12px}
+.admin-app .booking-board-column>header b{background:var(--bg2);color:var(--text)}
+.admin-app .booking-calendar{min-height:0}
+.admin-app .row-actions details{position:relative;text-align:start}
+.admin-app .row-actions details>summary{cursor:pointer;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text)}
+.admin-app .row-actions details[open]{display:grid;gap:7px;min-width:140px}
+.admin-app .row-actions details[open]>button{width:100%;margin:3px 0;min-height:44px}
+.filter-drawer{margin-block:10px}
+.filter-drawer>summary{cursor:pointer;min-height:44px;padding:10px 0;font-size:13px}
+.filter-drawer .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.workspace-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-block:16px}
+.workspace-controls label,.workspace-request-form label{display:grid;gap:7px}
+.workspace-controls select,.workspace-request-form :is(input,select,textarea){min-height:44px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:10px}
+.workspace-controls label{min-width:180px}
+.workspace-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.workspace-summary>div{display:grid;gap:8px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.workspace-summary span{font-size:12px;color:var(--muted)}.workspace-summary strong{font-size:22px}
+.compact-team,.operation-queue,.workspace-request-create{border:1px solid var(--line);border-radius:14px;padding:16px;margin-block:14px;background:var(--panel)}
+.team-status-row,.queue-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.team-status-row strong,.queue-row strong{flex:1 1 180px}.team-status-row span,.queue-row small{color:var(--muted);font-size:13px}
+.compact-team>small{display:block;line-height:1.8;margin-block:12px;color:var(--muted)}
+.workspace-request-create>summary,.workspace-request>summary{cursor:pointer;min-height:44px;padding:10px 0;font-weight:700}
+.workspace-request{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;overflow-wrap:anywhere}
+.workspace-request-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-block:14px}
+.workspace-request-form label:has(textarea),.workspace-request-form>p{grid-column:1/-1}
+.branch-workspace [role=status]{line-height:1.8;color:var(--muted)}
+.monthly-target-panel[data-target-view=workers] .monthly-target-content{display:grid;grid-template-columns:1fr;gap:8px}
+.monthly-target-panel[data-target-view=workers] .monthly-target-card{display:grid;grid-template-columns:minmax(160px,1.2fr) minmax(220px,1fr) auto;align-items:center;gap:8px 16px;padding:12px 14px}
+.monthly-target-panel[data-target-view=workers] .monthly-target-card h3{font-size:14px;margin:0}
+.monthly-target-panel[data-target-view=workers] .target-gauge{display:none}
+.monthly-target-panel[data-target-view=workers] .monthly-target-card dl{margin:0}
+.monthly-target-panel[data-target-view=workers] .target-state{text-align:start;font-size:12px;grid-column:1}
+.monthly-target-panel[data-target-view=workers] .target-edit{margin:0}
+.monthly-target-panel[data-target-view=workers] .monthly-target-card>small{grid-column:1/-1}
+.monthly-target-card .worker-target-bar{width:100%;height:7px;accent-color:var(--cyan)}
+.monthly-target-panel[data-target-view=branch] .monthly-target-card{max-width:760px}
+.admin-app .receipt-drawer-actions{gap:10px}
+.admin-app .receipt-drawer-summary>div{min-width:0;overflow-wrap:anywhere}
+.admin-app .receipt-drawer-summary>div:last-child b{font-size:24px}
+#adminAlertsDialog,#adminAlertsDialog .customer-drawer-shell,#adminAlertsDialog .customer-drawer-body{background:var(--panel);color:var(--text)}
+#adminAlertsDialog .admin-alert-item.booking-notice{background:var(--bg2);color:var(--text);border-color:var(--line)}
+#adminAlertsDialog .admin-alert-item :is(span,small){color:var(--muted)}
+#adminAlertsDialog .push-health{background:var(--bg2);color:var(--text);border-color:var(--line)}
+#adminAlertsDialog :is(button,.small-button){min-height:44px}
+#receiptDrawer .receipt-drawer-summary>div{min-width:0;overflow-wrap:anywhere}
+#receiptDrawer .receipt-drawer-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#receiptDrawer .receipt-drawer-actions>.receipt-section-title,#receiptDrawer .receipt-drawer-actions>small{grid-column:1/-1}
+#receiptDrawer .receipt-drawer-actions button{min-height:44px}
+html[data-theme=dark] .admin-app{--muted:#b4c6d1}
+body:has(.firebase-emulator-warning){--qa-clearance:36px;padding-bottom:var(--qa-clearance)}
+body .firebase-emulator-warning{box-sizing:border-box!important;font:11px/15px Arial!important;padding:5px!important;min-height:26px!important;max-height:36px!important;pointer-events:none}
+body:has(.firebase-emulator-warning) :is(.worker-nav,.cashier-mobile-nav,.owner-mobile-nav){bottom:var(--qa-clearance)}
+@media(max-width:900px){
+ .admin-app #tasks .split{grid-template-columns:1fr}
+ .admin-app .booking-calendar{display:grid;grid-template-columns:1fr;overflow:visible;gap:16px}
+ .admin-app .booking-board-column{min-width:0}
+ .admin-app .booking-board-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .monthly-target-panel[data-target-view=workers] .monthly-target-card{grid-template-columns:1fr 1fr}
+ .monthly-target-panel[data-target-view=workers] .monthly-target-card dl{grid-column:1/-1}
+}
+@media(max-width:600px){
+ #receiptDrawer .receipt-drawer-actions{grid-template-columns:1fr}
+ .admin-header{display:flex;flex-wrap:wrap!important;gap:6px}
+ .admin-header .header-title{flex:1 1 100px;min-width:0}
+ .admin-header .header-title h1{font-size:15px;max-width:140px}
+ .admin-header .header-scope{flex:1 1 150px;min-width:135px;order:3}
+ .admin-header .header-scope select{max-width:none!important;min-height:44px}
+ .admin-header .header-actions{flex:0 0 auto!important}
+ .admin-app .admin-header .header-actions #pushButton{display:inline-flex!important}
+ .admin-app .booking-board-items,.workspace-request-form{grid-template-columns:1fr}
+ .workspace-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .workspace-summary>div{padding:10px}.workspace-summary span{font-size:11px}.workspace-summary strong{font-size:19px}
+ .monthly-target-panel[data-target-view=workers] .monthly-target-card{grid-template-columns:1fr}
+ .monthly-target-panel[data-target-view=workers] .monthly-target-card dl{grid-column:1}
+ .monthly-target-panel[data-target-view=workers] .target-edit{flex-wrap:nowrap}
+ .workspace-controls label{flex:1;min-width:0}
+}
+
+.admin-app #tasks .tasks-panels{grid-template-columns:repeat(2,minmax(0,1fr))}
+.admin-app .cashier-header{gap:10px}
+.admin-app .cashier-header-tools{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.admin-app .cashier-header-title{min-width:0;flex:1}
+.admin-app #cashierThemeToggle{width:44px;min-width:44px;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text)}
+.monthly-target-controls label:has([type=month]){flex:1 1 165px;min-width:150px;max-width:220px}
+.monthly-target-controls input[type=month]{width:100%;font-size:13px}
+@media(max-width:1100px){
+ .admin-app .sidebar{width:min(300px,88vw)!important;max-width:100vw;box-sizing:border-box}
+ [dir=rtl] .admin-app .sidebar.open{transform:none!important;right:0!important;left:auto!important}
+ .admin-app .sidebar nav{width:100%;overflow-x:hidden}
+}
+@media(max-width:900px){.admin-app #tasks .tasks-panels{grid-template-columns:1fr}}
+@media(max-width:600px){
+ .admin-app .cashier-header{display:flex;flex-wrap:wrap;padding:8px 10px;gap:6px}
+ .admin-app .cashier-role-badge{display:none}
+ .admin-app .cashier-header-title h1{font-size:14px;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .admin-app .cashier-header-title small{display:none}
+ .admin-app .cashier-header-tools{gap:5px}
+ .admin-app #cashierHeaderBranchSlot{font-size:11px;max-width:60px;overflow-wrap:anywhere}
+ .admin-app #cashierAccountButton{padding:6px;font-size:12px;min-width:44px;min-height:44px}
+}

@@ -26,10 +26,25 @@ service firebase.storage {
             || (type == 'celebrity' && request.auth.token.permissions.hasAny(['celebrities']))
             || (type == 'news' && request.auth.token.permissions.hasAny(['posts'])))));
     }
+    function canonicalWorkerPhotoAccess(staffId) {
+      let account = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      let staff = firestore.get(/databases/(default)/documents/staff/$(staffId)).data;
+      return account.role == 'worker' && account.active == true
+        && (!('mustChangePassword' in account) || account.mustChangePassword != true)
+        && !('accessOperation' in account) && !('roleChangePending' in account)
+        && account.staffId == staffId && staff.userUid == request.auth.uid
+        && (!('active' in staff) || staff.active != false)
+        && account.branchIds is list && request.auth.token.branchIds is list
+        && account.branchIds.hasAll(request.auth.token.branchIds)
+        && request.auth.token.branchIds.hasAll(account.branchIds)
+        && staff.branchIds is list && staff.branchIds.hasAll(account.branchIds);
+    }
     function isOwnWorkerPhoto(staffId, fileName) {
       return request.auth != null
         && request.auth.token.role == 'worker'
+        && (!('mustChangePassword' in request.auth.token) || request.auth.token.mustChangePassword != true)
         && request.auth.token.staffId == staffId
+        && canonicalWorkerPhotoAccess(staffId)
         && fileName.matches('[A-Za-z0-9._-]+\\.(jpg|jpeg|png|webp|avif)')
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');

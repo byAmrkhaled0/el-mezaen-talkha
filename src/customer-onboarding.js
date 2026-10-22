@@ -1,0 +1,3 @@
+export const isOtpLoopback = host => ['localhost','127.0.0.1','::1','[::1]'].includes(String(host).toLowerCase()) || /^127\./.test(host);
+export function normalizeOtp(value){const code=String(value).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/\s/g,'');if(!/^\d{6}$/.test(code))throw new Error('اكتب رمز التحقق المكون من 6 أرقام');return code;}
+export function hostedAccountUrl(site){try{const url=new URL(site);if(url.protocol!=='https:'||isOtpLoopback(url.hostname)||url.username||url.password)return '';return new URL('/account/',url.origin).href;}catch{return '';}}

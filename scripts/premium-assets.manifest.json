@@ -228,5 +228,20 @@
     "path": "public/assets/premium/tools-640.webp",
     "width": 640,
     "height": 426
+  },
+  {
+    "path": "public/assets/premium/package-premium-1-400.webp",
+    "width": 400,
+    "height": 267
+  },
+  {
+    "path": "public/assets/premium/package-premium-2-400.webp",
+    "width": 400,
+    "height": 267
+  },
+  {
+    "path": "public/assets/premium/package-premium-3-400.webp",
+    "width": 400,
+    "height": 267
   }
 ]

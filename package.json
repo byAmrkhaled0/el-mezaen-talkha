@@ -19,7 +19,8 @@
     "migration:catalog:dry": "npm --prefix functions run migration:catalog:dry",
     "migration:catalog:apply": "npm --prefix functions run migration:catalog:apply --",
     "verify:assets": "python3 scripts/verify-premium-assets.py",
-    "package:release": "python3 scripts/package-release.py"
+    "package:release": "python3 scripts/package-release.py",
+    "test:final:emulators": "node scripts/final-regression-gate.mjs"
   },
   "dependencies": {
     "@fontsource/alexandria": "^5.2.8",
@@ -31,7 +32,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
-    "vite": "^7.0.6"
+    "vite": "7.3.7"
   },
   "overrides": {
     "@firebase/firestore": {

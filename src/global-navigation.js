@@ -1,5 +1,12 @@
+import './public-interface.css';
+import './public-refinement.css';
+import './client-showcase.css';
+import {mountPublicControls} from './public-controls.js';
+import {publicRoutes} from './public-navigation.js';
+import {refinePublicNavigation} from './public-navigation.js';
 import { bindSafeBack } from './navigation.js';
 export function mountGlobalNavigation() {
+  if (!publicRoutes.some(([url]) => url === location.pathname)) return;
   const path=location.pathname.replace(/\/$/,'');
   if(path && path!='/admin' && !document.querySelector('[data-safe-back]')) {
     const back=document.createElement('a');back.href='/';back.dataset.safeBack='';back.className='global-back';back.textContent='→ رجوع';
@@ -11,3 +18,5 @@ export function mountGlobalNavigation() {
   if(!top.id){const update=()=>{top.hidden=window.scrollY<350;};window.addEventListener('scroll',update,{passive:true});update();top.addEventListener('click',()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));}
 }
 mountGlobalNavigation();
+refinePublicNavigation();
+mountPublicControls();

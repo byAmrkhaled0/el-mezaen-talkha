@@ -2,7 +2,8 @@ export const isLocalEnvironment = () => ['localhost','127.0.0.1','[::1]'].includ
 // Runtime-only untracked developer config; this module contains no token.
 export function configureLocalAppCheck() {
   if (!isLocalEnvironment()) return;
-  globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = globalThis.__LOCAL_APPCHECK_DEBUG_TOKEN__ || true;
+  if (!globalThis.__USE_EMULATORS__ || !globalThis.__LOCAL_APPCHECK_DEBUG_TOKEN__) return;
+  globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = globalThis.__LOCAL_APPCHECK_DEBUG_TOKEN__;
   const config=globalThis.__FIREBASE_CONFIG__||{};
   console.info('[El Mezaen local]',{frontend:import.meta.env.DEV?'Vite dev':'build preview',firebaseProject:config.projectId||'not configured',emulators:Boolean(globalThis.__USE_EMULATORS__),appCheck:'local debug token; registration required'});
   if(config.projectId&&!globalThis.__USE_EMULATORS__) console.info('LOCAL PREVIEW connected to configured Firebase backend. Use emulators for mutations.');

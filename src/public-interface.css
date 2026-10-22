@@ -1,0 +1,7 @@
+/* Shared public form polish; no booking, navigation or data changes. */
+body[data-public-refinement] :is(.booking-dialog,.contact-section,.manage-booking-section,main form) :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=hidden]),.account-main :is(input,select,textarea):not([type=checkbox]):not([type=radio]),.login-shell :is(input,select,textarea){min-height:46px;max-width:100%;font:inherit;font-size:16px;line-height:1.5;padding:11px 13px;border:1px solid var(--line,#6c8797);border-radius:11px;color:var(--text,#eef7fa);background:var(--panel,#102b3b);box-shadow:none}
+body[data-public-refinement] :is(.booking-dialog,main form) label,.account-main form label{line-height:1.8;gap:7px}
+body[data-public-refinement] :is(.btn,.booking-dialog button,main form button),.account-main button,.login-shell button{min-height:44px;line-height:1.5;border-radius:11px;white-space:normal}
+body[data-public-refinement] :is(input,select,textarea,button,a):focus-visible,.account-main :is(input,select,textarea,button,a):focus-visible{outline:3px solid var(--cyan,#44d4df);outline-offset:3px}
+body[data-public-refinement] textarea,.account-main textarea{resize:vertical;min-height:100px}
+@media(max-width:720px){body[data-public-refinement] .section-head{gap:12px;flex-wrap:wrap}body[data-public-refinement] .section-head .btn{max-width:100%;white-space:normal}.account-main form>*{min-width:0;max-width:100%}}

@@ -4,4 +4,9 @@ const variants={haircut:3,beard:2,skin:1,styling:1,'hair-system':1};
 function stableHash(value){let hash=2166136261;for(const char of value){hash^=char.codePointAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 export function serviceMedia(item){const uploaded=safeMediaUrl(item.imageUrl);if(uploaded)return uploaded;const category=serviceAssetCategory(item),count=variants[category];if(!count)return '/assets/premium/tools-640.webp';const identity=String(item.id||item.nameAr||item.nameEn||category);return `/assets/premium/${category}-${1+stableHash(identity)%count}-640.webp`;}
 export function packageMedia(item){const uploaded=safeMediaUrl(item.imageUrl);if(uploaded&&!String(item.imageUrl).endsWith('/assets/package-premium.webp'))return uploaded;return `/assets/premium/package-premium-${1+stableHash(String(item.id||item.nameAr||'package'))%3}-640.webp`;}
+export function packageResponsiveMedia(item){
+  const src=packageMedia(item);
+  if(!/^\/assets\/premium\/package-premium-[1-3]-640\.webp$/.test(src))return {src};
+  return {src,srcset:[400,640,1280].map(width=>`${src.replace('-640.webp',`-${width}.webp`)} ${width}w`).join(', ')};
+}
 export function branchMedia(branch){return safeMediaUrl(branch?.imageUrl)||`/assets/premium/branch-${branch?.id==='mashaya'?'mashaya':'talkha'}-640.webp`;}

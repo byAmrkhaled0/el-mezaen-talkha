@@ -1,3 +1,4 @@
+import {createReadCoordinator} from './admin-read-coordinator.js';
 import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
 import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
@@ -93,10 +94,11 @@ export async function currentAccess(user) {
     } catch { /* Optional marketing access fails closed; normal operations retain their claims. */ }
     permissions = permissions.filter(value => (role === "cashier" && ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].includes(value)) || (role === "manager" && value === "campaigns") ? grants.includes(value) : true);
   }
-  return { role, staffId: token.claims.staffId || null, permissions, branchIds };
+  return { role, staffId: token.claims.staffId || null, permissions, branchIds, mustChangePassword: token.claims.mustChangePassword === true };
 }
 
 export async function logout() {
+  coordinatedRead.reset();
   if (!auth) return;
   try {
     const { deleteToken, getMessaging, getToken, isSupported } = await loadMessaging();
@@ -142,28 +144,19 @@ async function call(name, data = {}) {
   }
 }
 
-async function readCall(name, data = {}) {
-  let lastError;
-  for (const delay of [0, 500, 1500]) {
-    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-    try { return await call(name, data); }
-    catch (error) {
-      lastError = error;
-      if (!String(error?.code || "").match(/unavailable|deadline-exceeded|internal/)) throw error;
-    }
-  }
-  throw lastError;
-}
+// Share only concurrent reads; never cache successful business data or writes.
+const coordinatedRead = createReadCoordinator(call, {identity: () => auth?.currentUser?.uid || 'anonymous'});
+async function readCall(name, data = {}) { return coordinatedRead(name, data); }
 
 export const getDashboard = (branchId = "all") => readCall("getAdminDashboard", { branchId });
 export const getOwnerMobileHistory = options => readCall("getOwnerMobileHistory", options);
 export const setBranchMonthlyTarget = payload => call("setBranchMonthlyTarget", payload);
 export const getCashierSnapshot = (branchId = "all") => readCall("getCashierSnapshot", { branchId });
 export const getPosOffers = branchId => readCall("getPosOffers", { branchId });
-export const getBusinessDashboard = month => readCall("getBusinessDashboard", { month });
+export const getBusinessDashboard = (month, branchId = "all") => readCall("getBusinessDashboard", { month, branchId });
 export const getServiceTargetsDashboard = (month, branchId = "all") => readCall("getServiceTargetsDashboard", { month, branchId });
 export const upsertServiceTarget = payload => call("upsertServiceTarget", payload);
-export const getCollection = (collection, limit = 100, cursor = "") => readCall("getAdminCollection", { collection, limit, cursor });
+export const getCollection = (collection, limit = 100, cursor = "", branchId = "all") => readCall("getAdminCollection", { collection, limit, cursor, branchId });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
 export const secureDeleteRecord = (kind, id, reason = "") => call("adminSecureDelete", { kind, id, reason });
@@ -174,7 +167,7 @@ export const previewPosCoupon = payload => readCall("validateCoupon", payload);
 export const getBookingCalendar = (from, to, branchId = "all") => readCall("getBookingCalendar", { from, to, branchId });
 export const getCustomer360 = customerId => readCall("getCustomer360", { customerId });
 export const rotateCustomerQr = payload => call("rotateCustomerQr", payload);
-export const getCashOperations = (branchId, options = {}) => readCall("getCashOperations", { branchId, includeReports: options.includeReports === true });
+export const getCashOperations = (branchId, options = {}) => readCall("getCashOperations", { branchId, includeReports: options.includeReports === true, ...(options.payrollPreview === true ? { payrollPreview: true } : {}) });
 export const openCashShift = payload => call("openCashShift", payload);
 export const addCashMovement = payload => call("addCashMovement", payload);
 export const closeCashShift = payload => call("closeCashShift", payload);
@@ -201,7 +194,7 @@ export const changeUserRole = (uid, email, role, permissions = [], branchIds = [
 export const createUserAccount = payload => call("createAdminUser", payload);
 export const getAttendanceDashboard = (dateKey, branchId = "all") => readCall("getAttendanceDashboard", { dateKey, branchId });
 export const recordWorkerAttendance = payload => call("recordWorkerAttendance", payload);
-export const getWorkerWorkspace = () => readCall("getWorkerWorkspace");
+export const getWorkerWorkspace = (activeBranchId = "") => readCall("getWorkerWorkspace", { activeBranchId });
 export const createWorkerTask = payload => call("createWorkerTask", payload);
 export const updateWorkerTask = (taskId, status) => call("updateWorkerTask", { taskId, status });
 export const notifyWorker = payload => call("notifyWorker", payload);
@@ -257,6 +250,18 @@ export async function uploadImage(file, folder = "content", onProgress = null) {
   const target = ref(storage, `public/${folder}/${crypto.randomUUID()}-${safeName}`);
   await uploadMediaWithProgress(target, optimized, { contentType: optimized.type, cacheControl: "public,max-age=31536000,immutable" }, onProgress);
   return getDownloadURL(target);
+}
+
+export async function uploadPngFavicon(file,onProgress=null) {
+ if(typeof globalThis.createImageBitmap!=='function')throw Error('هذا المتصفح لا يدعم تجهيز الأيقونة؛ استخدم متصفحًا حديثًا');
+ if(!file||file.type!=='image/png'||file.size>10*1024*1024)throw Error('اختر أيقونة PNG أقل من 10MiB');
+ const bitmap=await createImageBitmap(file),canvas=document.createElement('canvas');
+ canvas.width=256;canvas.height=256;const context=canvas.getContext('2d',{alpha:true});
+ const scale=Math.min(256/bitmap.width,256/bitmap.height);const w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale));context.drawImage(bitmap,(256-w)/2,(256-h)/2,w,h);bitmap.close();
+ const blob=await new Promise((resolve,reject)=>canvas.toBlob(x=>x?resolve(x):reject(Error('تعذر تجهيز PNG')),'image/png'));
+ if(blob.size>=5*1024*1024)throw Error('الأيقونة يجب أن تكون أقل من 5MiB');
+ const target=ref(storage,`public/branding/${crypto.randomUUID()}-favicon.png`);
+ await uploadMediaWithProgress(target,blob,{contentType:'image/png',cacheControl:'public,max-age=31536000,immutable'},onProgress);return getDownloadURL(target);
 }
 
 export async function validateVideoFile(file) {
@@ -320,6 +325,7 @@ export async function createVideoPoster(file) {
 }
 
 export async function enablePush() {
+  if(globalThis.__USE_EMULATORS__)throw new Error('تنبيهات الموقع متاحة هنا؛ إشعارات الجهاز تحتاج إعداد Firebase Messaging واختبارًا منفصلًا خارج المحاكيات.');
   if (!configured || !globalThis.__VAPID_KEY__ || !("Notification" in globalThis) || !("serviceWorker" in navigator)) throw new Error("PUSH_NOT_CONFIGURED");
   const { getMessaging, getToken, isSupported } = await loadMessaging();
   if (!await isSupported()) throw new Error("PUSH_NOT_CONFIGURED");
@@ -328,7 +334,7 @@ export async function enablePush() {
   if (permission !== "granted") throw new Error("PUSH_DENIED");
   const token = await getToken(getMessaging(app), { vapidKey: globalThis.__VAPID_KEY__, serviceWorkerRegistration: registration });
   if (!token) throw new Error("PUSH_TOKEN_FAILED");
-  await call("registerPushToken", { token });
+  await call("registerPushToken", { token, branchId:document.querySelector("#headerBranchFilter")?.value || "all" });
   return true;
 }
 
@@ -357,10 +363,75 @@ export async function staffPhoneLogin(phone, elementId) {
 }
 export const markWorkerNotificationRead = id => call('markWorkerNotificationRead', { id });
 export async function watchWorkerPush(callback) {
-  if (!configured) return () => {};
-  const { getMessaging, onMessage, isSupported } = await loadMessaging();
-  if (!await isSupported()) return () => {};
-  return onMessage(getMessaging(app), callback);
+  if (!configured || globalThis.__USE_EMULATORS__ || !globalThis.__FIREBASE_CONFIG__?.messagingSenderId) return () => {};
+  try {
+    const { getMessaging, onMessage, isSupported } = await loadMessaging();
+    if (!await isSupported()) return () => {};
+    return onMessage(getMessaging(app), callback);
+  } catch { return () => {}; /* Optional push availability never blocks the worker account. */ }
 }
 
 export const getAccessAccountCenter = (data = {}) => readCall('getAccessAccountCenter', data);
+
+export async function loginWorkerUsername(username, password) {
+  const name = String(username || '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(name)) throw new Error('INVALID_WORKER_USERNAME');
+  const result = await login(`${name}@workers.el-mezaen.invalid`, password);
+  const token = await result.user.getIdTokenResult(true);
+  if (token.claims.role !== 'worker') { await logout(); throw new Error('INVALID_WORKER_ACCOUNT'); }
+  return result;
+}
+export async function changeOwnWorkerPassword(currentPassword, newPassword) {
+  const user = auth?.currentUser;
+  if (!user?.email) throw new Error('سجل الدخول أولًا');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+  await user.getIdToken(true);
+  await call('changeWorkerPassword', {newPassword});
+  await logout();
+}
+
+export const getWorkerLeaderboard = (month, branchId) => readCall("getWorkerLeaderboard", {month, branchId});
+
+export const getWorkerRequests = payload => readCall("getWorkerRequests", payload);
+export const submitWorkerRequest = payload => call("submitWorkerRequest", payload);
+export const updateWorkerRequest = payload => call("updateWorkerRequest", payload);
+export const getWorkerAdvancePolicy = staffId => readCall("getWorkerAdvancePolicy", { staffId });
+export const setWorkerAdvancePolicy = payload => call("setWorkerAdvancePolicy", payload);
+
+export const checkWorkerLeaveConflicts = payload => readCall("checkWorkerLeaveConflicts", payload);
+export const activateWorkerLeave = payload => call("activateWorkerLeave", payload);
+
+export const getReadyWorkerAdvances = payload => readCall('getReadyWorkerAdvances', payload);
+export const disburseWorkerAdvance = payload => call('disburseWorkerAdvance', payload);
+export const getWorkerAdvanceBalance = payload => readCall('getWorkerAdvanceBalance', payload);
+
+export const getMonthlyTargetProgress = data => readCall('getMonthlyTargetProgress',data);
+export const setWorkerMonthlyTarget = data => call('setWorkerMonthlyTarget',data);
+
+export const getAdminBusinessInsights=data=>call('getAdminBusinessInsights',data);
+export const adminBusinessAssistant=data=>call('adminBusinessAssistant',data);
+export const prepareAdminTargetAction=data=>call('prepareAdminTargetAction',data);
+export const confirmAdminTargetAction=data=>call('confirmAdminTargetAction',data);
+
+export const getTargetAchievementNotifications=data=>readCall('getTargetAchievementNotifications',data);
+export const markTargetAchievementNotificationsRead=ids=>call('markTargetAchievementNotificationsRead',{ids});
+
+export const getCashHandover=data=>readCall('getCashHandover',data);
+export const acceptCashHandover=data=>call('acceptCashHandover',data);
+export const resolveCashHandover=data=>call('resolveCashHandover',data);
+export const getWorkerAvailability=data=>readCall('getWorkerAvailability',data);
+export const setWorkerAvailability=data=>call('setWorkerAvailability',data);
+export const cancelWorkerAvailability=data=>call('cancelWorkerAvailability',data);
+
+export const getWorkerServiceSessions=data=>readCall('getWorkerServiceSessions',data);
+export const startWorkerService=data=>call('startWorkerService',data);
+export const extendWorkerService=data=>call('extendWorkerService',data);
+export const finishWorkerService=data=>call('finishWorkerService',data);
+export const getCashHandoverHistory=data=>readCall('getCashHandoverHistory',data);
+
+export const getBranchWorkRequests=payload=>readCall('getBranchWorkRequests',payload);
+export const submitBranchWorkRequest=payload=>call('submitBranchWorkRequest',payload);
+export const updateBranchWorkRequest=payload=>call('updateBranchWorkRequest',payload);
+
+export const listBranchWorkerAccounts=data=>readCall('listBranchWorkerAccounts',data);
+export const createBranchWorkerAccount=data=>call('createBranchWorkerAccount',data);

@@ -12,7 +12,7 @@ assert.ok(process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_AUTH_EMULA
 process.env.GCLOUD_PROJECT = projectId;
 const requireFunctions = createRequire(new URL("../functions/package.json", import.meta.url));
 const { getApp } = requireFunctions("firebase-admin/app");
-const { getFirestore, Timestamp } = requireFunctions("firebase-admin/firestore");
+const { getFirestore, Timestamp, FieldValue } = requireFunctions("firebase-admin/firestore");
 const { getAuth } = requireFunctions("firebase-admin/auth");
 // This tests production handlers with verified emulator tokens and Firestore data.
 // HTTP transport still requires the Functions emulator, which needs Unix sockets.
@@ -184,7 +184,7 @@ test("V8 customer can opt in and out only on owned identity with consent history
   assert.ok(history.docs.every(doc => doc.data().source === "customer_account"));
 });
 
-test("admin sees both branches, selected branch, monthly targets, and can edit a target", async () => {
+test("admin sees both branches and monthly targets; saved monthly target remains locked", async () => {
   const both = await allowed("getAdminDashboard", "admin", { branchId: "all" });
   assert.equal(both.stats.bookingCount, 3); // Includes legacy only for global admin.
   assert.equal(both.stats.monthlyRevenueTarget, 3000);
@@ -193,8 +193,8 @@ test("admin sees both branches, selected branch, monthly targets, and can edit a
   assert.equal(talkha.stats.bookingCount, 1);
   assert.equal(mashaya.stats.bookingCount, 1);
   assert.notEqual(talkha.stats.todayRevenue, mashaya.stats.todayRevenue);
-  await allowed("setBranchMonthlyTarget", "admin", { branchId: "talkha", month, targetAmount: 1100 });
-  assert.equal((await allowed("getAdminDashboard", "admin", { branchId: "talkha" })).stats.monthlyRevenueTarget, 1100);
+  await denied("setBranchMonthlyTarget", "admin", { branchId: "talkha", month, targetAmount: 1100 }, "ALREADY_EXISTS");
+  assert.equal((await allowed("getAdminDashboard", "admin", { branchId: "talkha" })).stats.monthlyRevenueTarget, 1000);
 });
 
 for (const [role, own, other] of [["cashierMashaya", "mashaya", "talkha"], ["cashierTalkha", "talkha", "mashaya"], ["managerMashaya", "mashaya", "talkha"], ["managerTalkha", "talkha", "mashaya"]]) {
@@ -524,8 +524,15 @@ test("V9.2 live shift aggregates all ledger rows, records one classified advance
   await denied("addCashMovement", "cashierTalkha", { type: "CASH_OUT", branchId: "mashaya", category: "advance", staffId: "mashaya-staff", reason: "سلفة", amount: 20, idempotencyKey: "v92_cross_advance_123456789" });
   await denied("addCashMovement", "cashierTalkha", { type: "CASH_OUT", branchId: "talkha", category: "advance", staffId: "mashaya-staff", reason: "سلفة", amount: 20, idempotencyKey: "v92_wrong_staff_123456789" }, "FAILED_PRECONDITION");
   const advanceData = { type: "CASH_OUT", branchId: "talkha", category: "advance", staffId: "talkha-staff", reason: "سلفة نقدية", amount: 20, idempotencyKey: "v92_advance_once_123456789" };
-  const advance = await allowed("addCashMovement", "cashierTalkha", advanceData);
-  assert.equal((await allowed("addCashMovement", "cashierTalkha", advanceData)).idempotent, true);
+  // The current approved-request policy deliberately rejects the legacy direct advance route.
+  await denied("addCashMovement", "cashierTalkha", advanceData, "FAILED_PRECONDITION");
+  const requestId="v92_approved_advance";
+  await db.doc(`workerRequests/${requestId}`).set({requestId,staffId:"talkha-staff",staffNameAr:"عامل اختبار",branchId:"talkha",requestType:"SALARY_ADVANCE",requestData:{amount:20,reason:"اختبار سلفة معتمدة"},status:"APPROVED",integrationStatus:"AWAITING_DISBURSEMENT",approvedAmount:20,finalDecisionActor:"admin",finalDecisionAt:FieldValue.serverTimestamp(),disbursementReference:null,version:3,createdAt:FieldValue.serverTimestamp()});
+  await db.doc("workerRequests/v92_foreign_approved").set({requestId:"v92_foreign_approved",staffId:"mashaya-staff",branchId:"mashaya",requestType:"SALARY_ADVANCE",requestData:{amount:20},status:"APPROVED",integrationStatus:"AWAITING_DISBURSEMENT",approvedAmount:20,finalDecisionActor:"admin",finalDecisionAt:FieldValue.serverTimestamp(),version:3});
+  await denied("disburseWorkerAdvance","cashierTalkha",{requestId:"v92_foreign_approved",expectedVersion:3,expectedAmount:20,expectedShiftId:opened.shiftId});
+  const approvedAdvance={requestId,expectedVersion:3,expectedAmount:20,expectedShiftId:opened.shiftId};
+  const advance = await allowed("disburseWorkerAdvance", "cashierTalkha", approvedAdvance);
+  assert.equal((await allowed("disburseWorkerAdvance", "cashierTalkha", approvedAdvance)).idempotent, true);
   const movement = (await db.doc(`cashMovements/${advance.movementId}`).get()).data();
   assert.equal(movement.shiftId, opened.shiftId);
   assert.equal(movement.staffId, "talkha-staff");

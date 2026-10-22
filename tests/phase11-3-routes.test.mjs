@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {createServer,preview} from 'vite';
-const root=new URL('../',import.meta.url).pathname;
-const entries=['admin','worker','login','account','booking','services','packages','team','reviews','results','hair-systems','branches/talkha','branches/mashaya'];
+import {createServer,preview} from 'vite';import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const entries=['admin','worker','login','account','booking','services','packages','team','reviews','results','about','gallery','news','celebrities','hair-systems','branches/talkha','branches/mashaya'];
 for(const mode of ['dev','preview'])test(`Actual Vite ${mode}: all extensionless MPA routes preserve entry and query`,async()=>{
  const server=mode==='dev'?await createServer({root,server:{host:'127.0.0.1',port:0,strictPort:false}}):await preview({root,preview:{host:'127.0.0.1',port:0,strictPort:false}});
  if(mode==='dev')await server.listen();const http=mode==='dev'?server.httpServer:server.httpServer;const origin=`http://127.0.0.1:${http.address().port}`;

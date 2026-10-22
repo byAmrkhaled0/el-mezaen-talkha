@@ -25,10 +25,12 @@
     </form>
     <section class="login-card" id="workerLoginCard" aria-labelledby="workerAccessTitle">
       <h2 id="workerAccessTitle">دخول العامل</h2><p>حجوزاتك وحضورك ومهامك في مكان واحد.</p>
-      <button class="login-button" type="button" id="workerGoogle">المتابعة باستخدام Google</button>
+      <form id="workerUsernameForm"><label>اسم المستخدم<input name="username" placeholder="اسم المستخدم فقط بدون @" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" dir="ltr" required></label><label>كلمة المرور<input name="password" type="password" autocomplete="current-password" required></label><button class="login-button" type="submit">دخول العامل</button></form>
+      <template id="legacyWorkerAccess">      <button class="login-button" type="button" id="workerGoogle">المتابعة باستخدام Google</button>
       <form id="workerPhoneForm"><label>رقم الهاتف<input name="phone" type="tel" autocomplete="tel" placeholder="01xxxxxxxxx" required></label><div id="workerRecaptcha"></div><button class="login-button">إرسال رمز التحقق</button></form>
       <form id="workerOtpForm" hidden><label>رمز التحقق<input name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required></label><button class="login-button">تأكيد الرمز</button></form>
       <div id="pendingActivation" class="pending-activation" hidden><h3>تم إنشاء حسابك</h3><p>الحساب في انتظار اعتماد الإدارة.</p><button id="pendingSignOut" type="button" class="login-button">تسجيل الخروج</button></div><form id="workerInviteForm" hidden><p>تم إنشاء حسابك، في انتظار اعتماد الإدارة</p><label>رمز دعوة الإدارة<input name="secret" autocomplete="off" required></label><button class="login-button">تفعيل الدعوة</button></form>
+</template>
       <p id="workerAccessStatus" role="status"></p>
     </section>
   </div></main>

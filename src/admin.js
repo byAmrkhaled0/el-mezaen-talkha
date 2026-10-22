@@ -1,9 +1,32 @@
+import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
+import {createBranchWorkspace} from './branch-workspace.js';
+import './internal-polish.js';
+import {mountWorkerAvailability,syncCashHandover} from './operations-controls.js';
+import {getTargetAchievementNotifications,markTargetAchievementNotificationsRead} from './admin-api.js';
+import {mountAdminAdvisor} from './admin-advisor.js';
+import {mountDashboardScope} from './dashboard-scope.js';
+import {mountMonthlyTargetPanel} from './monthly-target-panel.js';
+import './cms-media.css';
+import {createCashierAdvanceCenter} from './advance-center.js';
+import {getReadyWorkerAdvances,disburseWorkerAdvance,getWorkerAdvanceBalance} from './admin-api.js';
+import {createAdminRequestCenter} from './request-center.js';
+import './worker-requests.css';
+import {getWorkerRequests,updateWorkerRequest,getWorkerAdvancePolicy,setWorkerAdvancePolicy,checkWorkerLeaveConflicts,activateWorkerLeave} from './admin-api.js';
+import {getWorkerLeaderboard} from "./admin-api.js";
 import { staffBranchHealth } from './staff-data-health.js';
 import { isLocalEnvironment, localAppCheckSetup } from './local-environment.js';
 import { staffRouteGuard } from "./staff-routing.js";
 import { getAccessAccountCenter, createWorkerInvitation, manageAccessAccount, markWorkerNotificationRead, watchWorkerPush } from './admin-api.js';
 import "./admin.css";
-import { addCashMovement, adjustCustomerWallet, changeBooking, checkWhatsappMarketingRecipient, changeOwnPassword, changeUserRole, closeBusinessDay, closeCashShift, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, createWorkerTask, currentAccess, deleteEntity, enablePush, ensureAdminAppCheckReady, findCustomerByPhone, getAttendanceDashboard, getAuditEvents, getBookingCalendar, getBusinessDashboard, getBusinessReport, getCashierSnapshot, getCashOperations, getCollection, getCustomer360, getDashboard, getOwnerMobileHistory, getPosOffers, getServiceTargetsDashboard, getWorkerWorkspace, getWhatsappCampaignOptions, getWhatsappCampaignRecipients, getWhatsappCampaignStats, logout, notifyWorker, openCashShift, previewPosCoupon, previewWhatsappCampaign, rebuildBusinessReport, recordExpense, recordPayrollPayment, recordWorkerAttendance, rescheduleBooking, rotateCustomerQr, saveEntity, scanCustomerCode, secureDeleteRecord, setBranchMonthlyTarget, updateExpense, updateWorkerProfilePhoto, updateWorkerTask, upsertServiceTarget, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
+import './mobile-management.css';
+import './admin-appearance.css';
+import './admin-workspace.css';
+import './admin-interface.css';
+import './closure-ui.css';
+import {syncAdminWorkspace} from './admin-workspace.js';
+import {siteMediaSlots} from './site-media.js';
+import {mountSiteMediaEditor,refreshSiteMediaEditor,pendingSiteMediaFile,setSiteMediaSaveState,stageSiteMediaUpload,completeSiteMediaSave} from './site-media-editor.js';
+import { addCashMovement, adjustCustomerWallet, changeBooking, checkWhatsappMarketingRecipient, changeOwnPassword, changeUserRole, closeBusinessDay, closeCashShift, createPosOrder, createUserAccount, createVideoPoster, createWhatsappCampaign, createWorkerTask, currentAccess, deleteEntity, enablePush, ensureAdminAppCheckReady, findCustomerByPhone, getAttendanceDashboard, getAuditEvents, getBookingCalendar, getBusinessDashboard, getBusinessReport, getCashierSnapshot, getCashOperations, getCollection, getCustomer360, getDashboard, getOwnerMobileHistory, getPosOffers, getServiceTargetsDashboard, getWorkerWorkspace, getWhatsappCampaignOptions, getWhatsappCampaignRecipients, getWhatsappCampaignStats, logout, notifyWorker, openCashShift, previewPosCoupon, previewWhatsappCampaign, rebuildBusinessReport, recordExpense, recordPayrollPayment, recordWorkerAttendance, rescheduleBooking, rotateCustomerQr, saveEntity, scanCustomerCode, secureDeleteRecord, setBranchMonthlyTarget, updateExpense, updateWorkerProfilePhoto, updateWorkerTask, upsertServiceTarget, updateWhatsappCampaignState, updateWhatsappConsent, uploadImage, uploadPngFavicon, uploadVideo, validateVideoFile, verifyAdminPassword, watchAuth } from "./admin-api.js";
 import { cashVariance, closeShiftReasonMissing } from "./cashier-shift.js";
 import { isInvalidAuthSession } from "./admin-session.js";
 import { isVideoContent, safeMediaUrl, videoSource } from "./media.js";
@@ -26,16 +49,19 @@ const cairoDateKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/
 const escapeHtml = value => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML.replaceAll('"', "&quot;").replaceAll("'", "&#39;"); };
 const escapeAttr = value => escapeHtml(String(value ?? "")).replaceAll('"', "&quot;");
 const state = { user: null, role: null, staffId: "", permissions: new Set(), branchIds: [], hub: "", dashboard: { bookings: [], ledger: [], expenses: [], stats: {} }, attendance: { rows: [] }, worker: { staff: null, attendance: null, bookings: [], tasks: [], notifications: [], target: {} }, business: { payroll: [], serviceTargets: [], expenses: [], inventory: [], drinks: [], reviews: [], stats: {} }, calendar: { bookings: [], staff: [] }, cash: { state: null, shift: null, snapshot: null, movements: [] }, loadedAt: { dashboard: 0, cashier: 0, business: 0, calendar: 0, cash: 0, attendance: 0, worker: 0 }, posCart: [], posOffers: [], posOffersBranch: "", posOffersLoadedAt: 0, bookingActionKeys: new Map(), posIdempotencyKey: "", posBookingId: "", editingExpenseId: "", editingUserId: "", collections: new Map(), collectionCursors: new Map(), section: "workspaceHome", expenseInventoryKind: "all", lastBookingIds: new Set(), editor: { collection: "", id: "", preset: {} }, secureDelete: { kind: "", id: "", label: "" }, manualOffer: { offer: null, recipients: [], nextCursor: null, opened: new Set(), message: "" } };
-const permissionLabels = { dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", attendance: "الحضور والموجودون", tasks: "مهام وتنبيهات العمال", revenue: "الدفع والإيرادات", refundTransactions: "استرداد المعاملات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", faqs: "أسئلة الشات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
+const branchWorkspace=createBranchWorkspace({state,navigate:id=>showSection(id)});
+const workerRequestCenter=createAdminRequestCenter(()=>state,{getWorkerRequests,updateWorkerRequest,getWorkerAdvancePolicy,setWorkerAdvancePolicy,checkWorkerLeaveConflicts,activateWorkerLeave,getCollection,getWorkerAdvanceBalance});
+const cashierAdvanceCenter=createCashierAdvanceCenter(()=>({role:state.role,uid:state.user?.uid,branchId:cashBranch(),shift:state.cash.shift}),{getReadyWorkerAdvances,disburseWorkerAdvance},()=>loadCashOperations(true));
+const permissionLabels = { websiteContent:"إدارة محتوى الموقع", dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", attendance: "الحضور والموجودون", tasks: "مهام وتنبيهات العمال", revenue: "الدفع والإيرادات", refundTransactions: "استرداد المعاملات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", faqs: "أسئلة الشات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = ROLE_DEFAULT_PERMISSIONS;
-const socialSections = new Set(["packages", "offers", "coupons", "reviews", "gallery", "results", "hairMedia", "celebrities", "posts", "faqs", "campaigns"]);
+const socialSections = new Set(["adminAssistant","websiteContent", "packages", "offers", "coupons", "reviews", "gallery", "results", "hairMedia", "celebrities", "posts", "faqs", "campaigns"]);
 let dashboardPage = 1;
 let dashboardRequestVersion = 0;
 let cashierRequestVersion = 0;
 let calendarRequestVersion = 0;
 let teamRequestVersion = 0;
 let attendanceRequestVersion = 0;
-const managementSections = new Set(["dashboard", "pos", "bookings", "calendar", "attendance", "tasks", "worker", "customers", "revenue", "expenses", "cash", "cashierGoals", "dailyClosing", "inventory", "drinks", "payroll", "services", "staff", "rewards", "schedule", "settings", "activity", "users", "mobileContent"]);
+const managementSections = new Set(["branchOperations","teamAvailability","targets","customerRequests","branchNeeds","dashboard", "pos", "bookings", "calendar", "attendance", "tasks", "worker", "customers", "revenue", "expenses", "cash", "cashierGoals", "workerTargets", "dailyClosing", "inventory", "drinks", "payroll", "workerRequests", "services", "staff", "rewards", "schedule", "settings", "activity", "users", "mobileContent"]);
 const contentGrants = { gallery: "gallery", result: "results", "hair-system": "hairMedia", celebrity: "celebrities", news: "posts", offer: "offers" };
 const canManageContent = type => state.role === "admin" || (contentGrants[type] && state.permissions.has(contentGrants[type]));
 const hasContentWorkspace = () => Object.keys(contentGrants).some(canManageContent);
@@ -93,19 +119,30 @@ const fields = {
   reviews: [["name", "اسم العميل", "text", true], ["rating", "التقييم من 5", "number", true], ["comment", "التعليق", "textarea", true, null, true], ["bookingCode", "كود الحجز", "text"], ["status", "حالة التقييم", "select", true, [["pending", "بانتظار المراجعة"], ["published", "منشور"], ["rejected", "مرفوض"]]], ["featured", "تقييم مميز ومثبت", "boolean"], ["adminReply", "رد الإدارة", "textarea", false, null, true]],
   faqs: [["questionAr", "السؤال بالعربية", "text", true, null, true], ["answerAr", "الإجابة المحددة", "textarea", true, null, true], ["keywords", "كلمات البحث (بفواصل)", "text", false, null, true], ["actions", "الأزرار: book, services, hair, branch, whatsapp, manage", "text", false, null, true], ["branchIds", "يظهر في", "branch-scope", true, null, true], ["sortOrder", "ترتيب الظهور", "number"], ["active", "مفعل", "boolean"]],
   holidays: [["branchId", "الفرع", "branch-select", true], ["date", "التاريخ", "date", true], ["reasonAr", "السبب", "text"], ["closed", "مغلق بالكامل", "boolean"]],
-  content: [["type", "", "hidden"], ["mediaType", "", "hidden"], ["imageUrl", "", "hidden"], ["videoUrl", "", "hidden"], ["beforeImageUrl", "", "hidden"], ["afterImageUrl", "", "hidden"], ["linkUrl", "", "hidden"], ["titleAr", "العنوان", "text", true], ["branchIds", "يظهر في", "branch-scope", true, null, true], ["bodyAr", "وصف اختياري", "textarea", false, null, true], ["mediaFile", "اختر صورة أو فيديو من الجهاز", "media-file", false, null, true], ["beforeFile", "قبل (اختياري للنتائج)", "file", false, null, true], ["afterFile", "بعد (اختياري للنتائج)", "file", false, null, true], ["status", "حالة المحتوى", "select", true, [["draft", "مسودة"], ["published", "منشور"], ["hidden", "مخفي"]]], ["sortOrder", "ترتيب الظهور", "number"]],
+  content: [["type", "", "hidden"], ["mediaType", "", "hidden"], ["imageUrl", "", "hidden"], ["videoUrl", "", "hidden"], ["beforeImageUrl", "", "hidden"], ["afterImageUrl", "", "hidden"], ["linkUrl", "", "hidden"], ["titleAr", "العنوان", "text", true], ["branchIds", "يظهر في", "branch-scope", true, null, true], ["bodyAr", "وصف اختياري", "textarea", false, null, true], ["mediaFile", "اختر صورة أو فيديو من الجهاز", "media-file", false, null, true], ["posterFile", "غلاف الفيديو (اختياري؛ صورة بدل الغلاف التلقائي)", "file", false, null, true], ["beforeFile", "قبل (اختياري للنتائج)", "file", false, null, true], ["afterFile", "بعد (اختياري للنتائج)", "file", false, null, true], ["status", "حالة المحتوى", "select", true, [["draft", "مسودة"], ["published", "منشور"], ["hidden", "مخفي"]]], ["sortOrder", "ترتيب الظهور", "number"]],
 };
 
-const sectionTitles = Object.fromEntries($$('[data-section]').map(button => [button.dataset.section, button.textContent.trim().replace(/^[^\s]+\s/, "")]));
+const sectionTitles = Object.fromEntries($$('[data-section]').map(button => {
+  const label = button.cloneNode(true);
+  label.querySelectorAll('svg,.nav-icon,[aria-hidden="true"]').forEach(icon => icon.remove());
+  return [button.dataset.section, label.textContent.trim().replace(/^[^\p{L}\p{N}]+/u, "")];
+}));
+sectionTitles.websiteContent = "إدارة محتوى الموقع";
 sectionTitles.workspaceHome = "البوابات الرئيسية";
 sectionTitles.cashierGoals = "أهداف الخدمات";
+sectionTitles.workerTargets="العمال — التارجت";
 
-function sectionPermission(id) { return ({ calendar: "bookings", cash: "pos", cashierGoals: "dashboard", dailyClosing: "revenue", worker: "dashboard" })[id] || id; }
-const cashierSections = new Set(["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses"]);
+function sectionPermission(id) { return ({ calendar: "bookings", cash: "pos", cashierGoals: "dashboard", workerTargets:"teamOperations", workerRequests: "payroll", dailyClosing: "revenue", worker: "dashboard" })[id] || id; }
+const cashierSections = new Set(["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses", "workerTargets"]);
 const cashierOptionalMarketing = new Set(["offers", "campaigns"]);
 function canOpenSection(id) {
+  if(id==='targets')return ['admin','cashier','manager'].includes(state.role)&&(state.role==='admin'||state.permissions.has('dashboard'));
+  if(id==='teamAvailability')return state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations');
+  if(['branchOperations','customerRequests','branchNeeds'].includes(id))return state.role==='admin'||state.role==='cashier'&&state.permissions.has('pos')&&(id==='branchNeeds'||state.permissions.has('bookings'))&&(id!=='branchOperations'||state.permissions.has('teamOperations'));
+  if(id==="workerTargets")return ["admin","cashier"].includes(state.role)&&state.permissions.has("teamOperations");
+  if(id==="adminAssistant")return state.role==="admin";
   if (!document.getElementById(id)?.classList.contains("admin-section")) return false;
-  if (id === "mobileContent") return hasContentWorkspace();
+  if (id === "mobileContent" || id === "websiteContent") return state.role !== "worker" && hasContentWorkspace();
   if (state.role === "cashier") {
     return (cashierSections.has(id) || cashierOptionalMarketing.has(id)) && state.permissions.has(sectionPermission(id));
   }
@@ -164,7 +201,7 @@ async function openHub(hub) {
   $("#adminApp").dataset.hub = hub;
   $("#adminApp")?.classList.remove("portal-mode");
   applyAccess();
-  const preferred = state.role === "worker" ? "worker" : hub === "management" && sections.includes("dashboard") ? "dashboard" : sections[0];
+  const preferred = state.role === "worker" ? "worker" : hub === "social" && sections.includes("websiteContent") ? "websiteContent" : hub === "management" && sections.includes("dashboard") ? "dashboard" : sections[0];
   await showSection(preferred);
 }
 
@@ -202,12 +239,14 @@ function toast(message, error = false) {
 }
 
 function setTheme(theme) {
-  theme = "light"; // Admin v4.1 uses the reference's light palette even with an old saved preference.
+  theme = theme === "dark" ? "dark" : "light";
   document.documentElement.dataset.theme = theme;
   saveStaffTabPreference("mz-admin-theme", theme);
   $("#adminTheme").innerHTML = theme === "dark"
     ? '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>'
     : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z"/></svg>';
+  $("#adminTheme").setAttribute("aria-pressed", String(theme === "dark"));
+  $("#adminTheme").setAttribute("aria-label", theme === "dark" ? "تفعيل الوضع النهاري" : "تفعيل الوضع الليلي");
   const mobile = $("#mobileThemeToggle");
   if (mobile) {
     mobile.innerHTML = `${$("#adminTheme").innerHTML}<span>${theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}</span>`;
@@ -215,9 +254,12 @@ function setTheme(theme) {
   }
 }
 
-async function showSection(id, { historyMode = "push" } = {}) {
+async function showSection(id, { historyMode = "push", staffPresentation = false } = {}) {
+  if(id==='workerTargets')return showSection('targets',{historyMode});
   if (id === "workspaceHome") return showWorkspaceHome({ historyMode });
   if (!canOpenSection(id)) return toast("لا تملك صلاحية هذا القسم", true);
+  if (staffPresentation && (id !== 'staff' || state.role !== 'admin')) return toast('هذا المسار متاح للأدمن فقط',true);
+  state.staffPresentation = id === 'staff' && staffPresentation;
   if (id !== state.section) closeScanner();
   if (state.hub && sectionHub(id) && sectionHub(id) !== state.hub) return toast("ارجع للبوابات لاختيار مساحة العمل", true);
   state.section = id;
@@ -230,17 +272,24 @@ async function showSection(id, { historyMode = "push" } = {}) {
   $$('#sidebar .sidebar-primary [data-cashier-target]').forEach(button => button.classList.remove("active"));
   if (id === "cashierGoals") $$('#cashierSidebarItems [data-cashier-target]').forEach(button => button.classList.add("active"));
   $("#pageTitle").textContent = sectionTitles[id] || id;
+  if(state.staffPresentation)$("#pageTitle").textContent='عرض فريق العمل على الموقع';
+  if(id==='staff'){
+    $('#staffSummary')?.toggleAttribute('hidden',state.staffPresentation);
+    $('#staff [data-new="staff"]')?.toggleAttribute('hidden',state.staffPresentation);
+  }
   if ($("#cashierPageTitle")) $("#cashierPageTitle").textContent = id === "cash" ? "إحصائيات الشيفت" : sectionTitles[id] || id;
   closeAdminMenu();
   const activeSection = $("#" + id);
   activeSection?.classList.add("section-loading");
-  const tasks = [];
+  const tasks = [branchWorkspace.open(id)];
+  if(id === "workerRequests")tasks.push(workerRequestCenter.load());
+  if(id === "cash" && state.role === "cashier")tasks.push(cashierAdvanceCenter.load());
   if (id === "pos" || (id === "bookings" && state.role === "cashier")) {
     if (id === "bookings" || Date.now() - state.loadedAt.cashier > 60_000) tasks.push(loadCashierDashboard());
     if (id === "pos" && state.role === "cashier" && Date.now() - state.loadedAt.cash > 60_000) tasks.push(loadCashOperations(true));
   } else if (["dashboard", "bookings", "revenue", "expenses"].includes(id) && (id === "bookings" || Date.now() - state.loadedAt.dashboard > 45_000)) tasks.push(loadDashboard());
-  if (["bookings", "staff"].includes(id) && (state.role === "admin" || state.permissions.has("attendance")) && Date.now() - state.loadedAt.attendance > 45_000) tasks.push(loadAttendance(true));
-  const map = { pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["staff"], services: ["categories", "services"] };
+  if (["bookings", "staff"].includes(id) && !state.staffPresentation && (state.role === "admin" || state.permissions.has("attendance")) && Date.now() - state.loadedAt.attendance > 45_000) tasks.push(loadAttendance(true));
+  const map = { websiteContent:state.role === "admin" ? ["settings"] : [], pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["staff"], services: ["categories", "services"] };
   tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
   if (state.role === "cashier" && ["bookings", "calendar"].includes(id)) tasks.push(loadCollection("staff"));
   if (id === "pos") tasks.push(loadPosOffers());
@@ -248,6 +297,7 @@ async function showSection(id, { historyMode = "push" } = {}) {
   if (["expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
   try { await Promise.all(tasks); } finally { activeSection?.classList.remove("section-loading"); }
   if (id === "mobileContent") renderMobileContent();
+  if (id === "websiteContent") { $("#websiteSiteMedia").hidden=state.role!=="admin"; $("#websiteBrandMedia").hidden=state.role!=="admin"; $$('[data-cms-admin]').forEach(el=>el.hidden=state.role!=="admin"); refreshSiteMediaEditor((state.collections.get("settings")||[])[0]||{}); }
   if (id === "revenue" && state.role === "admin" && adminMobileViewport.matches) {
     const selector = $("#ownerSalesFilters [name=staffId]");
     selector.innerHTML = '<option value="all">كل العاملين</option>' + (state.collections.get("staff") || []).filter(worker => $("#dashboardBranchFilter").value === "all" || worker.branchIds?.includes($("#dashboardBranchFilter").value)).map(worker => `<option value="${escapeAttr(worker.id)}">${escapeHtml(worker.nameAr || worker.id)}</option>`).join("");
@@ -255,6 +305,7 @@ async function showSection(id, { historyMode = "push" } = {}) {
   if (state.role === "admin" && adminMobileViewport.matches && ["revenue", "expenses"].includes(id)) void loadOwnerHistory(id === "revenue" ? "sales" : "expenses");
   if (id === "revenue") renderRevenue();
   if (id === "pos") { renderPos(); setPosView("receipts"); }
+  if (id === "staff"&&!staffPresentation)void loadWorkerRanking();
   if (id === "payroll") renderServiceTargets();
   if (id === "users") { void loadAccessCenter(); renderUserAccounts(); syncWorkerAccountFields($("#accountRole")?.value || "cashier"); }
   if (id === "campaigns") { await loadCampaignOptions(); renderCampaigns(); }
@@ -308,6 +359,8 @@ function applyAccess() {
   });
   $$('[data-new-pos]').forEach(button => { button.hidden = state.role !== "admin" && !state.permissions.has("pos"); });
   $$('[data-go]').forEach(button => { button.hidden = !canOpenSection(button.dataset.go); });
+  $$('[data-cms-target]').forEach(button=>{button.hidden=!canOpenSection(button.dataset.cmsTarget)||button.hasAttribute('data-cms-admin')&&state.role!=='admin';});
+  $$('[data-cms-admin]').forEach(el=>{el.hidden=state.role!=='admin';});
   $$('[data-dashboard-permission]').forEach(element => { element.hidden = state.role !== "admin" && !state.permissions.has(element.dataset.dashboardPermission); });
   if ($("[data-dashboard-attendance]")) $("[data-dashboard-attendance]").hidden = !canOpenSection("attendance");
   if ($("#editBranchTarget")) $("#editBranchTarget").hidden = state.role !== "admin";
@@ -323,9 +376,16 @@ function applyAccess() {
   }
   $$('[data-cashier-target]').forEach(button => { button.hidden = state.role !== "cashier" || !state.permissions.has("dashboard"); });
   syncAdminMobileVisibility();
+  const closingScope = $("#dailyClosingForm")?.elements.branchId;
+  if (closingScope) {
+    closingScope.querySelector('option[value="all"]')?.remove();
+    if (state.role === "admin") closingScope.insertAdjacentHTML("beforeend", '<option value="all">المصروفات المشتركة (محاسبي فقط)</option>');
+    syncDailyClosingScope();
+  }
   if ($("#branchLocationPanel")) $("#branchLocationPanel").hidden = state.role !== "admin";
   if (state.role !== "admin") $$('select').forEach(select => [...select.options].forEach(option => { if (["talkha", "mashaya"].includes(option.value) && !state.branchIds.includes(option.value)) option.remove(); }));
   refreshSidebarGroups();
+  syncAdminWorkspace(state.role, canOpenSection);
 }
 
 const cashierHeaderHomes = {
@@ -352,6 +412,8 @@ function renderRoleShell() {
     const primary = adminNav.querySelector(".sidebar-primary");
     const selectors = ['[data-section="pos"]', '[data-section="calendar"]', '[data-section="bookings"]', '[data-go="cash"]', '[data-cashier-target]'];
     $("#cashierSidebarItems").replaceChildren(...selectors.map(selector => primary.querySelector(selector)?.cloneNode(true)).filter(Boolean));
+    for(const id of ['branchOperations','teamAvailability','targets','customerRequests','branchNeeds']){const link=adminNav.querySelector(`[data-section="${id}"]`)?.cloneNode(true);if(link&&canOpenSection(id)){$("#cashierSidebarItems").append(link);link.hidden=false;}}
+    const shiftLink=$('#cashierSidebarItems [data-go="cash"]');if(shiftLink?.lastChild)shiftLink.lastChild.textContent='ورديتي';
     const marketing = [["offers", "العروض"], ["campaigns", "حملات واتساب"]].filter(([id]) => state.permissions.has(id));
     $("#cashierMarketingLinks").hidden = !marketing.length;
     $("#cashierMarketingLinks").innerHTML = marketing.length ? '<span class="sidebar-menu-label">صلاحيات إضافية</span>' + marketing.map(([id, label]) => `<button type="button" data-section="${id}">${label}</button>`).join("") : "";
@@ -436,7 +498,7 @@ async function submitAccessEdit(event) {
 function renderUserAccounts() {
   const statusFilter = document.querySelector("#accountStatusFilter")?.value;
   const items = (state.collections.get("users") || []).filter(item => !statusFilter || (item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE")) === statusFilter);
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.phone || item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value).join("، ") || "غير محدد"}</p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<p>${escapeHtml((item.authProviders || []).join(" • "))} • ${escapeHtml(item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE"))} • آخر دخول: ${escapeHtml(item.lastSignInAt ? dateTime(item.lastSignInAt) : "غير متاح")}</p><div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions"><button class="small-button" type="button" data-access-action="disable" data-uid="${escapeAttr(item.id)}">تعطيل</button><button class="small-button" type="button" data-access-action="activate" data-uid="${escapeAttr(item.id)}">تفعيل</button><button class="small-button" type="button" data-access-action="revoke" data-uid="${escapeAttr(item.id)}">إبطال الجلسات</button>${item.staffId ? `<button class="small-button" type="button" data-access-action="unlink" data-uid="${escapeAttr(item.id)}">فك الربط</button>` : ""}<button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.username || item.phone || item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => escapeHtml(value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value)).join("، ") || "غير محدد"}</p><p><b>UID:</b> <bdi>${escapeHtml(item.id)}</bdi></p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<p>${escapeHtml((item.authProviders || []).join(" • "))} • ${escapeHtml(item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE"))} • آخر دخول: ${escapeHtml(item.lastSignInAt ? dateTime(item.lastSignInAt) : "غير متاح")}</p>${item.role === "worker" ? (()=>{const row=(state.workerRankingRows||[]).find(r=>r.staffId===item.staffId);return row?`<p class="account-worker-performance"><b>أداء الفرع المختار:</b> ${money(row.achieved)} / ${money(row.target)} • ${row.achievementPercent==null?'بدون هدف':Math.round(row.achievementPercent)+'%'}<br>${Number(row.completedBookings)} حجز مكتمل • ${Number(row.completedTasks)} مهمة مكتملة • ترتيب #${Number(row.rank)}</p>`:'<p>الأداء متاح من ترتيب الفريق بعد اختيار فرع العامل.</p>';})():""}<div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions">${item.role === "worker" ? `<button class="small-button" type="button" data-access-action="username" data-uid="${escapeAttr(item.id)}">تعيين اسم مستخدم</button>` : ""}<button class="small-button" type="button" data-access-action="disable" data-uid="${escapeAttr(item.id)}">تعطيل</button><button class="small-button" type="button" data-access-action="activate" data-uid="${escapeAttr(item.id)}">تفعيل</button><button class="small-button" type="button" data-access-action="revoke" data-uid="${escapeAttr(item.id)}">إبطال الجلسات</button>${item.staffId ? `<button class="small-button" type="button" data-access-action="unlink" data-uid="${escapeAttr(item.id)}">فك الربط</button>` : ""}<button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 function workerSelectOptions(selected = "", branchId = "") {
@@ -445,6 +507,10 @@ function workerSelectOptions(selected = "", branchId = "") {
 
 function syncWorkerAccountFields(role, selectedStaffId = "") {
   const create = role === "worker";
+  $("#accountEmailField").hidden = create;
+  $("#accountEmailField input").required = !create;
+  $("#accountUsernameField").hidden = !create;
+  $("#accountUsernameField input").required = create;
   const field = $("#accountStaffField");
   if (field) field.hidden = !create;
   if ($("#accountStaff")) {
@@ -683,9 +749,11 @@ async function submitUserAccount(event) {
   const formElement = event.currentTarget;
   const button = formElement.querySelector('button[type="submit"]');
   const form = new FormData(formElement);
-  const payload = { name: form.get("name"), email: form.get("email"), password: form.get("password"), role: form.get("role"), staffId: form.get("staffId") || "", permissions: form.getAll("permissions"), branchIds: form.getAll("branchIds") };
+  const payload = { name: form.get("name"), email: form.get("email"), ...(form.get("role") === "worker" ? {username:form.get("username")} : {}), password: form.get("password"), role: form.get("role"), staffId: form.get("staffId") || "", permissions: form.getAll("permissions"), branchIds: form.getAll("branchIds") };
   button.disabled = true;
   try {
+    const adminPassword = prompt("أعد التحقق بكلمة مرور الأدمن لإنشاء الحساب"); if (!adminPassword) return;
+    await verifyAdminPassword(adminPassword);
     const result = await createUserAccount(payload);
     formElement.reset();
     renderPermissionPicker("cashier");
@@ -717,12 +785,16 @@ async function loadDashboard(silent = false) {
     detectNewBookings(result.bookings || []);
     state.dashboard = result;
     state.loadedAt.dashboard = Date.now();
+
     renderDashboard();
+    if(state.role==="admin")void loadTargetAchievementAlerts();
+    document.dispatchEvent(new CustomEvent("mz:dashboard-ready",{detail:{branchId}}));
     $("#headerBranchLabel").textContent = branchLabel(branchId);
     void loadDashboardShiftState(branchId);
     if (canOpenSection("attendance")) void loadDashboardAttendance(branchId);
   } catch (error) {
     if (requestVersion !== dashboardRequestVersion) return;
+    document.dispatchEvent(new CustomEvent("mz:dashboard-error"));
     setDashboardMetricsUnavailable(error.message || "تعذر تحميل لوحة الإدارة");
     if (!silent) toast(error.message || "تعذر تحميل لوحة الإدارة", true);
   } finally { if (requestVersion === dashboardRequestVersion) { $("#dashboard")?.removeAttribute("aria-busy"); $(".mobile-monthly-target")?.removeAttribute("aria-busy"); $(".desktop-monthly-target")?.removeAttribute("aria-busy"); } }
@@ -771,13 +843,16 @@ async function refreshCashierOperations() {
   await Promise.allSettled([loadCashOperations(true), loadCashierDashboard(true)]);
 }
 
+let businessRequestVersion=0;
 async function loadBusiness(silent = false) {
+  const version=++businessRequestVersion, branchId=$("#headerBranchFilter").value;
   const month = $("#payrollMonth")?.value || cairoDateKey().slice(0, 7);
   try {
     const [business, serviceTargets] = await Promise.all([
-      getBusinessDashboard(month),
-      state.role === "admin" || state.permissions.has("payroll") ? getServiceTargetsDashboard(month) : Promise.resolve({ targets: [] })
+      getBusinessDashboard(month, branchId),
+      state.role === "admin" || state.permissions.has("payroll") ? getServiceTargetsDashboard(month, branchId) : Promise.resolve({ targets: [] })
     ]);
+    if(version!==businessRequestVersion || branchId!==$("#headerBranchFilter").value)return;
     state.business = { ...business, serviceTargets: serviceTargets.targets || [] };
     state.loadedAt.business = Date.now();
     state.collections.set("inventoryItems", state.business.inventory || []);
@@ -854,11 +929,15 @@ async function loadCashOperations(silent = false, includeReports = false) {
 }
 
 function renderCashOperations() {
+  if(state.role==='admin'||state.role==='cashier')void syncCashHandover({branchId:cashBranch(),role:state.role,uid:state.user?.uid,onChanged:()=>loadCashOperations()});
   const shift = state.cash.shift || {};
   const snapshot = state.cash.snapshot || null;
   const isOpen = state.cash.state?.status === "OPEN" && shift.status === "OPEN";
+  const ownsShift=state.role!=="cashier"||shift.cashierUid===state.user?.uid;
+  const advanceShortcut = document.querySelector('[data-cash-movement="ADVANCE"]');
+  if(advanceShortcut){advanceShortcut.hidden=state.role!=="cashier";advanceShortcut.disabled=state.role!=="cashier";}
   const shiftShortcut = $(".sidebar-end-shift");
-  if (shiftShortcut) shiftShortcut.textContent = isOpen ? "إنهاء الشيفت" : "بدء الشيفت";
+  if (shiftShortcut) {shiftShortcut.textContent = isOpen ? "إنهاء الشيفت" : "بدء الشيفت";if(isOpen&&!ownsShift)shiftShortcut.textContent="الوردية مع كاشير آخر";shiftShortcut.disabled=isOpen&&!ownsShift||Boolean(state.cash.state?.pendingHandoverId);}
   if ($("#cashierNoShiftNotice")) $("#cashierNoShiftNotice").hidden = state.role !== "cashier" || isOpen;
   $("#cashOpening").textContent = shift.id ? money(shift.openingCash) : "—";
   $("#cashSales").textContent = shift.id ? money(shift.cashSales) : "—";
@@ -881,9 +960,9 @@ function renderCashOperations() {
     showShiftReport(shift.report);
   }
   $("#openShiftTrigger").hidden = isOpen;
-  $("#cashMovementForm").hidden = !isOpen;
-  $(".cash-movement-actions").hidden = !isOpen;
-  $("#closeShiftForm").hidden = !isOpen;
+  $("#cashMovementForm").hidden = !isOpen||!ownsShift;
+  $(".cash-movement-actions").hidden = !isOpen||!ownsShift;
+  $("#closeShiftForm").hidden = !isOpen||!ownsShift;
   $("#cashMovements").innerHTML = (state.cash.movements || []).map(item => `<article class="entity-card"><h3>${item.category === "advance" ? "سلفة موظف" : escapeHtml(({ CASH_IN: "إيداع", CASH_OUT: "سحب", CASH_SALE: "بيع نقدي", CASH_REFUND: "استرداد نقدي" })[item.type] || item.type)}</h3><p>${money(item.amount)} • ${escapeHtml(item.staffNameAr || item.reason || item.receiptNumber || item.bookingId || "")}</p><small>${escapeHtml(dateTime(item.createdAt))}</small></article>`).join("") || '<div class="empty-state">لا توجد حركات.</div>';
   const previous = $("#previousShiftReports");
   if (previous) {
@@ -955,6 +1034,7 @@ async function submitCashMovement(event) {
 }
 
 function openCloseShiftDialog() {
+  if(state.role==="cashier"&&state.cash.shift?.cashierUid!==state.user?.uid)return toast("الوردية عهدة كاشير آخر",true);
   const expected = Number(state.cash.shift?.expectedCash);
   $("#closeShiftExpected").textContent = Number.isFinite(expected) ? money(expected) : "—";
   $("#closeShiftForm").elements.actualCash.value = Number.isFinite(expected) ? expected.toFixed(2) : "";
@@ -979,12 +1059,12 @@ async function submitCloseShift(event) {
       await loadCashOperations();
       $("#shiftReportId").value = result.shiftId;
       if (result.report) showShiftReport(result.report);
-      toast("تم إغلاق الشيفت؛ يمكنك عرض التقرير وطباعته");
+      toast(result.handoverId?"تم إغلاق الوردية؛ العهدة في انتظار تأكيد المستلم":"تم إغلاق الشيفت؛ يمكنك عرض التقرير وطباعته");
     } catch (error) { toast(error.message || "تعذر إغلاق الوردية", true); }
   });
 }
 
-const reportLabels = { grossRevenue: "إجمالي التحصيل قبل الاسترداد", netRevenue: "صافي التحصيل بعد الاسترداد", cash: "نقدي (صافي)", card: "بطاقة", transfer: "تحويل إلكتروني", other: "طرق أخرى", expenses: "المصروفات", advances: "سلف الموظفين (ضمن الخارج من الدرج)", cashIn: "إضافة كاش", cashOut: "الخارج من الدرج شاملًا السلف والمصروفات النقدية", refunds: "الاسترداد", transactions: "المعاملات", bookings: "الحجوزات", completed: "مكتملة", cancelled: "ملغاة", noShow: "لم يحضر", averageTicket: "متوسط الشيك" };
+const reportLabels = { grossRevenue: "إجمالي التحصيل قبل الاسترداد", netRevenue: "صافي التحصيل بعد الاسترداد", cash: "نقدي (صافي)", card: "بطاقة", transfer: "تحويل إلكتروني", other: "طرق أخرى", expenses: "المصروفات", advances: "سلف الموظفين (ضمن الخارج من الدرج)", payrollCashPaid: "رواتب نقدية مدفوعة (ضمن الخارج من الدرج)", cashIn: "إضافة كاش", cashOut: "الخارج من الدرج شاملًا السلف والمصروفات النقدية", refunds: "الاسترداد", transactions: "المعاملات", bookings: "الحجوزات", completed: "مكتملة", cancelled: "ملغاة", noShow: "لم يحضر", averageTicket: "متوسط الشيك", sharedExpenses:"المصروفات المشتركة (ضمن إجمالي المصروفات)", netProfit:"صافي الربح" };
 function reportPrintHeader(title, branch, period, generated) {
   return `<header class="v7-print-heading"><img src="/assets/el-mezaen-logo.jpeg" alt="El Mezaen"><div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(branch || "—")} • ${escapeHtml(period || "—")}</p><small>أُنشئ: ${escapeHtml(dateTime(generated))}</small></div></header>`;
 }
@@ -998,14 +1078,14 @@ function reportNumbers(totals) {
 }
 function showShiftReport(report) {
   const result = $("#shiftReportResult");
-  result.innerHTML = `${reportPrintHeader("تقرير إغلاق الشيفت", report.branchName || branchLabel(report.branchId), report.businessDate, report.closedAt)}<p>الكاشير: ${escapeHtml(report.cashierName || report.cashierUid)} • الوردية: ${escapeHtml(report.shiftId)}</p><p>من ${escapeHtml(dateTime(report.openedAt))} إلى ${escapeHtml(dateTime(report.closedAt))}</p>${reportNumbers({ grossRevenue: report.grossRevenue, netRevenue: report.netCollected, cash: report.cash, card: report.card, transfer: report.transfer, other: report.other, refunds: report.refunds, expenses: report.expenses, advances: report.advances, transactions: report.transactions, cashIn: report.cashIn, cashOut: report.cashOut })}<p>رصيد البداية ${money(report.openingCash)} • المتوقع ${money(report.expectedCash)} • الفعلي ${money(report.actualCash)} • الفرق ${money(report.variance)}</p>${report.notes ? `<p>الملاحظة: ${escapeHtml(report.notes)}</p>` : ""}`;
+  result.innerHTML = `${reportPrintHeader("تقرير إغلاق الشيفت", report.branchName || branchLabel(report.branchId), report.businessDate, report.closedAt)}<p>الكاشير: ${escapeHtml(report.cashierName || report.cashierUid)} • الوردية: ${escapeHtml(report.shiftId)}</p><p>من ${escapeHtml(dateTime(report.openedAt))} إلى ${escapeHtml(dateTime(report.closedAt))}</p>${reportNumbers({ grossRevenue: report.grossRevenue, netRevenue: report.netCollected, cash: report.cash, card: report.card, transfer: report.transfer, other: report.other, refunds: report.refunds, expenses: report.expenses, advances: report.advances, payrollCashPaid: report.payrollCashPaid ?? null, transactions: report.transactions, cashIn: report.cashIn, cashOut: report.cashOut })}<p>رصيد البداية ${money(report.openingCash)} • المتوقع ${money(report.expectedCash)} • الفعلي ${money(report.actualCash)} • الفرق ${money(report.variance)}</p>${report.notes ? `<p>الملاحظة: ${escapeHtml(report.notes)}</p>` : ""}`;
   $("#shiftReportPrint").disabled = false;
 }
 function showCurrentShiftReport() {
   const shift = state.cash.shift;
   const live = state.cash.snapshot;
   if (!shift || !live || shift.status !== "OPEN") return toast("ابدأ الشيفت أو اختر تقرير وردية مغلقة", true);
-  $("#shiftReportResult").innerHTML = `${reportPrintHeader("ملخص الوردية الحالية · مبدئي", branchLabel(shift.branchId), shift.businessDate, new Date().toISOString())}<p>${escapeHtml(shift.cashierName || "الكاشير")} • منذ ${escapeHtml(dateTime(shift.openedAt))}</p>${reportNumbers({ grossRevenue: live.grossRevenue, netRevenue: live.netRevenue, cash: live.cashSales, card: live.cardSales, transfer: live.transferSales, other: live.otherSales, refunds: live.refunds, expenses: live.expenses, advances: live.advances, cashIn: live.cashIn, cashOut: live.cashOut, transactions: live.transactionsCount })}<p>الرصيد المتوقع ${money(live.expectedCash)}. الأرقام مبدئية حتى إغلاق الشيفت.</p>`;
+  $("#shiftReportResult").innerHTML = `${reportPrintHeader("ملخص الوردية الحالية · مبدئي", branchLabel(shift.branchId), shift.businessDate, new Date().toISOString())}<p>${escapeHtml(shift.cashierName || "الكاشير")} • منذ ${escapeHtml(dateTime(shift.openedAt))}</p>${reportNumbers({ grossRevenue: live.grossRevenue, netRevenue: live.netRevenue, cash: live.cashSales, card: live.cardSales, transfer: live.transferSales, other: live.otherSales, refunds: live.refunds, expenses: live.expenses, advances: live.advances, payrollCashPaid: live.payrollCashPaid ?? null, cashIn: live.cashIn, cashOut: live.cashOut, transactions: live.transactionsCount })}<p>الرصيد المتوقع ${money(live.expectedCash)}. الأرقام مبدئية حتى إغلاق الشيفت.</p>`;
   $("#shiftReportPrint").disabled = false;
 }
 async function loadShiftReport(button = $("#shiftReportLoad")) {
@@ -1031,7 +1111,9 @@ async function loadBusinessReport(button = $("#reportLoad")) {
   const periodKey = reportKey();
   if (!periodKey) return toast("حدد تاريخ التقرير", true);
   await withButtonBusy(button, async () => {
-    try { const result = await getBusinessReport({ type: $("#reportType").value, branchId: $("#reportBranch").value, periodKey }); showBusinessReports(result.reports, result.missingBranches, result.combined); }
+    try { const result = await getBusinessReport({ type: $("#reportType").value, branchId: $("#reportBranch").value, periodKey }); showBusinessReports(result.reports, result.missingBranches, result.combined);
+      if (result.financialClosing) $("#reportResult").insertAdjacentHTML("afterbegin", result.financialClosing.status === "FINAL" ? '<p>الإقفال المالي المجمّع نهائي، ويشمل المصروفات المشتركة مرة واحدة.</p>' : '<p>الإقفال المالي المجمّع غير نهائي؛ يلزم إقفال طلخا والمشاية والمصروفات المشتركة. التجميع الحالي للفروع فقط.</p>');
+    }
     catch (error) { $("#reportResult").textContent = error.message; $("#reportPrint").disabled = true; }
   });
 }
@@ -1055,12 +1137,14 @@ function selectCashierReportTab(type) {
   $("#cashierReportType").dispatchEvent(new Event("change"));
   $("#cashierReportsPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-let auditCursor = null;
+let auditCursor = null, auditRequestVersion=0;
 async function loadAuditEvents(cursor = "") {
+  const version=++auditRequestVersion;
   if (state.role !== "admin") return;
   const params = { cursor, branchId: $("#auditBranch").value, actorUid: $("#auditActor").value.trim(), role: $("#auditRole").value, action: $("#auditAction").value.trim(), entityType: $("#auditEntity").value.trim(), date: $("#auditDate").value, limit: 50 };
   try {
     const result = await getAuditEvents(params);
+    if(version!==auditRequestVersion || params.branchId!==$("#auditBranch").value)return;
     const cards = result.items.map(activityCard).join("");
     $("#auditResults").innerHTML = cursor ? $("#auditResults").innerHTML + cards : cards || '<p class="empty-state">لا توجد أحداث ضمن هذه الصفحة.</p>';
     auditCursor = result.nextCursor;
@@ -1078,17 +1162,31 @@ async function submitOwnPassword(event) {
   });
 }
 
+function syncDailyClosingScope() {
+  const form = $("#dailyClosingForm");
+  if (!form) return;
+  const shared = state.role === "admin" && form.elements.branchId.value === "all";
+  for (const name of ["actualCash", "reason"]) {
+    const input = form.elements[name];
+    input.disabled = shared;
+    input.closest("label").hidden = shared;
+  }
+  form.elements.actualCash.required = !shared;
+}
 async function submitDailyClosing(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form));
-  if (!confirm(`إغلاق يوم ${data.businessDate} للفرع؟ لن تُقبل حركات مالية جديدة على التاريخ.`)) return;
+  const shared = data.branchId === "all";
+  if (shared && state.role !== "admin") return toast("الإقفال المشترك للأدمن فقط", true);
+  if (!confirm(shared ? `إقفال المصروفات المشتركة ليوم ${data.businessDate} بعد إقفال طلخا والمشاية؟ سيصبح التقرير المجمّع نهائيًا.` : `إغلاق يوم ${data.businessDate} للفرع؟ لن تُقبل حركات مالية جديدة على التاريخ.`)) return;
   try {
-    const result = await closeBusinessDay({ ...data, actualCash: Number(data.actualCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
+    const result = await closeBusinessDay({ ...data, actualCash: shared ? 0 : Number(data.actualCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
     const closing = result.closing || {};
-    $("#dailyClosingResult").innerHTML = `<h3>تم إغلاق اليوم</h3><p>إجمالي البيع: ${money(closing.grossSales)} • الصافي: ${money(closing.netSales)} • المصروفات: ${money(closing.expenses)} • الاستردادات: ${money(closing.refunds)}</p><p>المتوقع: ${money(closing.expectedCash)} • الفعلي: ${money(closing.actualCash)} • الفرق: ${money(closing.variance)}</p>`;
+    if (shared) $("#dailyClosingResult").innerHTML = `<h3>تم إقفال المصروفات المشتركة</h3><p>المصروفات المشتركة: ${money(closing.expenses)} • إجمالي المصروفات: ${money(closing.consolidated?.expenses)} • صافي الربح: ${money(closing.consolidated?.netProfit)}</p><p>التقرير المجمّع نهائي. لم يُنشأ درج أو وردية مشتركة.</p>`;
+    else $("#dailyClosingResult").innerHTML = `<h3>تم إغلاق اليوم</h3><p>إجمالي البيع: ${money(closing.grossSales)} • الصافي: ${money(closing.netSales)} • المصروفات: ${money(closing.expenses)} • الاستردادات: ${money(closing.refunds)}</p><p>المتوقع: ${money(closing.expectedCash)} • الفعلي: ${money(closing.actualCash)} • الفرق: ${money(closing.variance)}</p>`;
     form.dataset.key = "";
-    toast("تم إغلاق يوم الفرع وتسجيل تقرير التسوية");
+    toast(shared ? "تم الإقفال المحاسبي المشترك" : "تم إغلاق يوم الفرع وتسجيل تقرير التسوية");
   } catch (error) { toast(error.message || "تعذر إغلاق اليوم", true); }
 }
 
@@ -1367,7 +1465,7 @@ function openReceiptDrawer(id) {
   if (!item) return toast("تعذر العثور على الشيك", true);
   $("#receiptDrawerTitle").textContent = `${item.source === "pos" ? "شيك" : "حجز"} ${item.code || item.receiptNumber || item.id}`;
   const lines = item.items || [];
-  $("#receiptDrawerBody").innerHTML = `<section class="receipt-drawer-summary"><div><span>رقم العملية</span><b>${escapeHtml(item.receiptNumber || item.code || item.id)}</b><small>${escapeHtml(dateTime(item.createdAt || item.bookingDate))}</small></div><div><span>العميل</span><b>${escapeHtml(item.customerName || "عميل نقدي")}</b><small>${escapeHtml(item.phone || "لا يوجد رقم")}</small></div><div><span>الفرع</span><b>${escapeHtml(branchLabel(item.branchId))}</b><small>${escapeHtml(item.bookingDate || String(item.createdAt || "").slice(0, 10))} ${escapeHtml(item.bookingTime || "")}</small></div><div><span>الحالة</span><b>${escapeHtml(statusLabel(item.status))}</b><small>${escapeHtml(paymentLabel(item.paymentStatus))} • ${escapeHtml(paymentMethod(item.paymentMethod))}</small></div><div><span>الإجمالي</span><b>${money(item.total)}</b><small>الخصم ${money(item.discountAmount)}</small></div></section><div class="receipt-drawer-lines">${lines.map(line => `<article><div><b>${escapeHtml(line.nameAr || "بند")}</b><small>${escapeHtml(line.workerNameAr || item.staffNameAr || "بدون عامل")} • الكمية ${Number(line.qty || 1)}</small></div><strong>${money(line.lineTotal ?? Number(line.price || 0) * Number(line.qty || 1))}</strong></article>`).join("") || '<p>تفاصيل البنود غير متاحة لهذا السجل القديم.</p>'}</div><footer class="receipt-drawer-actions">${item.source === "pos" && item.paymentStatus === "unpaid" && state.permissions.has("revenue") ? `<label>طريقة الدفع<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select></label>` : ""}${receiptDrawerOperations(item)}${receiptActionButtons(item.id, "طباعة الإيصال", false)}</footer>`;
+  $("#receiptDrawerBody").innerHTML = `<h3 class="receipt-section-title">ملخص العملية</h3><section class="receipt-drawer-summary"><div><span>رقم العملية</span><b>${escapeHtml(item.receiptNumber || item.code || item.id)}</b><small>${escapeHtml(dateTime(item.createdAt || item.bookingDate))}</small></div><div><span>العميل</span><b>${escapeHtml(item.customerName || "عميل نقدي")}</b><small>${escapeHtml(item.phone || "لا يوجد رقم")}</small></div><div><span>الفرع</span><b>${escapeHtml(branchLabel(item.branchId))}</b><small>${escapeHtml(item.bookingDate || String(item.createdAt || "").slice(0, 10))} ${escapeHtml(item.bookingTime || "")}</small></div><div><span>الحالة</span><b>${escapeHtml(statusLabel(item.status))}</b><small>${escapeHtml(paymentLabel(item.paymentStatus))} • ${escapeHtml(paymentMethod(item.paymentMethod))}</small></div><div><span>الإجمالي</span><b>${money(item.total)}</b><small>الخصم ${money(item.discountAmount)}</small></div></section><section class="receipt-drawer-lines" aria-label="بنود العملية"><h3 class="receipt-section-title">الخدمات والبنود</h3>${lines.map(line => `<article><div><b>${escapeHtml(line.nameAr || "بند")}</b><small>${escapeHtml(line.workerNameAr || item.staffNameAr || "بدون عامل")} • الكمية ${Number(line.qty || 1)}</small></div><strong>${money(line.lineTotal ?? Number(line.price || 0) * Number(line.qty || 1))}</strong></article>`).join("") || '<p>تفاصيل البنود غير متاحة لهذا السجل القديم.</p>'}</section><footer class="receipt-drawer-actions"><h3 class="receipt-section-title">إجراءات العملية</h3>${item.source === "pos" && item.paymentStatus === "unpaid" && state.permissions.has("revenue") ? `<label>طريقة الدفع<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select></label>` : ""}${receiptDrawerOperations(item)}${receiptActionButtons(item.id, "طباعة الإيصال", false)}</footer>`;
   if (!$("#receiptDrawer").open) $("#receiptDrawer").showModal();
 }
 
@@ -1583,6 +1681,7 @@ function whatsappPhone(value) {
 }
 
 async function createReceiptCanvas(item) {
+  if(document.fonts){await Promise.all(['500','600','700'].map(weight=>document.fonts.load(weight+' 24px Tajawal')));await document.fonts.ready;}
   const lines = Array.isArray(item.items) ? item.items : [];
   const canvas = document.createElement("canvas");
   canvas.width = 900;
@@ -1607,7 +1706,7 @@ async function createReceiptCanvas(item) {
   let y = 220;
   const meta = [
     `رقم الشيك: ${item.code || item.id}`,
-    `الكاشير: ${item.cashierName || item.finalizedBy || item.createdBy || "—"}`,
+    `الكاشير: ${item.cashierName || item.cashierUid || item.finalizedBy || item.createdBy || item.createdByUid || "غير مسجل في الشيك القديم"}`,
     `العميل: ${item.customerName || "عميل نقدي"}`,
     `الهاتف: ${item.phone || "—"}`,
     `التاريخ: ${item.bookingDate || String(item.createdAt || "").slice(0, 10) || cairoDateKey()} ${item.bookingTime || ""}`,
@@ -1679,7 +1778,7 @@ function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("تعذر إنشاء صورة الشيك")), "image/png"));
 }
 
-async function openReceiptInWhatsapp(id) {
+async function openReceiptInWhatsapp(id, preparedBlob = null) {
   const item = state.dashboard.bookings.find(value => value.id === id);
   if (!item) return toast("تعذر العثور على الشيك", true);
   const phone = whatsappPhone(item.phone);
@@ -1695,8 +1794,7 @@ async function openReceiptInWhatsapp(id) {
     window.focus();
   }
   try {
-    const canvas = await createReceiptCanvas(item);
-    const blob = await canvasBlob(canvas);
+    const blob = preparedBlob || await canvasBlob(await createReceiptCanvas(item));
     const file = new File([blob], `el-mezaen-receipt-${item.code || item.id}.png`, { type: "image/png" });
     if (nativeFileShare && navigator.canShare?.({ files: [file] })) {
       try { await navigator.share({ files: [file], title: `شيك مزين مصر ${item.code || ""}`, text: message }); return; }
@@ -1729,10 +1827,14 @@ async function printReceipt(id) {
   popup.document.close();
   try {
     const canvas = await createReceiptCanvas(item);
-    const imageUrl = canvas.toDataURL("image/png");
+    const preparedBlob = await canvasBlob(canvas);
+    const imageUrl = URL.createObjectURL(preparedBlob);
     popup.document.open();
-    popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(item.code || item.id)}</title><style>@page{margin:4mm}*{box-sizing:border-box}body{margin:0;background:#eef2f4;font-family:Arial;text-align:center}main{width:min(100%,420px);margin:auto;padding:12px;background:#fff}img{display:block;width:100%;height:auto}button{margin:12px;padding:10px 26px;border:0;border-radius:8px;background:#007f99;color:#fff;font-weight:700}@media print{body,main{width:100%;background:#fff;padding:0}button{display:none}}</style></head><body><main><img src="${imageUrl}" alt="شيك مزين مصر"><button type="button" onclick="print()">طباعة</button></main></body></html>`);
+    popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(item.code || item.id)}</title><style>@page{margin:4mm}*{box-sizing:border-box}body{margin:0;background:#eef2f4;font-family:Arial;text-align:center}main{width:min(100%,420px);margin:auto;padding:12px;background:#fff}img{display:block;width:100%;height:auto}button{margin:12px;padding:10px 26px;border:0;border-radius:8px;background:#007f99;color:#fff;font-weight:700}@media print{body,main{width:100%;background:#fff;padding:0}button{display:none}}</style></head><body><main><img src="${imageUrl}" alt="شيك مزين مصر"><div class="receipt-toolbar"><button type="button" onclick="print()">طباعة</button><button id="receiptWhatsapp" type="button">إرسال الصورة واتساب</button><button id="receiptDownload" type="button">تنزيل الصورة</button></div><p id="receiptShareHint" style="font-size:12px;line-height:1.7">راجع رقم العميل قبل الإرسال. المشاركة تحتاج اختيار المستلم أو إرفاق الصورة داخل واتساب.</p></main></body></html>`);
     popup.document.close();
+    popup.document.getElementById('receiptWhatsapp').onclick=()=>openReceiptInWhatsapp(id,preparedBlob);
+    popup.addEventListener('pagehide',()=>URL.revokeObjectURL(imageUrl),{once:true});
+    popup.document.getElementById('receiptDownload').onclick=()=>{const a=popup.document.createElement('a');a.href=imageUrl;a.download='el-mezaen-'+String(item.code||item.id)+'.png';a.click();};
   } catch (error) {
     popup.close();
     toast(error.message || "تعذر تجهيز صورة الشيك", true);
@@ -1859,7 +1961,7 @@ function renderPayroll() {
   $("#payrollGrid").innerHTML = (state.business.payroll || []).filter(item => item.active !== false).map(item => {
     const paid = item.payment?.status === "paid";
     const progress = Number(item.progressPercent || 0);
-    return `<article class="payroll-card"><header><div class="customer-avatar">${escapeHtml(String(item.nameAr || "ع").charAt(0))}</div><div><h3>${escapeHtml(item.nameAr || item.id)}</h3><span>${escapeHtml(branchScopeLabel(item.branchIds))}</span></div><b class="${item.targetAchieved ? "target-hit" : ""}">${item.targetAchieved ? "تم تحقيق التارجت" : `${progress}% من التارجت`}</b></header><div class="target-progress"><i style="width:${progress}%"></i></div><dl><div><dt>إيراد الشهر</dt><dd>${money(item.revenue)}</dd></div><div><dt>التارجت</dt><dd>${money(item.monthlyTarget)}</dd></div><div><dt>الأساسي</dt><dd>${money(item.baseSalary)}</dd></div><div><dt>زيادة ${Number(item.targetBonusPercent || 0)}%</dt><dd>${money(item.bonus)}</dd></div></dl><div class="payroll-total"><span>الراتب المتوقع</span><strong>${money(item.netSalary)}</strong></div>${paid ? `<p class="salary-paid">تم الصرف: ${money(item.payment.netSalary)} • ${escapeHtml(dateTime(item.payment.paidAt))}</p>` : state.role === "admin" ? `<div class="payroll-actions"><label>تسوية + أو -<input type="number" step="any" value="0" data-payroll-adjustment="${escapeAttr(item.id)}"></label><select data-payroll-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option></select><button class="small-button primary" data-pay-salary="${escapeAttr(item.id)}">تسجيل صرف الراتب</button></div>` : ""}</article>`;
+    return `<article class="payroll-card"><header><div class="customer-avatar">${escapeHtml(String(item.nameAr || "ع").charAt(0))}</div><div><h3>${escapeHtml(item.nameAr || item.id)}</h3><span>${escapeHtml(branchScopeLabel(item.branchIds))}</span></div><b class="${item.targetAchieved ? "target-hit" : ""}">${item.targetAchieved ? "تم تحقيق التارجت" : `${progress}% من التارجت`}</b></header><div class="target-progress"><i style="width:${progress}%"></i></div><dl><div><dt>إيراد الشهر</dt><dd>${money(item.revenue)}</dd></div><div><dt>التارجت</dt><dd>${money(item.monthlyTarget)}</dd></div><div><dt>الأساسي</dt><dd>${money(item.baseSalary)}</dd></div><div><dt>زيادة ${Number(item.targetBonusPercent || 0)}%</dt><dd>${money(item.bonus)}</dd></div></dl><div class="payroll-total"><span>الراتب المتوقع</span><strong>${money(item.netSalary)}</strong></div>${paid ? `<p class="salary-paid">المستحق الإجمالي: ${money(item.payment.grossEntitlement ?? item.payment.netSalary)} • خصم السلف ${money(item.payment.advanceDeduction || 0)} • المدفوع ${money(item.payment.netPaid ?? item.payment.netSalary)} • المتبقي من السلف ${money(item.payment.remainingAdvance || 0)} • ${escapeHtml(dateTime(item.payment.paidAt))}${item.payment.fundingBranchId ? `<br>فرع الدرج: ${escapeHtml(branchLabel(item.payment.fundingBranchId))} • النقد المدفوع ${money(item.payment.netCashPaid)}<br>مرجع حركة الدرج: ${escapeHtml(item.payment.cashMovementReference || "—")}` : ""}</p>` : state.role === "admin" ? `<div class="payroll-actions"><label>تسوية + أو -<input type="number" step="any" value="0" data-payroll-adjustment="${escapeAttr(item.id)}"></label><select data-payroll-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option></select>${item.branchIds?.length > 1 ? `<label>فرع صرف المرتب<select data-payroll-funding="${escapeAttr(item.id)}"><option value="">اختر الفرع للراتب النقدي</option>${item.branchIds.filter(branch => ["talkha", "mashaya"].includes(branch)).map(branch => `<option value="${escapeAttr(branch)}">${escapeHtml(branchLabel(branch))}</option>`).join("")}</select><small>مصروف الراتب: كل الفروع — الدرج: الفرع المختار فقط</small></label>` : ""}<p data-payroll-info="${escapeAttr(item.id)}" role="status" aria-live="polite"></p><button class="small-button primary" data-pay-salary="${escapeAttr(item.id)}">تسجيل صرف الراتب</button></div>` : ""}</article>`;
   }).join("") || '<div class="entity-card"><p>أضف بيانات الراتب والتارجت من قسم فريق العمل.</p></div>';
 }
 
@@ -1980,8 +2082,10 @@ function renderPosCart() {
     const options = item.section === "drink" && item.drinkOptions?.length ? `<select data-pos-option="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="تحضير ${escapeAttr(item.nameAr)}">${item.drinkOptions.map(option => `<option value="${escapeAttr(option)}" ${option === line.option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>` : "";
     const quantity = ["inventory", "product", "drink"].includes(line.kind) ? `<input type="number" min="1" max="${line.kind === "inventory" ? Math.max(1, item.stockQty) : 20}" value="${line.qty}" data-pos-qty="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="الكمية">` : "";
     const staff=(state.collections.get("staff")||[]).filter(member=>member.active!==false&&member.available!==false&&availableAtBranch(member,$("#posBranch").value));const needsWorker=["service","package","offer"].includes(line.kind);const worker=needsWorker?`<select data-pos-worker="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="العامل لخدمة ${escapeAttr(item.nameAr)}"><option value="none">بدون عامل</option>${staff.map(member=>`<option value="${escapeAttr(member.id)}" ${member.id===(line.workerId||$("#posStaff").value)?"selected":""}>${escapeHtml(member.nameAr)}</option>`).join("")}</select>`:"";
+    const serviceWorkerId=line.workerId||$("#posStaff").value;
+    const serviceAction=needsWorker&&(state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations'))&&serviceWorkerId&&serviceWorkerId!=='none'?`<button class="small-button" type="button" data-service-draft-worker="${escapeAttr(serviceWorkerId)}" data-service-draft-duration="${Math.max(5,Math.ceil((Number(item.duration)||30)/5)*5)}">تشغيل الخدمة وحجز وقت العامل</button>`:'';
     const packageChoices = item.choiceGroups?.length ? `<div class="pos-package-choices">${item.choiceGroups.map(group => `<label><span>${escapeHtml(group.labelAr || "اختيار الباقة")}${group.required === false ? "" : " *"}</span><select data-pos-choice="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" data-choice-group="${escapeAttr(group.id)}" aria-label="${escapeAttr(group.labelAr || "اختيار الباقة")}" ${group.required === false ? "" : "required"}><option value="">اختر واحدًا</option>${(group.options || []).map(option => `<option value="${escapeAttr(option.id)}" ${line.choices?.[group.id] === option.id ? "selected" : ""}>${escapeHtml(option.labelAr || option.id)}</option>`).join("")}</select></label>`).join("")}</div>` : "";
-    return `<div class="pos-cart-line"><div><b>${escapeHtml(item.nameAr)}</b><small>${money(item.price)} × ${line.qty}${line.option ? ` • ${escapeHtml(line.option)}` : ""}</small></div><div class="pos-line-controls">${worker}${options}${quantity}${packageChoices}</div><strong>${money(item.price * line.qty)}</strong><button type="button" data-pos-remove="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="حذف ${escapeAttr(item.nameAr)}">×</button></div>`;
+    return `<div class="pos-cart-line"><div><b>${escapeHtml(item.nameAr)}</b><small>${money(item.price)} × ${line.qty}${line.option ? ` • ${escapeHtml(line.option)}` : ""}</small></div><div class="pos-line-controls">${worker}${serviceAction}${options}${quantity}${packageChoices}</div><strong>${money(item.price * line.qty)}</strong><button type="button" data-pos-remove="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="حذف ${escapeAttr(item.nameAr)}">×</button></div>`;
   }).join("") || '<p>لم تتم إضافة أصناف بعد.</p>';
   const subtotal = state.posCart.reduce((sum, line) => sum + Number(index.get(`${line.kind}:${line.id}`)?.price || 0) * line.qty, 0);
   const discount = Math.max(0, Math.min(subtotal, Number($("#posDiscount").value || 0)));
@@ -2136,25 +2240,71 @@ async function submitExpense(event) {
 async function paySalary(staffId) {
   if (state.role !== "admin") return toast("صرف الرواتب متاح للأدمن فقط", true);
   const item = (state.business.payroll || []).find(value => value.id === staffId);
-  if (!item || !confirm(`تسجيل صرف راتب ${item.nameAr} عن ${state.business.month}؟`)) return;
+  if (!item) return;
+  const month = state.business.month, epoch = businessRequestVersion;
   const adjustment = Number(document.querySelector(`[data-payroll-adjustment="${CSS.escape(staffId)}"]`)?.value || 0);
   const paymentMethod = document.querySelector(`[data-payroll-method="${CSS.escape(staffId)}"]`)?.value || "cash";
+  const info = document.querySelector(`[data-payroll-info="${CSS.escape(staffId)}"]`);
+  const fundingBranchId = paymentMethod === "cash" ? (item.branchIds?.length === 1 ? item.branchIds[0] : document.querySelector(`[data-payroll-funding="${CSS.escape(staffId)}"]`)?.value) : null;
+  if (paymentMethod === "cash" && !fundingBranchId) return toast("اختر فرع صرف المرتب للعامل المشترك", true);
+  const basePayload = { month, staffId, adjustment, paymentMethod, ...(fundingBranchId ? { fundingBranchId } : {}) };
+  const attemptKey = JSON.stringify(basePayload);
+  state.payrollAttempts ||= new Map();
+  let payload = state.payrollAttempts.get(attemptKey);
   try {
-    await recordPayrollPayment({ month: state.business.month, staffId, adjustment, paymentMethod });
+    const amount = payload?.expectedEntitlement ?? Math.max(0, Number(item.netSalary || 0) + adjustment);
+    const balance = payload ? {balanceVersion:payload.expectedBalanceVersion,outstandingAdvance:payload.expectedOutstandingAdvance} : await getWorkerAdvanceBalance({staffId});
+    if (epoch !== businessRequestVersion || month !== state.business.month) return;
+    const deduction = Math.min(Math.floor((amount+1e-9)*100)/100, Number(balance.outstandingAdvance));
+    const net = amount-deduction;
+    let shiftId = payload?.expectedShiftId;
+    if (paymentMethod === "cash" && net>0 && !payload) {
+      const cash = await getCashOperations(fundingBranchId, { payrollPreview: true });
+      if (epoch !== businessRequestVersion || month !== state.business.month) return;
+      if (cash.state?.status !== "OPEN" || cash.shift?.status !== "OPEN" || cash.shift.branchId !== fundingBranchId || cash.state.openShiftId !== cash.shift.id) throw Error("لا توجد وردية كاش مؤهلة مفتوحة في فرع الصرف");
+      shiftId = cash.shift.id;
+    }
+    if (info) info.textContent = `المستحق ${money(amount)} • خصم السلف ${money(deduction)} • صافي الدفع ${money(net)} • المتبقي ${money(balance.outstandingAdvance-deduction)}${shiftId?` • الوردية ${shiftId}`:""}`;
+    if (!confirm(`تأكيد تسوية راتب ${item.nameAr} عن ${month}؟\nالمستحق ${money(amount)} • خصم السلف ${money(deduction)} • صافي الدفع ${money(net)}\nمصروف الراتب: ${branchScopeLabel(item.branchIds)}${paymentMethod === "cash" ? `\nفرع الدرج: ${branchLabel(fundingBranchId)} • الوردية: ${shiftId || "لا توجد حركة نقدية للصافي صفر"}` : "\nالدفع غير نقدي"}`)) return;
+    payload ||= { ...basePayload, expectedEntitlement: amount, expectedBalanceVersion:balance.balanceVersion, expectedOutstandingAdvance:balance.outstandingAdvance, ...(shiftId ? { expectedShiftId: shiftId } : {}) };
+    state.payrollAttempts.set(attemptKey, payload);
+    const {expectedOutstandingAdvance,...postingPayload}=payload;
+    const result = await recordPayrollPayment(postingPayload);
+    state.payrollAttempts.delete(attemptKey);
     await Promise.all([loadDashboard(), loadBusiness(true)]);
-    toast("تم تسجيل صرف الراتب وإضافته للمصروفات");
-  } catch (error) { toast(error.message || "تعذر تسجيل صرف الراتب", true); }
+    toast(result.idempotent ? "التسوية مسجلة بالفعل دون تكرار الخصم" : "تم تسجيل الراتب ومصروفه وحركة الدرج المرتبطة به");
+  } catch (error) {
+    if (!/unavailable|deadline-exceeded|internal|network/.test(error.code || error.cause?.code || error.message || "")) state.payrollAttempts.delete(attemptKey);
+    if (info) info.textContent = error.message || "تعذر تسجيل صرف الراتب";
+    toast(error.message || "تعذر تسجيل صرف الراتب", true);
+  }
 }
 
+let collectionRequestEpoch=0;
+const collectionLoads = new Map(), collectionLoadVersions = new Map(), collectionCacheScopes = new Map();
+function collectionReadScope(collection) {
+  return JSON.stringify([collectionRequestEpoch, state.user?.uid || '', state.role, [...state.permissions].sort(), [...state.branchIds].sort(), $("#headerBranchFilter").value, collection, 100, '']);
+}
 async function loadCollection(collection, refresh = false) {
-  if (!refresh && state.collections.has(collection)) return renderCollection(collection);
+  const scope = collectionReadScope(collection), branchId = $("#headerBranchFilter").value;
+  if (!refresh && collectionCacheScopes.get(collection) === scope && state.collections.has(collection)) return renderCollection(collection);
+  let entry = collectionLoads.get(scope);
+  if (!entry || refresh) {
+    entry = {promise: Promise.resolve().then(() => getCollection(collection, 100, "", branchId))};
+    collectionLoads.set(scope, entry);
+  }
+  collectionLoadVersions.set(collection, entry);
+  const current = () => collectionReadScope(collection) === scope && collectionLoadVersions.get(collection) === entry;
   try {
-    const result = await getCollection(collection, 100);
+    const result = await entry.promise;
+    if (!current()) return;
     state.collections.set(collection, result.items || []);
+    collectionCacheScopes.set(collection, scope);
     state.collectionCursors.set(collection, result.nextCursor || null);
     renderCollection(collection);
     $$(`[data-load-more="${CSS.escape(collection)}"]`).forEach(button => { button.hidden = !result.nextCursor; });
-  } catch (error) { toast(`تعذر تحميل ${collection}: ${error.message}`, true); }
+  } catch (error) { if (current()) toast(`تعذر تحميل ${collection}: ${error.message}`, true); }
+  finally { if (collectionLoads.get(scope) === entry) collectionLoads.delete(scope); }
 }
 
 async function loadPosOffers() {
@@ -2204,9 +2354,11 @@ async function installRequiredPackages(button) {
 
 async function loadMoreCollection(collection, button) {
   const cursor = state.collectionCursors.get(collection);
+  const epoch = collectionRequestEpoch, branchId = $("#headerBranchFilter").value;
   if (!cursor) return;
   await withButtonBusy(button, async () => {
-    const result = await getCollection(collection, 100, cursor);
+    const result = await getCollection(collection, 100, cursor, branchId);
+    if (epoch !== collectionRequestEpoch || branchId !== $("#headerBranchFilter").value) return;
     const current = state.collections.get(collection) || [];
     const merged = new Map([...current, ...(result.items || [])].map(item => [item.id, item]));
     state.collections.set(collection, [...merged.values()]);
@@ -2269,7 +2421,10 @@ function renderCollection(collection) {
   }
 }
 
+const staffPresentationFields = new Set(['nameAr','specialtyAr','bioAr','imageUrl','imageFile','sortOrder']);
+function staffPresentationCard(item){return `<article class="entity-card"><img class="entity-avatar" src="${escapeAttr(safeMediaUrl(item.imageUrl)||'/assets/el-mezaen-logo.jpeg')}" alt="" loading="lazy" decoding="async"><h3>${escapeHtml(item.nameAr||item.id)}</h3><p>${escapeHtml(item.specialtyAr||'')}</p><p>${escapeHtml(item.bioAr||'')}</p><p>${escapeHtml(item.branchIds?.length?branchScopeLabel(item.branchIds):'غير مربوط بفرع')} • ${item.active===false?'غير نشط':'نشط'}</p><footer><button data-edit-collection="staff" data-edit-id="${escapeAttr(item.id)}">تعديل العرض على الموقع</button></footer></article>`;}
 function entityCard(collection, item, readonly = false) {
+  if(collection==='staff'&&state.staffPresentation)return staffPresentationCard(item);
   if (collection === "customers") return customerCard(item);
   if (collection === "activityLogs") return activityCard(item);
   if (collection === "reviews") return reviewCard(item);
@@ -2294,7 +2449,7 @@ function entityCard(collection, item, readonly = false) {
   </div>` : "";
   const health=collection==='staff'?staffBranchHealth(item,state.collections.get('branches')?.length?state.collections.get('branches').map(b=>b.id):undefined):null;
   const staffHealth=health?`<div class="staff-data-health"><p>نشط: ${health.active?'نعم':'لا'} • متاح: ${health.available?'نعم':'لا'}</p><p>الفروع: ${escapeHtml(health.branchIds.join('، ')||'غير مربوط بفرع')}</p>${health.missing?'<b class="stock-warning">غير مربوط بفرع</b>':''}${health.invalid.length?'<b class="stock-warning">ربط فرع غير صالح</b>':''}<p>الحساب المرتبط: ${escapeHtml(health.linkedUid||'غير مربوط')}</p><p>الصورة: ${health.photo?'مرفوعة':'لم تُرفع بعد'}</p>${state.role==='admin'?`<button data-edit-collection="staff" data-edit-id="${escapeAttr(item.id)}">تحديد فروع العامل</button>`:''}</div>`:'';
-  const actions = collection === "branches" ? `<footer><button data-edit-collection="branches" data-edit-id="${escapeAttr(item.id)}">تعديل الموقع والنطاق</button></footer>` : `<footer>${collection === "offers" ? `${state.permissions.has("campaigns") || state.role === "admin" ? `<button data-offer-campaign="${escapeAttr(item.id)}">إرسال العرض للعملاء</button>` : ""}${(state.permissions.has("campaigns") && state.permissions.has("customers")) || state.role === "admin" ? `<button class="offer-send" data-prepare-offer-messages="${escapeAttr(item.id)}">إرسال للعملاء يدويًا</button>` : ""}` : ""}${collection === "offers" ? `<button data-preview-offer="${escapeAttr(item.id)}">معاينة</button><button data-book-offer="${escapeAttr(item.id)}">احجز العرض</button>` : ""}${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`;
+  const actions = collection === "branches" ? `<footer><button data-edit-collection="branches" data-edit-id="${escapeAttr(item.id)}">تعديل الموقع والنطاق</button></footer>` : `<footer>${collection === "staff" ? `<button type="button" data-worker-availability="${escapeAttr(item.id)}" data-worker-branch="${escapeAttr(item.branchIds?.[0]||'')}">إدارة التوفر</button>` : ""}${collection === "offers" ? `${state.permissions.has("campaigns") || state.role === "admin" ? `<button data-offer-campaign="${escapeAttr(item.id)}">إرسال العرض للعملاء</button>` : ""}${(state.permissions.has("campaigns") && state.permissions.has("customers")) || state.role === "admin" ? `<button class="offer-send" data-prepare-offer-messages="${escapeAttr(item.id)}">إرسال للعملاء يدويًا</button>` : ""}` : ""}${collection === "offers" ? `<button data-preview-offer="${escapeAttr(item.id)}">معاينة</button><button data-book-offer="${escapeAttr(item.id)}">احجز العرض</button>` : ""}${collection === "categories" ? `<button class="category-view" data-service-category="${escapeAttr(item.id)}">عرض الخدمات</button>` : ""}<button data-edit-collection="${collection}" data-edit-id="${escapeAttr(item.id)}">تعديل</button>${"active" in item ? `<button data-toggle-collection="${collection}" data-toggle-id="${escapeAttr(item.id)}">${collection === "reviews" ? item.active ? "إخفاء" : "نشر" : item.active === false ? "تفعيل" : "إيقاف"}</button>` : ""}<button class="delete" data-delete-collection="${collection}" data-delete-id="${escapeAttr(item.id)}">حذف</button></footer>`;
   return `<article class="entity-card ${item.active === false || item.available === false ? "inactive" : ""}">${collection === "staff" ? `<img class="entity-avatar" src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-logo.jpeg")}" alt="" loading="lazy" decoding="async">` : ""}${contentPreview}<h3>${escapeHtml(title)}</h3>${staffHealth}<p>${escapeHtml(detail)}</p>${packageDetails}${collection === "coupons" ? `<p>استخدام: ${Number(item.usageCount || 0)} • خصومات: ${money(item.discountTotal || 0)}</p>` : ""}${collection === "staff" ? `<p>حجوزات: ${Number(item.bookingCount || 0)} • إيراد: ${money(item.revenueTotal || 0)}<br>راتب: ${money(item.baseSalary)} • تارجت: ${money(item.monthlyTarget)} • زيادة: ${Number(item.targetBonusPercent || 0)}%</p>` : ""}${collection === "inventoryItems" && Number(item.stockQty || 0) <= Number(item.minStock || 0) ? '<b class="stock-warning">⚠ الرصيد منخفض</b>' : ""}${collection === "reviews" ? `<b class="review-state">${item.active ? "منشور على الموقع" : "بانتظار المراجعة"}</b>` : ""}${readonly ? "" : actions}</article>`;
 }
 
@@ -2442,17 +2597,21 @@ function branchScopeLabel(ids) {
 function openEditor(collection, id = "", preset = {}) {
   const item = id ? (state.collections.get(collection) || []).find(value => value.id === id) || {} : {};
   state.editor = { collection, id, preset };
-  $("#editorCollectionLabel").textContent = collection;
+  const staffPresentation=collection==='staff'&&state.staffPresentation;
+  if(staffPresentation && (state.role!=='admin'||!id||!item.id))return toast('اختر عاملًا موجودًا ومصرحًا به',true);
+  state.editor.staffPresentation=staffPresentation;
+  $("#editorCollectionLabel").textContent = ({categories:"تصنيفات الخدمات",branches:"الفروع",content:"محتوى الموقع",translations:"الترجمة",inventoryItems:"المخزون",workerLeaves:"إجازات الفريق"})[collection] || sectionTitles[collection] || "إدارة البيانات";
   $("#editorTitle").textContent = id ? "تعديل العنصر" : "إضافة عنصر جديد";
-  const schema = fields[collection];
+  const schema = staffPresentation ? fields.staff.filter(([name])=>staffPresentationFields.has(name)) : fields[collection];
   if (!schema) return toast("هذا القسم للعرض فقط", true);
   const editorItem = { active: true, available: true, closed: true, mediaType: "image", status: collection === "content" ? "draft" : undefined, ...preset, ...item };
   if (collection === "content" && !item.status && id) editorItem.status = item.active === false ? "hidden" : "published";
-  $("#editorFields").innerHTML = schema.map(definition => renderField(definition, editorItem)).join("") + (collection === "content" ? '<div class="editor-media-preview full" id="editorMediaPreview"><span>ستظهر معاينة الصورة أو الفيديو هنا</span></div>' : "");
-  if (collection === "content") {
+  $("#editorFields").innerHTML = schema.map(definition => renderField(definition, editorItem)).join("") + (["content","services","packages","offers","branches","staff"].includes(collection) ? '<div class="editor-media-preview full" id="editorMediaPreview"><span>ستظهر معاينة الصورة أو الفيديو هنا</span></div>' : "");
+  if(staffPresentation){$('#editorTitle').textContent='تعديل عرض العامل على الموقع';$('#editorFields').insertAdjacentHTML('beforeend',`<p class="full">الفروع الحالية: ${escapeHtml(item.branchIds?.length?branchScopeLabel(item.branchIds):'غير مربوط بفرع')}. هذا المحرر لا يغيّر الفروع أو إعدادات العمل.</p>`);}
+  if (["content","services","packages","offers","branches","staff"].includes(collection)) {
     for (const name of ["beforeFile", "afterFile"]) $("#editorFields").querySelector(`[name="${name}"]`)?.closest("label")?.toggleAttribute("hidden", editorItem.type !== "result");
-    $("#editorFields").addEventListener("input", updateEditorMediaPreview);
-    $("#editorFields").addEventListener("change", updateEditorMediaPreview);
+    $("#editorFields").oninput = updateEditorMediaPreview;
+    $("#editorFields").onchange = updateEditorMediaPreview;
     updateEditorMediaPreview();
   }
   $("#editorDialog").showModal();
@@ -2491,13 +2650,18 @@ function renderField([name, label, type, required = false, options = null, full 
 }
 
 let editorPreviewUrls = [];
+let editorPreviewVersion=0;
+let editorPosterCache=new WeakMap();
+function editorPoster(file){let promise=editorPosterCache.get(file);if(!promise){promise=createVideoPoster(file);editorPosterCache.set(file,promise);}return promise;}
+
 function updateEditorMediaPreview() {
   const preview = $("#editorMediaPreview");
   if (!preview) return;
+  const version=++editorPreviewVersion;
   editorPreviewUrls.forEach(url => URL.revokeObjectURL(url)); editorPreviewUrls = [];
   const localUrl = file => { const url = URL.createObjectURL(file); editorPreviewUrls.push(url); return url; };
   const mediaFile = $('#editorFields input[name="mediaFile"]')?.files?.[0];
-  const imageFile = mediaFile?.type?.startsWith("image/") ? mediaFile : $('#editorFields input[name="imageFile"]')?.files?.[0];
+  const imageFile = $('#editorFields input[name="posterFile"]')?.files?.[0] || (mediaFile?.type?.startsWith("image/") ? mediaFile : $('#editorFields input[name="imageFile"]')?.files?.[0]);
   const videoFile = mediaFile?.type?.startsWith("video/") ? mediaFile : $('#editorFields input[name="videoFile"]')?.files?.[0];
   const imageUrl = imageFile ? localUrl(imageFile) : $('#editorFields [name="imageUrl"]')?.value.trim();
   const rawVideoUrl = videoFile ? localUrl(videoFile) : $('#editorFields [name="videoUrl"]')?.value.trim();
@@ -2506,9 +2670,10 @@ function updateEditorMediaPreview() {
   const beforeUrl = beforeFile ? localUrl(beforeFile) : $('#editorFields [name="beforeImageUrl"]')?.value.trim();
   const afterUrl = afterFile ? localUrl(afterFile) : $('#editorFields [name="afterImageUrl"]')?.value.trim();
   const source = videoSource(rawVideoUrl);
+  if(videoFile&&!imageFile)editorPoster(videoFile).then(poster=>{if(version!==editorPreviewVersion)return;const player=preview.querySelector('video');if(player)player.poster=localUrl(poster);}).catch(()=>{if(version===editorPreviewVersion)preview.insertAdjacentHTML('beforeend','<small>تعذر تجهيز الغلاف؛ اختر MP4 بترميز H.264 أو WebM قابل للتشغيل.</small>');});
   if (beforeUrl && afterUrl && (beforeFile || safeMediaUrl(beforeUrl)) && (afterFile || safeMediaUrl(afterUrl))) preview.innerHTML = `<div class="editor-before-after"><figure><img src="${escapeAttr(beforeFile ? beforeUrl : safeMediaUrl(beforeUrl))}" alt="قبل"><figcaption>قبل</figcaption></figure><figure><img src="${escapeAttr(afterFile ? afterUrl : safeMediaUrl(afterUrl))}" alt="بعد"><figcaption>بعد</figcaption></figure></div>`;
   else if (videoFile || source.kind === "direct") preview.innerHTML = `<video src="${escapeAttr(videoFile ? rawVideoUrl : source.url)}" poster="${escapeAttr(imageFile ? imageUrl : safeMediaUrl(imageUrl))}" controls playsinline preload="metadata"></video>`;
-  else if (source.kind === "embed") preview.innerHTML = `<iframe src="${escapeAttr(source.url)}" title="معاينة الفيديو" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  else if (source.kind === "embed") preview.innerHTML = `<iframe src="${escapeAttr(source.url.replace(/autoplay=1/g,"autoplay=0"))}" title="معاينة الفيديو" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
   else if (source.kind === "external") preview.innerHTML = `<a href="${escapeAttr(source.url)}" target="_blank" rel="noopener">فتح ومعاينة رابط الفيديو ↗</a>`;
   else if (imageFile || safeMediaUrl(imageUrl)) preview.innerHTML = `<img src="${escapeAttr(imageFile ? imageUrl : safeMediaUrl(imageUrl))}" alt="معاينة الصورة">`;
   else preview.innerHTML = "<span>ستظهر معاينة الصورة أو الفيديو هنا</span>";
@@ -2518,16 +2683,20 @@ async function saveEditor(event) {
   event.preventDefault();
   const { collection, id } = state.editor;
   const formData = new FormData(event.currentTarget);
+  const staffPresentation=state.editor.staffPresentation===true;
+  if(staffPresentation && (collection!=='staff'||state.role!=='admin'||!canOpenSection('staff')||!id||[...formData.keys()].some(name=>!staffPresentationFields.has(name))))return toast('حقول غير مصرح بها في محرر العرض',true);
   const media = formData.get("mediaFile");
-  const image = media?.type?.startsWith("image/") ? media : formData.get("imageFile");
+  const manualPoster=formData.get("posterFile");
+  const image = manualPoster?.size ? manualPoster : media?.type?.startsWith("image/") ? media : formData.get("imageFile");
   const video = media?.type?.startsWith("video/") ? media : formData.get("videoFile");
   const beforeFile = formData.get("beforeFile"), afterFile = formData.get("afterFile");
-  formData.delete("beforeFile"); formData.delete("afterFile");
+  formData.delete("beforeFile"); formData.delete("afterFile"); formData.delete("posterFile");
   formData.delete("mediaFile");
   formData.delete("imageFile");
   formData.delete("videoFile");
   const payload = Object.fromEntries(formData.entries());
   const existing = id ? (state.collections.get(collection) || []).find(item => item.id === id) || {} : {};
+  if(staffPresentation){if(!existing.id||!Array.isArray(existing.branchIds)||!existing.branchIds.length)return toast('تحقق من ربط العامل بالفروع في إدارة الفريق',true);payload.branchIds=existing.branchIds.join(',');}
   if (collection === "packages" && payload.choiceGroups) {
     try { payload.choiceGroups = JSON.parse(payload.choiceGroups); }
     catch { return toast("صيغة JSON لاختيارات الباقة غير صحيحة", true); }
@@ -2543,6 +2712,10 @@ async function saveEditor(event) {
   if (collection === "content" && !image?.size && !video?.size && !beforeFile?.size && !payload.imageUrl && !payload.videoUrl && !payload.beforeImageUrl && !existing.imageUrl && !existing.videoUrl && !existing.beforeImageUrl) return toast("اختر صورة أو فيديو من الجهاز أولًا", true);
   if (collection === "content" && (beforeFile?.size || afterFile?.size) && payload.type !== "result") return toast("صور قبل وبعد مخصصة لنتائج الشغل", true);
   [["nameAr", "nameEn"], ["descriptionAr", "descriptionEn"], ["titleAr", "titleEn"], ["bodyAr", "bodyEn"], ["specialtyAr", "specialtyEn"], ["bioAr", "bioEn"], ["reasonAr", "reasonEn"]].forEach(([ar, en]) => { if (payload[ar] != null) payload[en] = existing[en] || payload[ar]; });
+  if(["content","services","packages","offers","staff"].includes(collection)) {
+    const requested=String(payload.branchIds||'').split(/[،,]/).map(v=>v.trim()).filter(Boolean);
+    if(!requested.length||requested.some(id=>!["talkha","mashaya"].includes(id)||state.role!=="admin"&&!state.branchIds.includes(id)))return toast('اختر فرعًا مصرحًا به قبل الرفع',true);
+  }
   const saveButton = $("#editorSave");
   const saveLabel = saveButton.textContent;
   saveButton.disabled = true;
@@ -2551,36 +2724,51 @@ async function saveEditor(event) {
     if (image?.size) {
       const offerBranches = String(payload.branchIds || (existing.branchIds || []).join(",")).split(/[،,]/).map(value => value.trim()).filter(Boolean);
       const folder = collection === "offers" ? `offers/${offerBranches.length === 1 ? offerBranches[0] : "all"}` : collection === "content" ? `content/${payload.type}/${offerBranches[0]}` : collection;
-      payload.imageUrl = await uploadImage(image, folder, collection === "content" ? percent => { saveButton.textContent = `جاري رفع الصورة ${percent}%`; } : null);
-      if (collection === "content") { $("#editorFields [name=imageUrl]").value = payload.imageUrl; $("#editorFields [name=mediaFile]").value = ""; }
+      payload.imageUrl = await uploadImage(image, folder, percent => { saveButton.textContent = `جاري رفع الصورة ${percent}%`; });
+      if ($("#editorFields [name=imageUrl]")) $("#editorFields [name=imageUrl]").value=payload.imageUrl;
+      if (video?.size) state.editor.pendingVideoPoster = video;
+      const chosenImage=manualPoster?.size ? $("#editorFields [name=posterFile]") : $("#editorFields [name=imageFile]") || (media?.type?.startsWith("image/") ? $("#editorFields [name=mediaFile]") : null); if(chosenImage)chosenImage.value="";
     }
     if (video?.size) {
       await validateVideoFile(video);
       saveButton.textContent = "جاري تجهيز صورة الفيديو…";
       let poster;
-      try { poster = await createVideoPoster(video); }
+      try { poster = await editorPoster(video); }
       catch { throw new Error("الفيديو لا يعمل داخل المتصفح أو ترميزه غير مدعوم. اختر MP4 بترميز H.264 (وليس HEVC/MOV)"); }
       const folder = collection === "content" ? `content/${payload.type}/${String(payload.branchIds).split(",")[0]}` : `${collection}/posters`;
-      payload.imageUrl = await uploadImage(poster, folder);
+      if (!(state.editor.pendingVideoPoster === video && payload.imageUrl)) {
+        if (!image?.size) payload.imageUrl = await uploadImage(poster, folder,percent=>{saveButton.textContent=`رفع غلاف الفيديو ${percent}%`;});
+        if ($("#editorFields [name=imageUrl]")) $("#editorFields [name=imageUrl]").value = payload.imageUrl;
+        state.editor.pendingVideoPoster = video;
+      }
       saveButton.textContent = "جاري رفع الفيديو…";
-      payload.videoUrl = await uploadVideo(video, collection === "content" ? folder : collection, collection === "content" ? percent => { saveButton.textContent = `جاري رفع الفيديو ${percent}%`; } : null);
+      payload.videoUrl = await uploadVideo(video, collection === "content" ? folder : collection, percent => { saveButton.textContent = `جاري رفع الفيديو ${percent}%`; });
       if (collection === "content") { $("#editorFields [name=videoUrl]").value = payload.videoUrl; $("#editorFields [name=imageUrl]").value = payload.imageUrl; $("#editorFields [name=mediaFile]").value = ""; }
       payload.mediaType = "video";
     }
     if (collection === "content" && (beforeFile?.size || afterFile?.size)) {
       const folder = `content/result/${String(payload.branchIds).split(",")[0]}`;
-      if (beforeFile?.size) payload.beforeImageUrl = await uploadImage(beforeFile, folder);
-      if (afterFile?.size) payload.afterImageUrl = await uploadImage(afterFile, folder);
+      if (beforeFile?.size) {
+        payload.beforeImageUrl = await uploadImage(beforeFile, folder);
+        $("#editorFields [name=beforeImageUrl]").value = payload.beforeImageUrl;
+        $("#editorFields [name=beforeFile]").value = "";
+      }
+      if (afterFile?.size) {
+        payload.afterImageUrl = await uploadImage(afterFile, folder);
+        $("#editorFields [name=afterImageUrl]").value = payload.afterImageUrl;
+        $("#editorFields [name=afterFile]").value = "";
+      }
       if (payload.afterImageUrl) payload.imageUrl = payload.afterImageUrl;
       for (const name of ["before", "after"]) if (payload[`${name}ImageUrl`]) { $("#editorFields [name=" + name + "ImageUrl]").value = payload[`${name}ImageUrl`]; $("#editorFields [name=" + name + "File]").value = ""; }
       if (payload.imageUrl) $("#editorFields [name=imageUrl]").value = payload.imageUrl;
     }
-    await saveEntity(collection, id, payload);
+    const saveId=id || (state.editor.pendingId ||= crypto.randomUUID());
+    await saveEntity(collection, saveId, payload);
     $("#editorDialog").close();
     await loadCollection(collection, true);
     if (state.section === "mobileContent") renderMobileContent();
-    if (["inventoryItems", "drinks", "staff"].includes(collection)) await loadBusiness(true);
-    toast("تم الحفظ بنجاح");
+    if (["inventoryItems", "drinks", "staff"].includes(collection) && !staffPresentation) await loadBusiness(true);
+    toast(collection === "content" ? payload.status === "published" ? "تم حفظ ونشر المحتوى" : "تم حفظ المحتوى دون نشره" : "تم الحفظ بنجاح");
   } catch (error) { toast(error.message || "تعذر الحفظ", true); }
   finally { saveButton.disabled = false; saveButton.textContent = saveLabel; }
 }
@@ -2748,22 +2936,45 @@ function fillSettings(item) {
     if (!form) return;
     [...form.elements].forEach(input => { if (input.name && item[input.name] != null) input.value = input.name === "whatsappMarketingTemplates" ? JSON.stringify(item[input.name], null, 2) : item[input.name]; });
   });
+  refreshSiteMediaEditor(item);
 }
 
 async function saveSettingsForm(event) {
   event.preventDefault();
-  const button = event.currentTarget.querySelector('button[type="submit"], button:not([type])');
-  if (button?.disabled) return;
-  if (button) button.disabled = true;
-  const payload = Object.fromEntries(new FormData(event.currentTarget));
-  try { for(const field of ["hero", "hairSystem"]){ const file=payload[`${field}ImageFile`];delete payload[`${field}ImageFile`];if(file?.size)payload[`${field}ImageUrl`]=await uploadImage(file,"homepage");} } catch(error){toast(error.message,true);if(button)button.disabled=false;return;}
-  const existing = (state.collections.get("settings") || [])[0] || {};
-  if (payload.businessNameAr != null) payload.businessNameEn = existing.businessNameEn || payload.businessNameAr;
-  if (payload.aboutAr != null) payload.aboutEn = existing.aboutEn || payload.aboutAr;
-  if (payload.whatsappMarketingTemplates != null) { try { payload.whatsappMarketingTemplates = JSON.parse(payload.whatsappMarketingTemplates || "[]"); } catch { return toast("صيغة JSON لقوالب واتساب غير صحيحة", true); } }
-  try { await saveEntity("settings", "public", payload); await loadCollection("settings", true); toast("تم حفظ الإعدادات"); }
-  catch (error) { toast(error.message || "تعذر الحفظ", true); }
-  finally { if (button) button.disabled = false; }
+  const form=event.currentTarget,button=form.querySelector('button[type="submit"], button:not([type])');
+  if(button?.disabled)return;
+  const label=button?.textContent,feedback=form.querySelector('[data-settings-feedback]');
+  if(button)button.disabled=true;
+  const payload=Object.fromEntries(new FormData(form));
+  let saved=false;
+  setSiteMediaSaveState(form,'uploading');
+  try {
+    if(payload.whatsappMarketingTemplates!=null) {
+      try {payload.whatsappMarketingTemplates=JSON.parse(payload.whatsappMarketingTemplates||'[]');}catch{throw Error('صيغة JSON لقوالب واتساب غير صحيحة');}
+    }
+    for(const [field,slot] of Object.entries(siteMediaSlots)) {
+      const fileName=field.replace(/Url$/,'File'),file=pendingSiteMediaFile(form,field)||payload[fileName];delete payload[fileName];
+      if(file?.size) {
+        const progress=percent=>{if(button)button.textContent=`رفع ${slot.label} ${percent}%`;if(feedback)feedback.textContent=`رفع ${slot.label} ${percent}%`;};
+        payload[field]=await (field==='brandFaviconUrl'?uploadPngFavicon(file,progress):uploadImage(file,slot.folder,progress));
+        // Persist staged URL in the form for retry; never delete an object of unknown ownership.
+        const input=form.elements.namedItem(field);if(input)input.value=payload[field];
+        if(form.elements.namedItem(fileName))form.elements.namedItem(fileName).value='';
+        stageSiteMediaUpload(form,field,payload[field]);
+      }
+    }
+    const existing=(state.collections.get('settings')||[])[0]||{};
+    if(payload.businessNameAr!=null)payload.businessNameEn=existing.businessNameEn||payload.businessNameAr;
+    if(payload.aboutAr!=null)payload.aboutEn=existing.aboutEn||payload.aboutAr;
+    if(button)button.textContent='جاري الحفظ…';
+    await saveEntity('settings','public',payload);saved=true;
+    state.collections.set('settings',[{...existing,...payload}]);
+    completeSiteMediaSave(form,{...existing,...payload});
+    await loadCollection('settings',true);
+    if(feedback)feedback.textContent='تم حفظ الصور المنشورة. تظهر عند تحديث الكتالوج؛ النسخة المحفوظة دون اتصال قد تتأخر.';
+    toast('تم حفظ الإعدادات');
+  }catch(error){if(!saved)setSiteMediaSaveState(form,'failed');const message=saved?'تم الحفظ؛ تعذر تحديث العرض، أعد تحميل الإعدادات':error.message||'تعذر الحفظ؛ أعد المحاولة';if(feedback)feedback.textContent=message;toast(message,true);}
+  finally{if(button){button.disabled=false;button.textContent=label;}}
 }
 
 function exportCsv(filename, headers, rows) {
@@ -2817,6 +3028,10 @@ let pushRegistrationReady = false;
 let pushSyncing = false;
 let pushConnectionPromise;
 const connectAdminPush = () => pushConnectionPromise ||= enablePush().finally(() => { pushConnectionPromise = null; });
+const operationalNotices=[];
+let targetAchievementNotices=[],targetNoticeCursor=null;
+async function loadTargetAchievementAlerts(full=false){if(state.role!=="admin"){targetAchievementNotices=[];targetNoticeCursor=null;return;}try{const previous=targetNoticeCursor;const result=await getTargetAchievementNotifications({branchId:"all",...(!full&&previous?{after:previous}:{})});if(state.role!=="admin")return;const incoming=result.items||[];if(previous&&!full&&incoming.some(x=>!x.read&&!targetAchievementNotices.some(y=>y.id===x.id)))toast('عامل حقق التارجت — راجع جرس التنبيهات');targetAchievementNotices=(full||!previous?incoming:[...new Map([...incoming,...targetAchievementNotices].map(x=>[x.id,x])).values()]).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,50);targetNoticeCursor=result.cursor||previous;renderAdminAlerts();}catch(error){console.warn('Target achievement inbox unavailable',error.message);}}
+
 function renderAdminAlerts() {
   const stats = state.dashboard.stats || {};
   const alerts = [];
@@ -2830,11 +3045,13 @@ function renderAdminAlerts() {
     .filter(item => item.source !== "pos" && (item.status === "pending" || (item.status === "confirmed" && item.bookingDate === now) || (item.status === "no_show" && item.bookingDate === now)))
     .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || `${a.bookingDate || ""} ${a.bookingTime || ""}`.localeCompare(`${b.bookingDate || ""} ${b.bookingTime || ""}`))
     .slice(0, 15) : [];
+  const scopedNotices=[...operationalNotices,...(state.role==="admin"?targetAchievementNotices:[])].filter(n=>$("#headerBranchFilter").value==="all"||n.branchId===$("#headerBranchFilter").value);
+  const unreadNotices=scopedNotices.filter(n=>!n.read).length;
   const count = $("#adminAlertsCount");
-  if (count) { count.textContent = String(bookingNotices.length); count.hidden = bookingNotices.length === 0; count.setAttribute("aria-label", `${bookingNotices.length} حجوزات للمتابعة`); }
-  if ($("#adminAlertsNewCount")) $("#adminAlertsNewCount").textContent = `${bookingNotices.length} حجوزات للمتابعة`;
+  if (count) { count.textContent = String(bookingNotices.length+unreadNotices); count.hidden = bookingNotices.length+unreadNotices === 0; count.setAttribute("aria-label", `${bookingNotices.length} حجوزات للمتابعة • ${unreadNotices} تنبيه جديد`); }
+  if ($("#adminAlertsNewCount")) $("#adminAlertsNewCount").textContent = `${bookingNotices.length} حجوزات للمتابعة • ${unreadNotices} تنبيه جديد`;
   const target = $("#adminAlertsList");
-  if (target) target.innerHTML = bookingNotices.map(item => { const attention = item.status === "pending" ? item.source === "website" ? "حجز جديد من الموقع · يحتاج تأكيد" : "يحتاج تأكيد" : item.status === "no_show" ? "لم يحضر · متابعة" : item.bookingTime < currentTime ? "موعد متأخر" : "موعد اليوم"; return `<button type="button" class="admin-alert-item booking-notice" data-calendar-booking="${escapeAttr(item.id)}"><b>${escapeHtml(item.customerName || "عميل")} <small>${escapeHtml(attention)}</small></b><span>${escapeHtml(item.phone || "")} · ${escapeHtml(item.bookingDate || "—")} ${escapeHtml(item.bookingTime || "")} · ${escapeHtml(branchLabel(item.branchId))} · ${Number(item.serviceNamesAr?.length || 0)} خدمات</span></button>`; }).join("") || '<p class="empty-state">لا توجد إشعارات حجوزات في السجلات المحمّلة.</p>';
+  if (target) target.innerHTML = scopedNotices.map(n=>`<button type="button" class="admin-alert-item" data-go="${n.staffId?'staff':'dashboard'}"><b>${escapeHtml(n.title)}</b><span>${escapeHtml(n.body)}</span><small>${n.read?"مقروء":"جديد"}</small></button>`).join("") + bookingNotices.map(item => { const attention = item.status === "pending" ? item.source === "website" ? "حجز جديد من الموقع · يحتاج تأكيد" : "يحتاج تأكيد" : item.status === "no_show" ? "لم يحضر · متابعة" : item.bookingTime < currentTime ? "موعد متأخر" : "موعد اليوم"; return `<button type="button" class="admin-alert-item booking-notice" data-calendar-booking="${escapeAttr(item.id)}"><b>${escapeHtml(item.customerName || "عميل")} <small>${escapeHtml(attention)}</small></b><span>${escapeHtml(item.phone || "")} · ${escapeHtml(item.bookingDate || "—")} ${escapeHtml(item.bookingTime || "")} · ${escapeHtml(branchLabel(item.branchId))} · ${Number(item.serviceNamesAr?.length || 0)} خدمات</span></button>`; }).join("") || '<p class="empty-state">لا توجد إشعارات حجوزات في السجلات المحمّلة.</p>';
   const preview = $("#dashboardAlertsPreview");
   if (preview) preview.innerHTML = alerts.slice(0, 3).map(item => `<button type="button" class="admin-alert-item ${item.type}" data-go="${escapeAttr(item.section)}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.body)}</span></button>`).join("") || '<p class="empty-state">لا توجد تنبيهات تشغيلية حاليًا.</p>';
   const health = $("#pushHealth");
@@ -2890,6 +3107,7 @@ async function requestAdminPush(button) {
 }
 
 async function handlePushButton(button) {
+  if(state.role==="admin")await loadTargetAchievementAlerts(true);
   if (state.role === "cashier" && Date.now() - state.loadedAt.cashier > 30_000) await loadCashierDashboard(true);
   else if (state.role !== "cashier" && Date.now() - state.loadedAt.dashboard > 30_000) await loadDashboard(true);
   renderAdminAlerts();
@@ -2978,6 +3196,7 @@ document.addEventListener("click", async event => {
     }
   }
   if (event.target.closest("[data-cashier-more]") && state.role === "cashier") { $("#cashierMoreSheet").showModal(); return; }
+  if(event.target.closest("[data-section=workerTargets]"))$("#cashierMoreSheet")?.close();
   if (event.target.closest("[data-cashier-password]") && state.role === "cashier") { $("#cashierMoreSheet").close(); $("#staffPasswordDialog").showModal(); return; }
   if (event.target.closest("#ownerMoreNotifications")) return void $("#pushButton").click();
   if (event.target.closest("#mobileContentAdd")) return void $("#mobileContentTypes").showModal();
@@ -2995,7 +3214,7 @@ document.addEventListener("click", async event => {
     const row = ownerHistory.sales.items.find(item => item.id === saleDetail.dataset.ownerSaleDetail);
     if (!row) return;
     $("#receiptDrawerTitle").textContent = row.bookingCode || row.id;
-    $("#receiptDrawerBody").innerHTML = `<dl class="receipt-details"><div><dt>العميل</dt><dd>${escapeHtml(row.customerName || "—")}</dd></div><div><dt>الفرع</dt><dd>${escapeHtml(branchLabel(row.branchId))}</dd></div><div><dt>الخدمات</dt><dd>${escapeHtml((row.itemNames || []).join("، ") || "—")}</dd></div><div><dt>التاريخ</dt><dd>${escapeHtml(dateTime(row.createdAt))}</dd></div><div><dt>طريقة الدفع</dt><dd>${escapeHtml(paymentMethod(row.paymentMethod))}</dd></div><div><dt>النوع</dt><dd>${row.type === "refund" ? "استرداد" : "دفع"}</dd></div><div><dt>القيمة</dt><dd>${money(row.amount)}</dd></div></dl>`;
+    $("#receiptDrawerBody").innerHTML = `<p class="receipt-section-eyebrow">تفاصيل الحركة المالية</p><dl class="receipt-details"><div><dt>العميل</dt><dd>${escapeHtml(row.customerName || "—")}</dd></div><div><dt>الفرع</dt><dd>${escapeHtml(branchLabel(row.branchId))}</dd></div><div><dt>الخدمات</dt><dd>${escapeHtml((row.itemNames || []).join("، ") || "—")}</dd></div><div><dt>التاريخ</dt><dd>${escapeHtml(dateTime(row.createdAt))}</dd></div><div><dt>طريقة الدفع</dt><dd>${escapeHtml(paymentMethod(row.paymentMethod))}</dd></div><div><dt>النوع</dt><dd>${row.type === "refund" ? "استرداد" : "دفع"}</dd></div><div><dt>القيمة</dt><dd>${money(row.amount)}</dd></div></dl>`;
     $("#receiptDrawer").showModal(); return;
   }
   const previewContent = event.target.closest("[data-content-preview]");
@@ -3009,6 +3228,9 @@ document.addEventListener("click", async event => {
   }
   const adminBack = event.target.closest("[data-admin-back]"); if (adminBack) return goBackInAdmin();
   const workspaceHome = event.target.closest("[data-open-workspace-home]"); if (workspaceHome) return showWorkspaceHome();
+  const cmsAnchor=event.target.closest('[data-cms-anchor]');if(cmsAnchor&&state.role==='admin'){const target=document.getElementById(cmsAnchor.dataset.cmsAnchor);target?.scrollIntoView({block:'start'});target?.querySelector('input[type=file]')?.focus();return;}
+  const cmsTarget=event.target.closest('[data-cms-target]');
+  if(cmsTarget){const id=cmsTarget.dataset.cmsTarget;if(!canOpenSection(id)||cmsTarget.hasAttribute('data-cms-staff-media')&&state.role!=='admin')return toast('لا تملك صلاحية هذا القسم',true);state.hub=sectionHub(id);$('#adminApp').dataset.hub=state.hub;applyAccess();return withButtonBusy(cmsTarget,()=>showSection(id,{staffPresentation:cmsTarget.hasAttribute('data-cms-staff-media')}));}
   const hub = event.target.closest("[data-open-hub]"); if (hub) return withButtonBusy(hub, () => openHub(hub.dataset.openHub));
   const shiftShortcut = event.target.closest(".sidebar-end-shift"); if (shiftShortcut) {
     if (!canOpenSection("cash")) return;
@@ -3037,6 +3259,7 @@ document.addEventListener("click", async event => {
   const cashMovement = event.target.closest("[data-cash-movement]"); if (cashMovement) {
     if (state.cash.state?.status !== "OPEN" || state.cash.shift?.status !== "OPEN") return toast("افتح الوردية أولًا", true);
     const type = cashMovement.dataset.cashMovement;
+    if(type === "ADVANCE") { await cashierAdvanceCenter.show(); return; }
     const form = $("#cashMovementForm");
     const mode = type === "ADVANCE" ? "advance" : type;
     if (form.dataset.mode !== mode) form.dataset.key = "";
@@ -3057,6 +3280,8 @@ document.addEventListener("click", async event => {
   const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);
   const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType, mediaType: add.dataset.presetMedia || "image" } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  const serviceDraft=event.target.closest('[data-service-draft-worker]');if(serviceDraft){const draft={staffId:serviceDraft.dataset.serviceDraftWorker,branchId:$("#posBranch").value,durationMinutes:Number(serviceDraft.dataset.serviceDraftDuration),bookingId:state.posBookingId||''};await showSection('teamAvailability');document.dispatchEvent(new CustomEvent('mz:service-start-draft',{detail:draft}));return;}
+  const availabilityButton=event.target.closest('[data-worker-availability]');if(availabilityButton){await showSection('teamAvailability');document.dispatchEvent(new CustomEvent('mz:worker-availability',{detail:{staffId:availabilityButton.dataset.workerAvailability,branchId:availabilityButton.dataset.workerBranch}}));return;}
   const edit = event.target.closest("[data-edit-collection]"); if (edit) openEditor(edit.dataset.editCollection, edit.dataset.editId);
   const remove = event.target.closest("[data-delete-collection]"); if (remove) await withButtonBusy(remove,()=>deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId));
   const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) await withButtonBusy(toggle,()=>toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId));
@@ -3064,7 +3289,7 @@ document.addEventListener("click", async event => {
   const notify = event.target.closest("[data-notify-worker]"); if (notify) await sendWorkerAlert(notify);
   const assign = event.target.closest("[data-assign-booking]"); if (assign) { const select = document.querySelector(`[data-assign-worker-select="${CSS.escape(assign.dataset.assignBooking)}"]`); await assignBookingToWorker(assign.dataset.assignBooking, select?.value || "", assign); }
   const workerTaskStatus = event.target.closest("[data-worker-task-status]"); if (workerTaskStatus) await withButtonBusy(workerTaskStatus, async () => { await updateWorkerTask(workerTaskStatus.dataset.taskId, workerTaskStatus.dataset.workerTaskStatus); await loadWorkerWorkspace(); toast("تم تحديث حالة المهمة"); });
-  const adminTaskCancel = event.target.closest("[data-admin-task-cancel]"); if (adminTaskCancel && confirm("إلغاء هذه المهمة؟")) await withButtonBusy(adminTaskCancel, async () => { await updateWorkerTask(adminTaskCancel.dataset.adminTaskCancel, "CANCELLED"); await loadAttendance(); toast("تم إلغاء المهمة"); });
+  const adminTaskCancel = event.target.closest("[data-admin-task-cancel]"); if (adminTaskCancel && confirm("إلغاء هذه المهمة؟")) await withButtonBusy(adminTaskCancel, async () => { await updateWorkerTask(adminTaskCancel.dataset.adminTaskCancel, "CANCELLED"); await Promise.all([loadAttendance(),loadWorkerRanking()]); toast("تم إلغاء المهمة"); });
   const reschedule = event.target.closest("[data-reschedule-booking]"); if (reschedule) await withButtonBusy(reschedule,()=>promptRescheduleBooking(reschedule.dataset.rescheduleBooking));
   const bookingPos = event.target.closest("[data-booking-pos]"); if (bookingPos) await withButtonBusy(bookingPos,()=>openBookingInPos(bookingPos.dataset.bookingPos));
   const printButton = event.target.closest("[data-print-booking]"); if (printButton) await withButtonBusy(printButton, () => printReceipt(printButton.dataset.printBooking));
@@ -3117,7 +3342,7 @@ document.addEventListener("input", event => {
 });
 document.addEventListener("change", async event => {
   if (event.target.id === "customerSegmentFilter") renderCollection("customers");
-  if(event.target.matches("[data-pos-worker]")){const line=state.posCart.find(item=>item.id===event.target.dataset.posWorker&&item.kind===event.target.dataset.posKind);if(line)line.workerId=event.target.value}
+  if(event.target.matches("[data-pos-worker]")){const line=state.posCart.find(item=>item.id===event.target.dataset.posWorker&&item.kind===event.target.dataset.posKind);if(line){line.workerId=event.target.value;renderPosCart()}}
   if (event.target.matches("[data-pos-option]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posOption && item.kind === event.target.dataset.posKind); if (line) { line.option = event.target.value; renderPosCart(); } }
   if (event.target.matches("[data-pos-choice]")) { const line = state.posCart.find(item => item.id === event.target.dataset.posChoice && item.kind === event.target.dataset.posKind); if (line) { line.choices ||= {}; if (event.target.value) line.choices[event.target.dataset.choiceGroup] = event.target.value; else delete line.choices[event.target.dataset.choiceGroup]; } }
   if (["expenseFrom", "expenseTo", "expenseBranchFilter", "expenseCategoryFilter"].includes(event.target.id)) renderExpenses();
@@ -3125,20 +3350,38 @@ document.addEventListener("change", async event => {
   if (["serviceTargetKind", "serviceTargetBranch"].includes(event.target.id)) refreshServiceTargetItems();
   if (["serviceTargetBranchFilter", "serviceTargetItemFilter"].includes(event.target.id)) renderServiceTargets();
   if (event.target.id === "taskBranch") renderAdminTasks();
-  if (event.target.id === "dashboardBranchFilter") { dashboardPage = 1; $("#headerBranchFilter").value = event.target.value; $("#calendarBranchFilter").value = event.target.value; [$("#dashboardTargetBranch"), $("#desktopTargetBranch")].filter(Boolean).forEach(targetBranch => { if ([...targetBranch.options].some(option => option.value === event.target.value)) targetBranch.value = event.target.value; }); void loadDashboard(); }
+  if (event.target.id === "dashboardBranchFilter") { dashboardPage = 1; $("#headerBranchFilter").value = event.target.value; $("#calendarBranchFilter").value = event.target.value; [$("#dashboardTargetBranch"), $("#desktopTargetBranch")].filter(Boolean).forEach(targetBranch => { if ([...targetBranch.options].some(option => option.value === event.target.value)) targetBranch.value = event.target.value; }); void $("#headerBranchFilter").dispatchEvent(new Event("change", {bubbles:true})); }
   if (event.target.id === "headerBranchFilter") {
     $("#dashboardBranchFilter").value = event.target.value;
     $("#calendarBranchFilter").value = event.target.value;
     dashboardPage = 1;
-    await loadDashboard();
+    collectionRequestEpoch++;businessRequestVersion++;rankingRequest++;
+    attendanceRequestVersion++;calendarRequestVersion++;teamRequestVersion++;cashRequestVersion++;auditRequestVersion++;
+    state.workerRankingKey=null;
+    state.dashboard={bookings:[],ledger:[],expenses:[],stats:{}};
+    state.cash={state:null,shift:null,snapshot:null,movements:[]};
+    state.posCart=[];state.posOffers=[];state.posOffersBranch="";state.posIdempotencyKey="";state.posBookingId="";
+    renderPosCart();renderDashboard();
+    state.workerRankingRows=[];
+    state.business = {payroll:[],serviceTargets:[],expenses:[],inventory:[],drinks:[],reviews:[],stats:{}};
+    state.attendance = {rows:[],tasks:[]};
+    state.calendar = {bookings:[],staff:[]};
+    for (const key of [...state.collections.keys()]) if (!['users','branches','settings','categories','translations'].includes(key)) {state.collections.delete(key);renderCollection(key);}
+    for (const id of ['attendanceBranch','taskBranch','expenseBranchFilter','serviceTargetBranchFilter','reportBranch','auditBranch','posBranch','campaignBranchFilter']) if ($( '#'+id ) && [...$( '#'+id ).options].some(o=>o.value===event.target.value)) $( '#'+id ).value=event.target.value;
+    Object.keys(state.loadedAt).forEach(key=>state.loadedAt[key]=0);
+    renderBusiness();renderAdminTasks();renderAttendance();renderCalendar();renderCashOperations();renderCashierTeam();
+    for(const id of ['auditResults','reportResult','cashierReportResult']) $('#'+id)?.replaceChildren();
+    if($('#reportPrint'))$('#reportPrint').disabled=true;
+    if(globalThis.Notification?.permission === "granted") void enablePush().catch(()=>{});
+    await Promise.allSettled([loadDashboard(), loadWorkerRanking(), loadBusiness(true)]);
+    if (managementSections.has(state.section) && !['dashboard','users','calendar'].includes(state.section)) await showSection(state.section);
     if (state.role === "cashier") await loadCashierDashboard(true);
     if (state.section === "calendar") await loadCalendar(true);
   }
   if (event.target.id === "calendarBranchFilter") {
     $("#dashboardBranchFilter").value = event.target.value;
     $("#headerBranchFilter").value = event.target.value;
-    await loadDashboard(true);
-    await loadCalendar();
+    $("#headerBranchFilter").dispatchEvent(new Event("change",{bubbles:true}));
   }
   if (["dashboardOperationFilter", "dashboardPaymentMethodFilter", "dashboardDateFilter", "dashboardStaffFilter", "dashboardPageSize"].includes(event.target.id)) { dashboardPage = 1; renderRecentOperations(); }
 });
@@ -3213,7 +3456,9 @@ $("#dashboardPageNext")?.addEventListener("click", () => { dashboardPage += 1; r
 $("#manualOfferClose").addEventListener("click", () => $("#manualOfferDialog").close());
 $("#manualOfferCancel").addEventListener("click", () => $("#manualOfferDialog").close());
 $("#entityForm").addEventListener("submit", saveEditor);
-[$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
+$("#editorDialog").addEventListener('close',()=>{editorPreviewVersion++;editorPreviewUrls.forEach(url=>URL.revokeObjectURL(url));editorPreviewUrls=[];editorPosterCache=new WeakMap();});
+mountSiteMediaEditor();
+[$("#scheduleSettings"), $("#siteSettings"), $("#rewardsSettings"), $("#cmsSiteMedia"), $("#cmsBrandMedia")].filter(Boolean).forEach(form => form.addEventListener("submit", saveSettingsForm));
 function campaignData() { const form = $("#campaignForm"); const data = Object.fromEntries(new FormData(form)); return { ...data, testMode: data.testMode === "true", recipientCap: Number(data.recipientCap) }; }
 async function previewCampaign(button) {
   return withButtonBusy(button, async () => {
@@ -3307,6 +3552,7 @@ $("#cashierRefundForm")?.addEventListener("submit", submitRefund);
 $("#cashierAccountButton")?.addEventListener("click", () => $("#staffPasswordDialog").showModal());
 $("#openAdminPassword")?.addEventListener("click", async () => { if (state.role === "admin") { await showSection("users"); $("#adminPasswordForm")?.scrollIntoView({ behavior: "smooth", block: "center" }); } else $("#staffPasswordDialog").showModal(); });
 $("#dailyClosingForm")?.addEventListener("submit", submitDailyClosing);
+$("#dailyClosingForm [name=branchId]")?.addEventListener("change", syncDailyClosingScope);
 $("#openShiftForm [name=branchId]")?.addEventListener("change", () => loadCashOperations());
 $("#posMobileSummary").addEventListener("click", () => $("#pos").classList.add("mobile-ticket-open"));
 $("#posTicketClose").addEventListener("click", () => $("#pos").classList.remove("mobile-ticket-open"));
@@ -3371,7 +3617,7 @@ if (bookingToolbar) {
 }
 initializeLineIcons();
 $("#reviewStatusFilter").addEventListener("change", () => renderCollection("reviews"));
-setTheme("light");
+setTheme(sessionStorage.getItem("mz-admin-theme") || "light");
 syncPushButtons();
 setSidebarCollapsed(false, { persist: false });
 $("#expenseDate").value = cairoDateKey();
@@ -3385,7 +3631,7 @@ window.addEventListener("online", updateConnectionState);
 window.addEventListener("offline", updateConnectionState);
 window.addEventListener("popstate", event => {
   if (!state.user) return;
-  const section = event.state?.adminSection || "workspaceHome";
+  const section = event.state?.adminSection || new URLSearchParams(location.hash.slice(1)).get("admin") || "workspaceHome";
   if (section === "workspaceHome" || !canOpenSection(section)) return state.role === "cashier" ? void showSection("calendar", { historyMode: "replace" }) : showWorkspaceHome({ historyMode: "none" });
   state.hub = sectionHub(section);
   void showSection(section, { historyMode: "none" });
@@ -3397,6 +3643,8 @@ if ("serviceWorker" in navigator) {
 }
 let dashboardRefreshTimer;
 async function bootstrapAdmin(user) {
+  collectionRequestEpoch++;
+  collectionLoads.clear(); collectionLoadVersions.clear(); collectionCacheScopes.clear();
   if (!user) { location.replace("/login/"); return; }
   try {
     const access = await currentAccess(user);
@@ -3407,6 +3655,7 @@ async function bootstrapAdmin(user) {
       return;
     }
     state.user = user; state.role = access.role; state.staffId = access.staffId || ""; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = effectivePermissions(access.role, access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
+    for(const id of ['headerBranchFilter','dashboardBranchFilter','calendarBranchFilter','attendanceBranch','taskBranch','reportBranch','auditBranch','expenseBranchFilter','serviceTargetBranchFilter','posBranch','campaignBranchFilter']) if($('#'+id)) $('#'+id).value=state.branchIds[0];
     $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"]').forEach(input => { input.value = user.email || ""; });
     const roleName = ({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[access.role] || access.role;
     const userName = user.displayName || user.email || "حساب مزين";
@@ -3433,6 +3682,14 @@ async function bootstrapAdmin(user) {
     }
 
     applyAccess();
+    mountAdminAdvisor({role:state.role});
+    if(state.role==="admin"){const ranking=$("#workerRanking")?.closest("article");if(ranking)$("#staff").append(ranking);}
+    Object.assign(sectionTitles,branchWorkspace.labels);
+    if(['admin','cashier','manager'].includes(state.role))mountMonthlyTargetPanel({anchor:$('#branchTargetPanel'),role:state.role,branchIds:state.branchIds});
+    if(state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations'))mountMonthlyTargetPanel({anchor:$('#workerTargetPanel'),role:state.role,branchIds:state.branchIds,mode:'workers'});
+    mountWorkerAvailability({anchor:$('#teamAvailability'),role:state.role,branchIds:state.branchIds,canManage:state.role==='admin'||state.permissions.has('teamOperations')});
+    mountBranchWorkerAccounts({anchor:$('#teamAvailability'),role:state.role,branchIds:state.branchIds});
+    if(state.role!=="worker"&&state.role!=="cashier")mountDashboardScope({branchIds:state.branchIds});
     if (state.role === "cashier" && state.branchIds.length === 1) {
       $("#dashboardBranchFilter").value = state.branchIds[0];
       $("#headerBranchFilter").value = state.branchIds[0];
@@ -3459,9 +3716,17 @@ async function bootstrapAdmin(user) {
       showWorkspaceHome({ historyMode: "replace" });
       if (access.role !== "worker" && (state.role === "admin" || state.permissions.has("dashboard") || state.permissions.has("revenue") || state.permissions.has("pos"))) void loadDashboard(true);
     }
+    if(state.role !== 'worker') void watchWorkerPush(payload=>{
+      const branch=payload.data?.branchId, selected=$("#headerBranchFilter").value;
+      if(branch && (selected!=='all' && branch!==selected || state.role!=='admin' && !state.branchIds.includes(branch)))return;
+      operationalNotices.unshift({branchId:branch,title:payload.notification?.title||'تحديث التشغيل',body:payload.notification?.body||'',read:false});operationalNotices.splice(20);renderAdminAlerts();
+      state.workerRankingKey=null;void loadDashboard(true);
+      if(payload.data?.type==='worker_task'){void loadWorkerRanking();if(state.section==='tasks')void loadAttendance(true);}
+    }).then(unsub=>window.addEventListener('beforeunload',unsub,{once:true})).catch(()=>{});
     clearInterval(dashboardRefreshTimer);
     dashboardRefreshTimer = state.role === "worker" ? null : setInterval(() => {
       if (document.hidden) return;
+      if(state.role==="admin"&&!["dashboard","bookings","revenue","expenses"].includes(state.section))void loadTargetAchievementAlerts();
       if (state.section === "pos" || (state.section === "bookings" && state.role === "cashier")) loadCashierDashboard(true);
       else if (state.section === "calendar") loadCalendar(true);
       else if (["dashboard", "bookings", "revenue", "expenses"].includes(state.section)) loadDashboard(true);
@@ -3509,7 +3774,9 @@ document.addEventListener('click', async event => {
   const access = event.target.closest('[data-access-action]');
   if (access && !access.disabled) {
     access.disabled = true;
-    try { const password = prompt('أدخل كلمة مرور الأدمن لتوثيق تغيير الحساب'); if (!password) return; await verifyAdminPassword(password); await manageAccessAccount({ uid:access.dataset.uid, action:access.dataset.accessAction }); await loadCollection('users',true);renderUserAccounts(); }
+    try { const password = prompt('أدخل كلمة مرور الأدمن لتوثيق تغيير الحساب'); if (!password) return; await verifyAdminPassword(password); const identity = {};
+      if(access.dataset.accessAction==='username'){identity.username=prompt('اسم المستخدم الجديد (3–32 حرفًا إنجليزيًا)');if(!identity.username)return;identity.temporaryPassword=prompt('كلمة مرور مؤقتة (8–128 حرفًا)');if(!identity.temporaryPassword)return;}
+      await manageAccessAccount({ uid:access.dataset.uid, action:access.dataset.accessAction, ...identity }); await loadCollection('users',true);renderUserAccounts(); }
     catch(error){toast(error.message,true);}finally{access.disabled=false;}
   }
   const notification = event.target.closest('[data-read-worker-notification]');
@@ -3529,7 +3796,7 @@ async function loadAccessCenter(reset=false) {
   if(reset){accessPagination.cursor=null;accessPagination.history=[];}
   const button=document.querySelector('#accountNext'); if(button)button.disabled=true;
   try {
-    const result=await getAccessAccountCenter({category:accessPagination.category,cursor:accessPagination.cursor||'',limit:25,branchId:document.querySelector('#accountBranchFilter').value,search:document.querySelector('#accountSearch').value.trim()});
+    const result=await getAccessAccountCenter({category:accessPagination.category,cursor:accessPagination.cursor||'',limit:25,branchId:document.querySelector('#accountBranchFilter').value,search:(document.querySelector('#accountSearchMode').value==='username'&&document.querySelector('#accountSearch').value.trim()?'username: ':'')+document.querySelector('#accountSearch').value.trim()});
     if(version!==accessCenterRequest)return;
     state.collections.set('users',result.staff||[]);renderUserAccounts();accessPagination.next=result.nextCursor||null;
     document.querySelector('#accountNext').disabled=!accessPagination.next;document.querySelector('#accountPrevious').disabled=!accessPagination.history.length;
@@ -3550,3 +3817,33 @@ const workerClockTimer = setInterval(() => {
 window.addEventListener('beforeunload',()=>clearInterval(workerClockTimer),{once:true});
 
 document.querySelector("#accountStatusFilter")?.addEventListener("change",renderUserAccounts);
+
+let rankingRequest=0;
+async function loadWorkerRanking() {
+  if (state.role!=='admin' && !state.permissions.has('dashboard') && !state.permissions.has('payroll')) return;
+  const version=++rankingRequest, branchId=$("#headerBranchFilter").value;
+  const target=$("#workerRanking"); if(!target)return;
+  target.setAttribute('aria-busy','true'); target.replaceChildren();
+  try {
+    const result=await getWorkerLeaderboard(cairoDateKey().slice(0,7),branchId);
+    if(version!==rankingRequest||branchId!==$("#headerBranchFilter").value)return;
+    state.workerRankingKey=`${branchId}|${result.month}`;
+    state.workerRankingRows=result.rows||[];
+    if(state.collections.has("users"))renderUserAccounts();
+    target.innerHTML=(result.rows||[]).map(row=>`<article class="worker-ranking-row"><b>#${Number(row.rank)}</b><div><strong>${escapeHtml(row.name)}</strong><small>${(row.branchIds||[]).map(id=>escapeHtml(branchLabel(id))).join(' • ')} • ${row.active?'فعال':'غير فعال'}</small></div><span>${money(row.achieved)} / ${money(row.target)}<small>${row.achievementPercent==null?'بدون هدف':Math.round(row.achievementPercent)+'%'} • ${Number(row.completedBookings)} حجز • ${Number(row.completedTasks)} مهمة</small></span></article>`).join('')||'<p class="empty-state">لا يوجد فريق مربوط بهذا الفرع.</p>';
+  } catch(error){if(version===rankingRequest)target.textContent=error.message||'تعذر تحميل ترتيب الفريق';}
+  finally{if(version===rankingRequest)target.removeAttribute('aria-busy');}
+}
+
+document.querySelector("#adminAlertsDialog")?.addEventListener("click",()=>{for(const n of operationalNotices)if($("#headerBranchFilter").value==="all"||n.branchId===$("#headerBranchFilter").value)n.read=true;renderAdminAlerts();});
+
+// Operational selectors share the canonical workspace branch. Account management remains global.
+document.addEventListener("change",event=>{
+  if(!["attendanceBranch","taskBranch","expenseBranchFilter","serviceTargetBranchFilter","reportBranch","auditBranch","posBranch","calendarBranch","campaignBranchFilter"].includes(event.target.id))return;
+  const header=document.querySelector("#headerBranchFilter");
+  if(header&&header.value!==event.target.value&&[...header.options].some(o=>o.value===event.target.value)){
+    header.value=event.target.value;header.dispatchEvent(new Event("change",{bubbles:true}));
+  }
+},true);
+
+document.querySelector('#adminAlertsDialog')?.addEventListener('click',async()=>{if(state.role!=='admin')return;const branch=$('#headerBranchFilter').value,items=targetAchievementNotices.filter(x=>!x.read&&(branch==='all'||x.branchId===branch));if(!items.length)return;try{await markTargetAchievementNotificationsRead(items.map(x=>x.id));items.forEach(x=>x.read=true);renderAdminAlerts();}catch(error){toast(error.message||'تعذر حفظ قراءة الإشعار',true);}});

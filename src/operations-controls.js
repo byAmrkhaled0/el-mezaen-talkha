@@ -1,0 +1,48 @@
+import {mountWorkerServiceControls,mountCashHandoverHistory} from './service-controls.js';
+import {getWorkerAvailability,setWorkerAvailability,cancelWorkerAvailability,getCashHandover,acceptCashHandover,resolveCashHandover} from './admin-api.js';
+import './operations-controls.css';
+const node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n};
+const cairoDate=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`};
+const money=n=>new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP'}).format(n);
+function field(form,title,input){const label=node('label',title);label.append(input);form.append(label);return input}
+function button(text){const b=node('button',text);b.type='button';b.className='small-button';return b}
+function input(type,name){const n=node('input');n.type=type;n.name=name;n.required=true;return n}
+export function mountWorkerAvailability({anchor,role,branchIds,canManage}){
+ if(!anchor||!canManage||!['admin','cashier'].includes(role)||anchor.querySelector('.worker-availability'))return;
+ const box=node('article');box.className='admin-panel worker-availability';box.append(node('h2','إدارة توفر العامل'),node('p','فترة مشغول أو بريك أو إجازة تمنع الحجوزات المتداخلة. الحجز القائم يجب معالجته أولًا.'));
+ const controls=node('div');controls.className='operations-controls';const branch=field(controls,'الفرع',node('select'));
+ for(const id of branchIds.filter(x=>['talkha','mashaya'].includes(x))){const o=node('option',id==='talkha'?'طلخا':'المشاية');o.value=id;branch.append(o)}
+ const day=field(controls,'التاريخ',input('date','dateKey'));day.value=cairoDate();const refresh=button('تحديث');controls.append(refresh);box.append(controls);
+ const status=node('p');status.setAttribute('role','status');box.append(status);
+ const form=node('form');form.className='operations-controls';const staff=field(form,'العامل',node('select'));staff.required=true;const kind=field(form,'نوع الفترة',node('select'));
+ for(const [value,title]of [['busy','مشغول'],['break','بريك'],['leave','إجازة']]){const o=node('option',title);o.value=value;kind.append(o)}
+ const start=field(form,'من',input('time','startTime')),end=field(form,'إلى',input('time','endTime'));start.value='13:00';end.value='14:00';
+ const full=button('اليوم بالكامل');full.addEventListener('click',()=>{start.value='00:00';end.value='23:59';kind.value='leave'});form.append(full);
+ const reason=field(form,'ملاحظة',input('text','reason'));reason.required=false;reason.maxLength=200;const save=button('حفظ الفترة');save.type='submit';save.classList.add('primary');form.append(save);box.append(form);const list=node('div');list.className='availability-periods';box.append(list);anchor.append(box);
+ let version=0,key='',pendingStaff='';
+ const context=()=>({branchId:branch.value,dateKey:day.value});
+ async function load(){const previousStaff=staff.value;const v=++version;status.textContent='جاري تحميل الجدول…';save.disabled=true;list.replaceChildren();staff.replaceChildren();try{const data=await getWorkerAvailability(context());if(v!==version)return;for(const row of data.staff){const o=node('option',row.nameAr);o.value=row.id;staff.append(o)}if(data.staff.some(x=>x.id===previousStaff))staff.value=previousStaff;if(pendingStaff&&data.staff.some(x=>x.id===pendingStaff)){staff.value=pendingStaff;pendingStaff=''}for(const row of data.periods){const card=node('article');card.className='availability-period';card.append(node('strong',data.staff.find(x=>x.id===row.staffId)?.nameAr||'عامل'),node('p',`${row.startTime} — ${row.endTime} • ${({busy:'مشغول',break:'بريك',leave:'إجازة'})[row.kind]||'غير متاح'}`));if(row.reason)card.append(node('small',row.reason));if(row.canCancel&&day.value>=cairoDate()){const cancel=button('إلغاء الفترة');cancel.addEventListener('click',async()=>{if(!confirm('إلغاء فترة عدم التوفر؟'))return;cancel.disabled=true;try{await cancelWorkerAvailability({branchId:branch.value,id:row.id});await load()}catch(e){status.textContent=e.message;cancel.disabled=false}});card.append(cancel)}list.append(card)}if(!data.periods.length)list.append(node('p','لا توجد فترات عدم توفر لهذا اليوم.'));status.textContent='الفترات المحفوظة تُراجع بالخادم قبل تأكيد أي حجز.';save.disabled=!data.staff.length||day.value<cairoDate();}catch(e){if(v===version)status.textContent=e.message||'تعذر تحميل الجدول'}}
+ form.addEventListener('input',()=>key='');form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity())return;if(start.value>=end.value){status.textContent='وقت النهاية لازم يكون بعد البداية';return;}save.disabled=true;try{await setWorkerAvailability({...context(),staffId:staff.value,kind:kind.value,startTime:start.value,endTime:end.value,reason:reason.value,idempotencyKey:key||=crypto.randomUUID()});key='';await load()}catch(err){status.textContent=err.message||'تعذر الحفظ؛ راجع تعارض الحجوزات';save.disabled=false}});
+ for(const n of [branch,day,refresh])n.addEventListener(n===refresh?'click':'change',()=>{key='';void load()});
+ document.addEventListener('mz:worker-availability',e=>{const data=e.detail||{};if(branchIds.includes(data.branchId)){branch.value=data.branchId;}pendingStaff=data.staffId||'';void load();box.scrollIntoView({behavior:'smooth',block:'start'});});
+ staff.addEventListener('change',()=>key='');staff.name='staffId';controls.insertBefore(staff.closest('label'),refresh);
+ const manual=document.createElement('details');manual.className='manual-availability';manual.append(node('summary','بريك أو إجازة أو فترة مستقبلية'));manual.append(form,list);box.append(manual);
+ mountWorkerServiceControls({box,branch,staff,onChanged:load});
+ void load();
+}
+let handoverVersion=0;
+export async function syncCashHandover({branchId,role,uid,onChanged}){
+ const anchor=document.querySelector('#cash'),closeForm=document.querySelector('#closeShiftForm');if(!anchor||!closeForm||!['admin','cashier'].includes(role))return;
+ let picker=closeForm.querySelector('[name=handoverToUid]');if(!picker){picker=node('select');picker.name='handoverToUid';const label=node('label','تسليم العهدة إلى');label.append(picker);closeForm.querySelector('footer').before(label)}
+ let box=anchor.querySelector('.cash-handover-panel');if(!box){box=node('article');box.className='admin-panel cash-handover-panel';anchor.prepend(box)}
+ mountCashHandoverHistory({anchor,branchId});
+ const version=++handoverVersion,previous=picker.value;picker.replaceChildren();const option=node('option','إغلاق فقط — بدون تسليم لكاشير آخر');option.value='';picker.append(option);box.replaceChildren(node('p','جاري مراجعة تسليم الوردية…'));
+ try{const data=await getCashHandover({branchId});if(version!==handoverVersion)return;for(const r of data.recipients){const o=node('option',r.name);o.value=r.uid;picker.append(o)}if([...picker.options].some(o=>o.value===previous))picker.value=previous;
+ box.replaceChildren();const pending=data.pending;const trigger=document.querySelector('#openShiftTrigger');if(trigger)trigger.disabled=Boolean(pending||data.blocked);
+ if(!pending){box.hidden=!data.blocked;if(data.blocked)box.append(node('p','تسليم عهدة الفرع في انتظار الاستلام بواسطة الكاشير المحدد.'));return;}box.hidden=false;box.append(node('h2',pending.status==='DISPUTED'?'اختلاف في استلام العهدة — مطلوب مراجعة الأدمن':'عهدة في انتظار الاستلام'),node('p',`المستلم: ${pending.toName} • المبلغ المعلن: ${money(pending.declaredCash)}`));
+ if(pending.status==='DISPUTED')box.append(node('p',`المبلغ المعدود: ${money(pending.reportedCash)} • ${pending.disputeReason||''}`));
+ const resolving=role==='admin';if(!resolving&&(pending.toUid!==uid||pending.status==='DISPUTED')){box.append(node('p','البيع على العهدة متوقف لحد تأكيد الاستلام.'));return;}
+ const form=node('form');form.className='operations-controls';const amount=field(form,'المبلغ المعدود فعليًا',input('number','receivedCash'));amount.min='0';amount.max='10000000';amount.step='0.01';const reason=field(form,resolving?'سبب تدخل الإدارة':'سبب الاختلاف إن وجد',input('text','reason'));reason.required=resolving;reason.maxLength=300;let release;if(resolving){release=field(form,'استلام الإدارة للعهدة بدل فتح وردية للمستلم',input('checkbox','releaseToAdmin'));release.required=false;}const submit=button(resolving?'حسم الاستلام وفتح وردية المستلم':'تأكيد الاستلام وبدء ورديتي');submit.type='submit';submit.classList.add('primary');form.append(submit);const status=node('p');status.setAttribute('role','status');box.append(form,status);
+ form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity())return;if(!confirm('تأكيد المبلغ المعدود واستلام العهدة؟'))return;submit.disabled=true;try{const payload={branchId,handoverId:pending.id,receivedCash:Number(amount.value),reason:reason.value,...(resolving?{releaseToAdmin:release.checked}:{})};const result=await(resolving?resolveCashHandover(payload):acceptCashHandover(payload));status.textContent=result.releasedToAdmin?'تم تسجيل العهدة في حيازة الإدارة بدون إضافتها للمبيعات.':result.disputed?'تم تسجيل الاختلاف؛ العهدة معلقة لمراجعة الأدمن.':'تم الاستلام؛ المبلغ رصيد بداية وليس إيراد بيع.';await onChanged();}catch(error){status.textContent=error.message;submit.disabled=false}});
+ }catch(e){if(version===handoverVersion){box.hidden=false;box.replaceChildren(node('p',e.message||'تعذر مراجعة التسليم'));}}
+}
