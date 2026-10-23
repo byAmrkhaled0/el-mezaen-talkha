@@ -1,0 +1,27 @@
+html[data-theme=light]{--control-bg:#fff;--control-hover:#e8f0f6;--control-ink:#173a50;--control-line:#91a9ba;--control-primary:#225d7a;--control-primary-ink:#fff;--control-disabled:#e6edf2;--control-disabled-ink:#506779;--control-focus:#006b81}
+html[data-theme=dark]{--control-bg:#173544;--control-hover:#22495c;--control-ink:#eef8ff;--control-line:#668b9e;--control-primary:#245b7b;--control-primary-ink:#fff;--control-disabled:#213e4b;--control-disabled-ink:#abc2cf;--control-focus:#66edf0}
+#adminApp :is(button,.small-button,.cashier-report-tabs button,.v7-report-panel button,.v7-shift-panel button,.entity-actions button,.dialog-actions button,.toolbar button){background:var(--control-bg);color:var(--control-ink);border:1px solid var(--control-line);border-radius:12px;min-height:44px;font-weight:700;line-height:1.4;box-shadow:0 2px 3px #0000000d;transition:background-color .15s,border-color .15s}
+#adminApp :is(.small-button,.cashier-report-tabs button,.entity-actions button,.dialog-actions button,.toolbar button):hover:not(:disabled){background:var(--control-hover);border-color:var(--control-focus)}
+#adminApp :is(.small-button.primary,.pos-submit,.small-button.pay,.toolbar button.primary,.attendance-workspace [data-self-in],.attendance-workspace [data-att-save]){background:var(--control-primary)!important;color:var(--control-primary-ink);border-color:var(--control-primary)}
+#adminApp :is(.small-button.danger,button.danger){background:#b82e47;color:#fff;border-color:#b82e47}
+#adminApp :is(.small-button.success,button.success){background:#146b4b;color:#fff;border-color:#146b4b}
+#adminApp .small-button.warning{background:#f7d079;color:#382600;border-color:#a57b24}
+#adminApp :is(button,input,select,textarea):focus-visible{outline:3px solid var(--control-focus);outline-offset:3px}
+#adminApp :is(input,select,textarea){color:var(--control-ink);background-color:var(--control-bg);border-color:var(--control-line);color-scheme:inherit}
+#adminApp :is(input,textarea)::placeholder{color:var(--muted,#647b8d);opacity:1}
+#adminApp button:disabled{opacity:1;color:var(--control-disabled-ink);background:var(--control-disabled);border-color:var(--control-line);box-shadow:none;cursor:not-allowed}
+#adminApp .cashier-report-tabs button{flex:1 1 120px;padding:12px 16px}
+#adminApp .v7-report-warning{color:var(--control-ink);background:var(--control-bg);border:1px solid var(--control-line)}
+#adminApp .v7-report-result{background:var(--panel-solid,var(--control-bg));color:var(--control-ink);border-color:var(--control-line)}
+#adminApp .row-actions{display:flex;flex-wrap:wrap;gap:8px}
+#adminApp .row-actions :is(button,a){min-height:44px;padding:10px 14px;border:1px solid var(--control-line);border-radius:10px;background:var(--control-bg);color:var(--control-ink);font-weight:700}
+#adminApp .row-actions .receipt-whatsapp{background:#146b4b;color:#fff;border-color:#146b4b}
+#adminApp .row-actions .receipt-print{background:#245b7b;color:#fff;border-color:#245b7b}
+#adminApp .row-actions button:disabled{background:var(--control-disabled);color:var(--control-disabled-ink)}
+@media(prefers-reduced-motion:reduce){#adminApp button{transition:none}}
+
+#adminApp :is(button.small-button,button.primary,button.pos-submit):disabled{background:var(--control-disabled)!important;color:var(--control-disabled-ink)!important;border-color:var(--control-line);box-shadow:none}
+
+#adminApp .attendance-workspace button:disabled{opacity:1;background:var(--control-disabled)!important;color:var(--control-disabled-ink)!important;border-color:var(--control-line);box-shadow:none}
+
+#adminApp button:is([aria-selected="true"],[aria-pressed="true"],.active){background:var(--control-primary);color:var(--control-primary-ink);border-color:var(--control-primary)}

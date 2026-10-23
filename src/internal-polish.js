@@ -2,17 +2,16 @@ const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textCon
 
 function compactActions(){
  for(const row of document.querySelectorAll('.row-actions:not([data-actions-packed])')){
-  row.dataset.actionsPacked='true';const buttons=[...row.children].filter(n=>n.tagName==='BUTTON');if(buttons.length<=2)continue;
-  const details=element('details'),summary=element('summary','الإجراءات');details.append(summary,...buttons.slice(1));row.append(details);
+  row.dataset.actionsPacked='true';
  }
 }
 function extraFilters(){
  for(const id of ['bookings','calendar']){
   const toolbar=document.querySelector('#'+id+' .toolbar');if(!toolbar||toolbar.dataset.compactFilters)return;toolbar.dataset.compactFilters='true';
   const movable=[...toolbar.children].filter(n=>n.matches('select,input,button')&&!/Search|Status|Date|Branch|Load|Refresh|Today/.test(n.id));if(movable.length<2)continue;
-  const details=element('details');details.className='filter-drawer';details.append(element('summary','فلاتر وأدوات إضافية'));const body=element('div');body.className='toolbar';body.append(...movable);details.append(body);toolbar.after(details);
+  const details=element('details');details.open=true;details.className='filter-drawer';details.append(element('summary','فلاتر وأدوات إضافية'));const body=element('div');body.className='toolbar';body.append(...movable);details.append(body);toolbar.after(details);
  }
- const metrics=document.querySelector('#cash .cashier-shift-breakdown');if(metrics&&!metrics.closest('details')){const details=element('details');details.className='filter-drawer shift-details';details.append(element('summary','تفاصيل مبيعات ومصروفات الوردية'));metrics.before(details);details.append(metrics);}
+ const metrics=document.querySelector('#cash .cashier-shift-breakdown');if(metrics&&!metrics.closest('details')){const details=element('details');details.open=true;details.className='filter-drawer shift-details';details.append(element('summary','تفاصيل مبيعات ومصروفات الوردية'));metrics.before(details);details.append(metrics);}
 }
 function cashierTheme(){
  const header=document.querySelector('#cashierHeader');if(!header||header.querySelector('#cashierThemeToggle'))return;

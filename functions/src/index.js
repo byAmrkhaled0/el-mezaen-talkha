@@ -1,5 +1,6 @@
 import {monthLedgerPages} from './month-ledger-pages.js';
 import {staffSelfAttendanceHandlers} from './staff-self-attendance.js';
+import {attendanceShiftEngine} from './attendance-shift-engine.js';
 import {backgroundRetry} from './background-retry.js';
 import {branchWorkerAccountHandlers} from './branch-worker-accounts.js';
 import {parseCustomerProfile,publicCustomerProfile} from './customer-profile.js';
@@ -1816,64 +1817,29 @@ export const getAttendanceDashboard = onCall(adminOptions, async request => {
   return { dateKey, branchId: requestedBranch, rows, tasks, presentCount: rows.filter(item => item.status === "PRESENT").length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 });
 
-const selfAttendance = staffSelfAttendanceHandlers({db,requireLiveStaff,requireRole,requireBranchAccess,branchesFor,rateLimit:enforceRateLimit,businessDateParts,FieldValue,HttpsError,hash});
+async function sendAttendanceShiftPush(note){
+  const {getAuth}=await import('firebase-admin/auth');
+  const [profile,tokens,live]=await Promise.all([db.doc(`users/${note.uid}`).get(),db.collection('pushTokens').where('uid','==',note.uid).limit(20).get(),getAuth().getUser(note.uid).catch(()=>null)]);
+  if(!live||live.disabled||live.customClaims?.role!==note.role||!live.customClaims?.branchIds?.includes(note.branchId)||profile.data()?.active!==true||!profile.data().branchIds?.includes(note.branchId))return {retryable:false};
+  const values=[...new Set(tokens.docs.filter(d=>d.data().role===note.role&&d.data().branchIds?.includes(note.branchId)).map(d=>d.data().token).filter(Boolean))];
+  if(!values.length)return {retryable:false};
+  const result=await getMessaging().sendEachForMulticast({tokens:values,notification:{title:note.title,body:note.body},webpush:{fcmOptions:{link:new URL(note.link,"https://el-mezaen-talkha.vercel.app").href},notification:{tag:`attendance_${note.id}`,icon:'/assets/el-mezaen-mark-v2.webp'}},data:{type:'attendance_completed',link:note.link,entityId:note.id}});
+  const terminal=new Set(['messaging/registration-token-not-registered','messaging/invalid-registration-token','messaging/mismatched-credential','messaging/invalid-argument']);
+  return {retryable:result.responses.some(r=>!r.success&&!terminal.has(r.error?.code))};
+}
+const attendanceEngine=attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,requireLiveAdmin,requireLiveStaff,linkedStaffId,requirePermission,sendPush:sendAttendanceShiftPush});
+const selfAttendance = staffSelfAttendanceHandlers({db,requireLiveStaff,requireRole,requireBranchAccess,branchesFor,rateLimit:enforceRateLimit,businessDateParts,FieldValue,HttpsError,hash,engine:attendanceEngine});
+export const getAttendanceMonth = onCall(adminOptions, attendanceEngine.month);
+export const getAttendancePolicies = onCall(adminOptions, attendanceEngine.policies);
+export const setAttendancePolicy = onCall(adminOptions, attendanceEngine.setPolicy);
+export const finishAttendanceShifts = onSchedule({region,schedule:"* * * * *",timeZone:"Africa/Cairo",timeoutSeconds:120,maxInstances:1},()=>attendanceEngine.sweep());
 export const getOwnStaffAttendance = onCall(adminOptions, selfAttendance.read);
 export const recordOwnStaffAttendance = onCall(adminOptions, selfAttendance.record);
 
 export const recordWorkerAttendance = onCall(adminOptions, async request => {
   requireRole(request, ["worker"]);
   requirePermission(request, "attendance");
-  await enforceRateLimit(request, "worker_attendance", 20, 15 * 60 * 1000, request.auth.uid);
-  const action = sanitizeText(request.data?.action || "checkIn", 20);
-  const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
-  if (!["checkIn", "checkOut"].includes(action) || !/^[a-z0-9-]{2,40}$/.test(branchId)) throw new HttpsError("invalid-argument", "طلب الحضور غير صالح");
-  requireBranchAccess(request, branchId);
-  const staffId = await linkedStaffId(request);
-  if (!staffId) throw new HttpsError("failed-precondition", "حساب العامل غير مرتبط بسجل فريق العمل");
-  const [staffSnapshot, branchSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.doc(`branches/${branchId}`).get()]);
-  if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !staffSnapshot.data().branchIds.includes(branchId)) throw new HttpsError("permission-denied", "العامل غير تابع لهذا الفرع");
-  if (!branchSnapshot.exists || branchSnapshot.data()?.active === false) throw new HttpsError("failed-precondition", "الفرع غير متاح");
-  const branch = branchSnapshot.data();
-  let evidence;
-  try {
-    evidence = validateAttendanceLocation({
-      branchLatitude: branch.latitude,
-      branchLongitude: branch.longitude,
-      latitude: request.data?.latitude,
-      longitude: request.data?.longitude,
-      accuracy: request.data?.accuracy,
-      radiusMeters: branch.attendanceRadiusMeters || 100
-    });
-  } catch (error) {
-    const messages = { INVALID_COORDINATES: "إحداثيات الموقع غير صحيحة", LOCATION_ACCURACY_TOO_LOW: "دقة GPS غير كافية؛ افتح الموقع وحاول في مكان مكشوف", INVALID_ATTENDANCE_RADIUS: "نطاق حضور الفرع غير مضبوط", OUTSIDE_BRANCH_GEOFENCE: "أنت خارج نطاق الفرع" };
-    throw new HttpsError("failed-precondition", messages[error.message] || "تعذر التحقق من موقع الحضور");
-  }
-  const { dateKey, time } = businessDateParts();
-  const ref = db.doc(`attendanceDays/${dateKey}_${staffId}`);
-  const now = FieldValue.serverTimestamp();
-  const result = await db.runTransaction(async transaction => {
-    const current = await transaction.get(ref);
-    if (action === "checkIn") {
-      if (current.exists) {
-        if (current.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "تم تسجيل حضورك اليوم في فرع آخر");
-        return { idempotent: true, status: current.data()?.status || "PRESENT" };
-      }
-      transaction.create(ref, {
-        staffId, staffNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), userId: request.auth.uid, branchId, dateKey, checkInTime: time, checkInAt: now, status: "PRESENT",
-        locationEvidence: { ...evidence, latitude: Number(Number(request.data?.latitude).toFixed(5)), longitude: Number(Number(request.data?.longitude).toFixed(5)) },
-        createdAt: now, updatedAt: now
-      });
-      transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "worker-check-in", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, distanceMeters: evidence.distanceMeters, createdAt: now });
-      return { idempotent: false, status: "PRESENT" };
-    }
-    if (!current.exists) throw new HttpsError("failed-precondition", "سجل الحضور غير موجود");
-    if (current.data()?.branchId !== branchId) throw new HttpsError("failed-precondition", "فرع الانصراف لا يطابق فرع الحضور");
-    if (current.data()?.status === "CHECKED_OUT") return { idempotent: true, status: "CHECKED_OUT" };
-    transaction.update(ref, { status: "CHECKED_OUT", checkOutTime: time, checkOutAt: now, checkOutEvidence: evidence, updatedAt: now });
-    transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "worker-check-out", collection: "attendanceDays", entityId: ref.id, staffId, branchId, userId: request.auth.uid, createdAt: now });
-    return { idempotent: false, status: "CHECKED_OUT" };
-  });
-  return { ok: true, dateKey, branchId, ...evidence, ...result };
+  return selfAttendance.record(request);
 });
 
 export const getWorkerWorkspace = onCall(adminOptions, async request => {
@@ -1889,6 +1855,7 @@ export const getWorkerWorkspace = onCall(adminOptions, async request => {
   try { context = workerContext(branchesFor(request), staff.branchIds, request.data?.activeBranchId ?? ""); }
   catch { throw new HttpsError("permission-denied", "اختر فرعًا مصرحًا به لحسابك وسجل العامل"); }
   const allowedBranches = [context.activeBranchId];
+  const activeAttendance = await attendanceEngine.settle(request.auth.uid);
   const [attendanceSnapshot, bookings, tasks, notifications, scopedLedger] = await Promise.all([
     db.doc(`attendanceDays/${dateKey}_${staffId}`).get(),
     scopedRows(scopedQueries("bookings", allowedBranches, query => query.where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60))),
@@ -1903,7 +1870,7 @@ export const getWorkerWorkspace = onCall(adminOptions, async request => {
     ...context,
     account: {username:request.workerAccount?.username || null},
     // One attendance record per worker/day remains authoritative across contexts.
-    attendance: attendanceSnapshot.exists && itemInAllowedBranch(attendanceSnapshot.data(), context.authorizedBranchIds) ? cleanDoc(attendanceSnapshot) : null,
+    attendance: activeAttendance && itemInAllowedBranch(activeAttendance, context.authorizedBranchIds) ? attendanceEngine.project(activeAttendance) : attendanceSnapshot.exists && itemInAllowedBranch(attendanceSnapshot.data(), context.authorizedBranchIds) ? cleanDoc(attendanceSnapshot) : null,
     bookings: bookings.filter(item => !["cancelled", "rejected"].includes(item.status)),
     tasks,
     notifications,

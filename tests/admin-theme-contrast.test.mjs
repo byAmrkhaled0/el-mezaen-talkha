@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+const css=readFileSync(new URL('../src/admin-theme-consistency.css',import.meta.url),'utf8');
+const luminance=hex=>{let h=hex.slice(1);if(h.length===3)h=[...h].map(x=>x+x).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);};
+const ratio=(a,b)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+for(const mode of ['light','dark'])test(`${mode}: control labels and primary actions maintain readable contrast`,()=>{const block=css.match(new RegExp(`html\\[data-theme=${mode}\\]\\{([^}]+)`))[1];const vars=Object.fromEntries([...block.matchAll(/--([\w-]+):(#[\da-f]+)/gi)].map(m=>[m[1],m[2]]));assert.ok(ratio(vars['control-ink'],vars['control-bg'])>=4.5);assert.ok(ratio(vars['control-primary-ink'],vars['control-primary'])>=4.5);assert.ok(ratio(vars['control-disabled-ink'],vars['control-disabled'])>=3);});
+test('action buttons are not repacked into a collapsed details menu',()=>{const source=readFileSync(new URL('../src/internal-polish.js',import.meta.url),'utf8');assert.doesNotMatch(source,/buttons\.slice\(1\)/);assert.match(source,/details\.open=true/);});

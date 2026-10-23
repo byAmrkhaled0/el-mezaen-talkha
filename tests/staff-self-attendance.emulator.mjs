@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -18,6 +19,7 @@ test('synthetic manager/cashier identities and branch GPS, no production resourc
     await auth.createUser({uid,email:`${uid}@qa.example.test`,password:'Local-only-2026!'});
     await auth.setCustomUserClaims(uid,claims);
     await db.doc(`users/${uid}`).set({...claims,name:'حضور محلي',active:true});
+    await db.doc('attendancePolicies/'+createHash('sha256').update(uid).digest('hex').slice(0,32)).set({uid,durationMinutes:480,version:1});
     actors[role]={uid,token:{...claims,auth_time:Math.ceil(Date.now()/1000)}};
   }
 });

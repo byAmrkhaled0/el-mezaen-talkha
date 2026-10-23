@@ -22,7 +22,7 @@ for(const role of ['cashier','manager'])test(`${role}: own GPS attendance, dupli
   assert.equal((await f.handlers.record(f.request({...f.payload,action:'checkOut'}))).idempotent,true);assert.equal(f.writes.length,4);
   const record=[...f.docs.values()].find(value=>value.accountRole===role);assert.equal(record.userId,'own');assert.equal(record.staffNameAr,'موظف اختبار');
 });
-test('worker, customer, admin and missing role cannot use manager/cashier self endpoint',async()=>{
+test('legacy adapter without the worker lifecycle rejects unsupported roles',async()=>{
   for(const role of ['worker','customer','admin',null]){const f=fixture(role);await assert.rejects(f.handlers.record(f.request(f.payload)),{code:'permission-denied'});assert.equal(f.writes.length,0);}
 });
 test('forged target, unauthorized branch, poor GPS and distant location produce no writes',async()=>{

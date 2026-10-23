@@ -26,7 +26,8 @@ test('cashier team callables reuse scoped attendance, task and notification reso
   assert.match(task, /workerNotifications\/task_/);
   const worker = section('recordWorkerAttendance', 'getWorkerWorkspace');
   assert.match(worker, /requireRole\(request, \["worker"\]\)/);
-  assert.match(worker, /validateAttendanceLocation/);
+  assert.match(worker, /selfAttendance\.record\(request\)/);
+  assert.match(await read('functions/src/staff-self-attendance.js'), /validateAttendanceLocation/);
 });
 
 test('POS coupon uses canonical priced lines, branch and transactional usage, with no coupon management grant', async () => {

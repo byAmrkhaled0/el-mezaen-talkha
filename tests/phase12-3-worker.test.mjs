@@ -17,10 +17,11 @@ function handler(name, next, dependencies) {
   });
 }
 const request = (activeBranchId = '', extra = {}) => ({ auth: { uid: 'worker-a', token: { role: 'worker' } }, data: { activeBranchId, ...extra } });
-function workspaceFixture({ staffBranches = ['talkha', 'mashaya'], claims = ['talkha', 'mashaya'], userUid = 'worker-a' } = {}) {
+function workspaceFixture({ staffBranches = ['talkha', 'mashaya'], claims = ['talkha', 'mashaya'], userUid = 'worker-a', attendance = null } = {}) {
   const scopes = [];
   const snapshot = { exists: true, id: 'staff-a', data: () => ({ branchIds: staffBranches, active: true, userUid }) };
   const callable = handler('getWorkerWorkspace', 'updateWorkerProfilePhoto', {
+    attendanceEngine: {settle: async () => attendance, project: row => row},
     requireRole: r => { if (r.auth.token.role !== 'worker') throw Error('role'); },
     linkedStaffId: async () => 'staff-a', businessDateParts: () => ({ dateKey: '2026-10-09', month: '2026-10' }),
     db: { doc: path => ({ get: async () => path.startsWith('staff/') ? snapshot : { exists: false } }) },
@@ -47,6 +48,13 @@ test('actual workspace handler scopes all operational reads to the selected auth
   assert.deepEqual([...result.authorizedBranchIds], ['talkha', 'mashaya']);
   for (const [, scope] of f.scopes) assert.deepEqual(scope, ['mashaya']);
   assert.equal(f.scopes.length, 4);
+});
+
+test('workspace includes the active attendance session from the previous calendar day', async () => {
+  const attendance={id:'previous-day',dateKey:'2026-10-08',branchId:'talkha',status:'PRESENT'};
+  const result=await workspaceFixture({attendance}).callable(request('talkha'));
+  assert.equal(result.attendance.id,'previous-day');
+  assert.equal(result.attendance.status,'PRESENT');
 });
 
 test('workspace rejects unauthorized contexts or a mismatched canonical UID before operational reads', async () => {

@@ -11,3 +11,20 @@
 [data-theme=dark] .self-attendance{background:#0c2936;color:#edf9ff;border-color:#28505e}
 [data-theme=dark] .self-attendance :is(select,button){background:#123644;color:#edf9ff;border-color:#28505e}
 @media(max-width:600px){.self-attendance-actions button{flex:1 1 130px}.self-attendance>summary small{display:block;margin:4px 0 0}.self-attendance{margin:12px}}
+.attendance-workspace{font-family:Tajawal,system-ui,sans-serif;color:var(--text,#163544);width:100%;max-width:1280px;margin-inline:auto;padding:clamp(12px,2vw,24px);box-sizing:border-box}
+.attendance-heading,.attendance-history>header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.attendance-heading h2{font:700 clamp(20px,3vw,28px) Alexandria,Tajawal,sans-serif;margin:8px 0}
+.attendance-heading p,.attendance-help,.attendance-heading small{color:var(--muted,#597180);line-height:1.8;margin:0}
+.attendance-current,.attendance-history,.attendance-person,.attendance-metrics article{background:var(--panel,#fff);border:1px solid var(--line,#c8dbe3);border-radius:18px;padding:20px}
+.attendance-current{display:grid;grid-template-columns:1fr minmax(240px,400px);gap:24px;align-items:center}
+.attendance-current strong{display:block;font-size:1.35rem;margin:12px 0}.attendance-current p{line-height:1.7}
+.attendance-controls,.attendance-workspace label{display:grid;gap:8px}.attendance-controls{gap:16px}
+.attendance-workspace :is(input,select,button){box-sizing:border-box;min-height:44px;max-width:100%;font:inherit;border-radius:12px;border:1px solid var(--line,#bfd5de);padding:10px 14px;background:var(--panel,#fff);color:inherit}
+.attendance-workspace button{cursor:pointer}.attendance-workspace button:disabled{cursor:not-allowed;opacity:.5}
+.attendance-workspace [data-self-in],.attendance-workspace [data-att-save]{background:#087e8b;color:#fff;border-color:#087e8b}
+.attendance-workspace [data-self-error],.attendance-workspace [data-att-message]{line-height:1.8;min-height:1.8em}
+.attendance-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.attendance-metrics article{padding:16px;background:var(--bg,#f2f7f9)}.attendance-metrics b,.attendance-metrics small{display:block}.attendance-metrics b{font-size:1.5rem;margin-top:8px}
+.attendance-history{margin-top:24px}.attendance-table-wrap{overflow-x:auto;margin-top:16px}.attendance-table-wrap table{border-collapse:collapse;min-width:650px;width:100%;text-align:start}.attendance-table-wrap :is(th,td){padding:14px 10px;border-bottom:1px solid var(--line,#cfdee4);text-align:start}.attendance-table-wrap td small{display:block}
+.attendance-admin-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.attendance-person{display:grid;grid-template-columns:minmax(150px,1fr) 180px auto auto;gap:14px;align-items:end;margin-bottom:12px}.attendance-person small{display:block;color:var(--muted,#597180);margin-top:8px}.attendance-person input{width:100%}
+.attendance-workspace .self-attendance-actions{display:flex;gap:10px;flex-wrap:wrap}.attendance-workspace .self-attendance-actions button{flex:1}
+@media(max-width:700px){.attendance-current{grid-template-columns:1fr;padding:16px}.attendance-metrics{grid-template-columns:1fr}.attendance-person{grid-template-columns:1fr 1fr}.attendance-person>div{grid-column:1/-1}.attendance-person label{grid-column:1/-1}.attendance-history{padding:14px}.attendance-workspace{padding:12px}}

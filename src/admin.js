@@ -1,5 +1,6 @@
 import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
-import {mountSelfAttendance} from './staff-self-attendance.js';
+import {mountSelfAttendance,mountAttendanceManagement} from './staff-self-attendance.js';
+let personalAttendanceView,attendanceManagementView;
 import {createBranchWorkspace} from './branch-workspace.js';
 import './internal-polish.js';
 import {mountWorkerAvailability,syncCashHandover} from './operations-controls.js';
@@ -24,6 +25,7 @@ import './admin-appearance.css';
 import './admin-workspace.css';
 import './admin-interface.css';
 import './closure-ui.css';
+import './admin-theme-consistency.css';
 import {syncAdminWorkspace} from './admin-workspace.js';
 import {siteMediaSlots} from './site-media.js';
 import {mountSiteMediaEditor,refreshSiteMediaEditor,pendingSiteMediaFile,setSiteMediaSaveState,stageSiteMediaUpload,completeSiteMediaSave} from './site-media-editor.js';
@@ -137,6 +139,8 @@ function sectionPermission(id) { return ({ calendar: "bookings", cash: "pos", ca
 const cashierSections = new Set(["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses", "workerTargets"]);
 const cashierOptionalMarketing = new Set(["offers", "campaigns"]);
 function canOpenSection(id) {
+  if(id==='myAttendance')return ['worker','cashier','manager'].includes(state.role);
+  if(id==='attendanceManagement')return state.role==='admin';
   if(id==='targets')return ['admin','cashier','manager'].includes(state.role)&&(state.role==='admin'||state.permissions.has('dashboard'));
   if(id==='teamAvailability')return state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations');
   if(['branchOperations','customerRequests','branchNeeds'].includes(id))return state.role==='admin'||state.role==='cashier'&&state.permissions.has('pos')&&(id==='branchNeeds'||state.permissions.has('bookings'))&&(id!=='branchOperations'||state.permissions.has('teamOperations'));
@@ -264,6 +268,8 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
   if (id !== state.section) closeScanner();
   if (state.hub && sectionHub(id) && sectionHub(id) !== state.hub) return toast("ارجع للبوابات لاختيار مساحة العمل", true);
   state.section = id;
+  if(id==='myAttendance')void personalAttendanceView?.load();
+  if(id==='attendanceManagement')void attendanceManagementView?.load();
   if (id === "pos") setPosView("receipts");
   commitAdminHistory(id, historyMode);
   $("#adminApp")?.classList.remove("portal-mode");
@@ -413,7 +419,7 @@ function renderRoleShell() {
     const primary = adminNav.querySelector(".sidebar-primary");
     const selectors = ['[data-section="pos"]', '[data-section="calendar"]', '[data-section="bookings"]', '[data-go="cash"]', '[data-cashier-target]'];
     $("#cashierSidebarItems").replaceChildren(...selectors.map(selector => primary.querySelector(selector)?.cloneNode(true)).filter(Boolean));
-    for(const id of ['branchOperations','teamAvailability','targets','customerRequests','branchNeeds']){const link=adminNav.querySelector(`[data-section="${id}"]`)?.cloneNode(true);if(link&&canOpenSection(id)){$("#cashierSidebarItems").append(link);link.hidden=false;}}
+    for(const id of ['myAttendance','branchOperations','teamAvailability','targets','customerRequests','branchNeeds']){const link=adminNav.querySelector(`[data-section="${id}"]`)?.cloneNode(true);if(link&&canOpenSection(id)){$("#cashierSidebarItems").append(link);link.hidden=false;}}
     const shiftLink=$('#cashierSidebarItems [data-go="cash"]');if(shiftLink?.lastChild)shiftLink.lastChild.textContent='ورديتي';
     const marketing = [["offers", "العروض"], ["campaigns", "حملات واتساب"]].filter(([id]) => state.permissions.has(id));
     $("#cashierMarketingLinks").hidden = !marketing.length;
@@ -3688,7 +3694,13 @@ async function bootstrapAdmin(user) {
     $("#managerBranchLabel").textContent = state.branchIds.length === 1 ? branchLabel(state.branchIds[0]) : "الفروع المصرح بها";
     $("#cashierBranchLabel").hidden = access.role !== "cashier";
     $("#logoutButton").dataset.avatar = String(userName).trim().charAt(0) || "م";
-    mountSelfAttendance({role:state.role,uid:user.uid,currentUid:()=>state.user?.uid});
+    personalAttendanceView?.dispose();
+    for(const [id,label] of [['myAttendance','حضوري وساعات عملي'],['attendanceManagement','مدد وسجل الحضور']]){
+      managementSections.add(id);sectionTitles[id]=label;
+      if(!document.getElementById(id)){const section=document.createElement('section');section.id=id;section.className='admin-section';$('.admin-main').append(section);const button=document.createElement('button');button.type='button';button.dataset.section=id;button.textContent=label;$('#sidebar nav[aria-label="أقسام لوحة الإدارة"] .sidebar-primary').append(button);}
+    }
+    personalAttendanceView=mountSelfAttendance({role:state.role,uid:user.uid,currentUid:()=>state.user?.uid,anchor:$('#myAttendance')});
+    if(state.role==='admin')attendanceManagementView=mountAttendanceManagement($('#attendanceManagement'));
     renderRoleShell();
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
     if (state.role === 'worker') {
