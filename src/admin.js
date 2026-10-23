@@ -3374,7 +3374,7 @@ document.addEventListener("change", async event => {
     if($('#reportPrint'))$('#reportPrint').disabled=true;
     if(globalThis.Notification?.permission === "granted") void enablePush().catch(()=>{});
     await Promise.allSettled([loadDashboard(), loadWorkerRanking(), loadBusiness(true)]);
-    if (managementSections.has(state.section) && !['dashboard','users','calendar'].includes(state.section)) await showSection(state.section);
+    if ((managementSections.has(state.section) || socialSections.has(state.section)) && !['dashboard','users','calendar'].includes(state.section)) await showSection(state.section);
     if (state.role === "cashier") await loadCashierDashboard(true);
     if (state.section === "calendar") await loadCalendar(true);
   }
