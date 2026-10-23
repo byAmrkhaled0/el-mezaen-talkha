@@ -7,7 +7,7 @@
   const srcset='/assets/owner/owner-hero-studio-suit-640.webp 640w, /assets/owner/owner-hero-studio-suit-960.webp 960w';
   let custom='';
   try {
-    const cache=JSON.parse(localStorage.getItem('mz-public-catalog-v4')||'null');
+    const cache=JSON.parse(localStorage.getItem('mz-public-catalog-v6')||'null');
     const value=cache?.data?.settings?.heroImageUrl;
     const bucket=globalThis.__FIREBASE_CONFIG__?.storageBucket;
     if(cache?.savedAt && Date.now()-Number(cache.savedAt)>=0 && Date.now()-Number(cache.savedAt)<=7*24*60*60*1000 && typeof value==='string' && bucket){

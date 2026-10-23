@@ -1,0 +1,938 @@
+{
+  "index.html": {
+    "ids": [
+      "canonical",
+      "home",
+      "navLinks",
+      "branchSwitch",
+      "langToggle",
+      "themeToggle",
+      "menuToggle",
+      "main",
+      "publicHeroTemplate",
+      "hero-title",
+      "catalogStatus",
+      "choose-branch",
+      "selectedBranchCompact",
+      "fullBranchChoice",
+      "branch-first-title",
+      "branchQuickGrid",
+      "services",
+      "services-title",
+      "categoryFilters",
+      "serviceGrid",
+      "packages",
+      "packages-title",
+      "packageGrid",
+      "offers",
+      "offers-title",
+      "offersGrid",
+      "results",
+      "results-title",
+      "resultsGrid",
+      "specialized-title",
+      "homeHairVideos",
+      "local-seo-title",
+      "team",
+      "team-title",
+      "teamGrid",
+      "reviews",
+      "reviews-title",
+      "reviewAverage",
+      "reviewAverageStars",
+      "reviewCount",
+      "publishedReviews",
+      "reviewForm",
+      "star5",
+      "star4",
+      "star3",
+      "star2",
+      "star1",
+      "about",
+      "about-title",
+      "aboutText",
+      "galleryGrid",
+      "celebrity-title",
+      "celebrityGrid",
+      "newsSection",
+      "news-title",
+      "newsGrid",
+      "manage-booking",
+      "manage-booking-title",
+      "manageBookingForm",
+      "manageBookingResult",
+      "contact",
+      "contact-title",
+      "mobileQuickActions",
+      "mobileCall",
+      "mobileWhatsapp",
+      "mobileMap",
+      "branchFooterGrid",
+      "socialLinks",
+      "scrollTop",
+      "toast",
+      "networkStatus",
+      "branchDialog",
+      "branch-dialog-title",
+      "branchPicker",
+      "packageDetailsDialog",
+      "packageDetailsTitle",
+      "packageDetailsBody",
+      "packageDetailsAdd",
+      "bookingDialog",
+      "booking-title",
+      "bookingBranchName",
+      "bookingBranchAddress",
+      "bookingProgress",
+      "cartLines",
+      "bookingServiceChoices",
+      "drinkUpsell",
+      "drinkUpsellToggle",
+      "drinkMenu",
+      "drinkOptions",
+      "productOnlyStaff",
+      "staffPicker",
+      "productOnlyDate",
+      "appointmentFields",
+      "bookingDate",
+      "appointmentTimeFields",
+      "bookingTime",
+      "productOnlyTime",
+      "customerForm",
+      "firstName",
+      "lastName",
+      "customerPhone",
+      "partySize",
+      "customerNote",
+      "couponCode",
+      "applyCoupon",
+      "finalBookingReview",
+      "successCode",
+      "successBranch",
+      "successServices",
+      "successStaff",
+      "successAppointment",
+      "successTotal",
+      "successBarcode",
+      "previewNotice",
+      "successWhatsapp",
+      "bookingSummary",
+      "summaryBranch",
+      "summaryItems",
+      "summaryDate",
+      "summaryStaff",
+      "summarySubtotal",
+      "discountPercent",
+      "summaryDiscount",
+      "summaryTotal",
+      "dialogActions",
+      "mobileBookingTotal",
+      "prevStep",
+      "nextStep"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"#main\"}]": 1,
+      "[\"a\", {\"href\": \"#home\"}]": 3,
+      "[\"a\", {\"href\": \"#services\"}]": 1,
+      "[\"a\", {\"href\": \"#packages\"}]": 1,
+      "[\"a\", {\"href\": \"/results/\"}]": 3,
+      "[\"a\", {\"href\": \"/team/\"}]": 3,
+      "[\"a\", {\"href\": \"#choose-branch\"}]": 1,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 5,
+      "[\"a\", {\"href\": \"#offers\"}]": 1,
+      "[\"a\", {\"href\": \"#contact\"}]": 1,
+      "[\"a\", {\"href\": \"#reviews\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 5,
+      "[\"button\", {\"data-open-branch\": \"\", \"id\": \"branchSwitch\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-open-booking\": \"\", \"type\": \"button\"}]": 8,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"menuToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-open-booking\": \"\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 8,
+      "[\"button\", {\"data-open-branch\": \"\", \"type\": \"button\"}]": 2,
+      "[\"a\", {\"href\": \"/packages/\"}]": 2,
+      "[\"a\", {\"href\": \"/reviews/\"}]": 1,
+      "[\"form\", {\"id\": \"reviewForm\"}]": 1,
+      "[\"input\", {\"name\": \"name\"}]": 1,
+      "[\"input\", {\"name\": \"bookingCode\"}]": 1,
+      "[\"input\", {\"id\": \"star5\", \"name\": \"rating\", \"type\": \"radio\"}]": 1,
+      "[\"input\", {\"id\": \"star4\", \"name\": \"rating\", \"type\": \"radio\"}]": 1,
+      "[\"input\", {\"id\": \"star3\", \"name\": \"rating\", \"type\": \"radio\"}]": 1,
+      "[\"input\", {\"id\": \"star2\", \"name\": \"rating\", \"type\": \"radio\"}]": 1,
+      "[\"input\", {\"id\": \"star1\", \"name\": \"rating\", \"type\": \"radio\"}]": 1,
+      "[\"textarea\", {\"name\": \"comment\"}]": 1,
+      "[\"button\", {\"type\": \"submit\"}]": 2,
+      "[\"a\", {\"href\": \"/gallery/\"}]": 1,
+      "[\"a\", {\"href\": \"/celebrities/\"}]": 1,
+      "[\"a\", {\"href\": \"/news/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\"}]": 3,
+      "[\"form\", {\"id\": \"manageBookingForm\"}]": 1,
+      "[\"input\", {\"name\": \"code\"}]": 1,
+      "[\"input\", {\"name\": \"phone\", \"type\": \"tel\"}]": 1,
+      "[\"a\", {\"href\": \"#contact\", \"id\": \"mobileCall\"}]": 1,
+      "[\"a\", {\"href\": \"#contact\", \"id\": \"mobileWhatsapp\"}]": 1,
+      "[\"a\", {\"href\": \"#contact\", \"id\": \"mobileMap\"}]": 1,
+      "[\"a\", {\"href\": \"https://wa.me/201008454029\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"scrollTop\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-close-branch\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-close-package-details\": \"\", \"type\": \"button\"}]": 2,
+      "[\"button\", {\"id\": \"packageDetailsAdd\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-safe-back\": \"\", \"href\": \"/\"}]": 1,
+      "[\"button\", {\"data-close-booking\": \"\", \"type\": \"button\"}]": 2,
+      "[\"button\", {\"data-change-branch\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"drinkUpsellToggle\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"bookingDate\", \"type\": \"date\"}]": 1,
+      "[\"select\", {\"id\": \"bookingTime\"}]": 1,
+      "[\"form\", {\"id\": \"customerForm\"}]": 1,
+      "[\"input\", {\"id\": \"firstName\", \"name\": \"firstName\"}]": 1,
+      "[\"input\", {\"id\": \"lastName\", \"name\": \"lastName\"}]": 1,
+      "[\"input\", {\"id\": \"customerPhone\", \"name\": \"phone\", \"type\": \"tel\"}]": 1,
+      "[\"input\", {\"id\": \"partySize\", \"name\": \"partySize\", \"type\": \"number\"}]": 1,
+      "[\"textarea\", {\"id\": \"customerNote\", \"name\": \"note\"}]": 1,
+      "[\"input\", {\"id\": \"couponCode\"}]": 1,
+      "[\"button\", {\"id\": \"applyCoupon\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"href\": \"/\"}]": 2,
+      "[\"a\", {\"href\": \"https://wa.me/201093008896\", \"id\": \"successWhatsapp\"}]": 1,
+      "[\"button\", {\"id\": \"prevStep\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"nextStep\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1
+    },
+    "title": "حلاق وتركيب شعر في المنصورة وطلخا | مزين مصر",
+    "canonical": [
+      "__SITE_URL__"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "jsonld": [
+      "\n  {\n    \"@context\": \"https://schema.org\",\n    \"@graph\": [\n      {\n        \"@type\": \"Organization\",\n        \"@id\": \"__SITE_URL__#organization\",\n        \"name\": \"مزين مصر\",\n        \"alternateName\": \"El Mezaen Egypt\",\n        \"url\": \"__SITE_URL__\",\n        \"logo\": \"__SITE_ORIGIN__/assets/el-mezaen-logo.jpeg\",\n        \"foundingDate\": \"1995\",\n        \"description\": \"صالون حلاقة وعناية رجالية وتركيب وصيانة شبكية الشعر بفرعي طلخا والمشاية في المنصورة.\",\n        \"areaServed\": [\"المنصورة\", \"طلخا\", \"الدقهلية\"],\n        \"sameAs\": [\"https://www.facebook.com/profile.php?id=61559147948668\", \"https://www.instagram.com/ahmed_elmzin1\", \"https://www.tiktok.com/@ahmedelmzin1\"]\n      },\n      {\n        \"@type\": \"WebSite\",\n        \"@id\": \"__SITE_URL__#website\",\n        \"url\": \"__SITE_URL__\",\n        \"name\": \"مزين مصر\",\n        \"inLanguage\": \"ar-EG\",\n        \"publisher\": {\"@id\": \"__SITE_URL__#organization\"}\n      },\n      {\n        \"@type\": [\"HairSalon\", \"LocalBusiness\"],\n        \"@id\": \"__SITE_URL__#talkha\",\n        \"parentOrganization\": {\"@id\": \"__SITE_URL__#organization\"},\n        \"name\": \"مزين مصر – فرع طلخا\",\n        \"url\": \"__SITE_URL__/branches/talkha/\",\n        \"image\": \"__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp\",\n        \"telephone\": \"+201093008896\",\n        \"priceRange\": \"ج.م\",\n        \"currenciesAccepted\": \"EGP\",\n        \"hasMap\": \"https://www.google.com/maps/search/?api=1&query=%D8%AA%D9%82%D8%B3%D9%8A%D9%85+%D8%A8%D9%87%D8%A7%D8%A1+%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D9%8A%D9%86%D9%8A+%D8%B7%D9%84%D8%AE%D8%A7\",\n        \"sameAs\": [\"https://www.facebook.com/profile.php?id=61559147948668\", \"https://www.instagram.com/ahmed_elmzin1\", \"https://www.tiktok.com/@ahmedelmzin1\"],\n        \"openingHoursSpecification\": [{\"@type\": \"OpeningHoursSpecification\", \"dayOfWeek\": [\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\", \"Sunday\"], \"opens\": \"11:00\", \"closes\": \"23:00\"}],\n        \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"تقسيم بهاء الشربيني، أمام محل LONDONE للملابس\", \"addressLocality\": \"طلخا\", \"addressRegion\": \"الدقهلية\", \"addressCountry\": \"EG\"}\n      },\n      {\n        \"@type\": [\"HairSalon\", \"LocalBusiness\"],\n        \"@id\": \"__SITE_URL__#mashaya\",\n        \"parentOrganization\": {\"@id\": \"__SITE_URL__#organization\"},\n        \"name\": \"مزين مصر – فرع المشاية\",\n        \"url\": \"__SITE_URL__/branches/mashaya/\",\n        \"image\": \"__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp\",\n        \"telephone\": \"+201101006961\",\n        \"priceRange\": \"ج.م\",\n        \"currenciesAccepted\": \"EGP\",\n        \"hasMap\": \"https://www.google.com/maps/search/?api=1&query=%D8%B4%D8%A7%D8%B1%D8%B9+%D8%AD%D8%B3%D8%A7%D9%85+%D8%B1%D8%A8%D9%8A%D8%B9+%D8%A7%D9%84%D9%85%D8%B4%D8%A7%D9%8A%D8%A9+%D8%A7%D9%84%D8%B3%D9%81%D9%84%D9%8A%D8%A9+%D8%A7%D9%84%D9%85%D9%86%D8%B5%D9%88%D8%B1%D8%A9\",\n        \"sameAs\": [\"https://www.facebook.com/profile.php?id=61559147948668\", \"https://www.instagram.com/ahmed_elmzin1\", \"https://www.tiktok.com/@ahmedelmzin1\"],\n        \"openingHoursSpecification\": [{\"@type\": \"OpeningHoursSpecification\", \"dayOfWeek\": [\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\", \"Sunday\"], \"opens\": \"11:00\", \"closes\": \"23:00\"}],\n        \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع\", \"addressLocality\": \"المنصورة\", \"addressRegion\": \"الدقهلية\", \"addressCountry\": \"EG\"}\n      }\n    ]\n  }\n  "
+    ]
+  },
+  "404.html": {
+    "ids": [],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/#packages\"}]": 1,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 1
+    },
+    "title": "الصفحة غير موجودة | مزين مصر",
+    "canonical": [],
+    "robots": [
+      "noindex,follow"
+    ],
+    "jsonld": []
+  },
+  "services/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogFilters",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 2,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#services\", \"data-safe-back\": \"\", \"href\": \"/#services\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 1,
+      "[\"a\", {\"href\": \"/branches/mashaya/\"}]": 1,
+      "[\"a\", {\"href\": \"/branches/talkha/\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 2,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "خدمات وأسعار حلاق في المنصورة وطلخا | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/services/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":\"CollectionPage\",\"@id\":\"__SITE_URL__/services/#page\",\"url\":\"__SITE_URL__/services/\",\"name\":\"خدمات وأسعار مزين مصر\",\"description\":\"خدمات الحلاقة والعناية الرجالية في فرعي طلخا والمشاية\",\"isPartOf\":{\"@id\":\"__SITE_URL__#organization\"}},{\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"الرئيسية\",\"item\":\"__SITE_URL__\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"الخدمات والأسعار\",\"item\":\"__SITE_URL__/services/\"}]}]}"
+    ]
+  },
+  "packages/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogFilters",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 2,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#packages\", \"data-safe-back\": \"\", \"href\": \"/#packages\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "كل الباقات | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/packages/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@type\":\"CollectionPage\",\"name\":\"باقات مزين مصر\",\"url\":\"__SITE_URL__/packages/\",\"isPartOf\":{\"@id\":\"__SITE_URL__#website\"}}"
+    ]
+  },
+  "team/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 2,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#team\", \"data-safe-back\": \"\", \"href\": \"/#team\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "فريق مزين مصر | حلاقون محترفون في طلخا والمشاية",
+    "canonical": [
+      "__SITE_URL__/team/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":\"CollectionPage\",\"@id\":\"__SITE_URL__/team/#page\",\"url\":\"__SITE_URL__/team/\",\"name\":\"فريق عمل مزين مصر\",\"description\":\"متخصصو الحلاقة والعناية الرجالية في فرعي طلخا والمشاية\",\"isPartOf\":{\"@id\":\"__SITE_URL__#organization\"}},{\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"الرئيسية\",\"item\":\"__SITE_URL__\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"فريق العمل\",\"item\":\"__SITE_URL__/team/\"}]}]}"
+    ]
+  },
+  "results/index.html": {
+    "ids": [
+      "all-results-title",
+      "resultsCount",
+      "resultsSearch",
+      "resultFilters",
+      "allResultsGrid",
+      "resultViewer",
+      "resultViewerBefore",
+      "resultViewerImage",
+      "resultViewerTitle",
+      "resultViewerBranch",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 4,
+      "[\"a\", {\"href\": \"/services/\"}]": 4,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 3,
+      "[\"button\", {\"data-theme-toggle\": \"\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/\", \"data-safe-back\": \"\", \"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/#services\"}]": 1,
+      "[\"input\", {\"id\": \"resultsSearch\", \"type\": \"search\"}]": 1,
+      "[\"button\", {\"data-result-branch\": \"all\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-result-branch\": \"talkha\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"data-result-branch\": \"mashaya\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"type\": \"button\"}]": 3,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "نتائج شغلنا | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/results/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@type\":\"CollectionPage\",\"name\":\"نتائج شغلنا في مزين مصر\",\"url\":\"__SITE_URL__/results/\",\"isPartOf\":{\"@id\":\"__SITE_URL__#website\"}}"
+    ]
+  },
+  "hair-systems/index.html": {
+    "ids": [
+      "hair-services-title",
+      "process-title",
+      "hair-videos",
+      "hair-videos-title",
+      "hairMediaGrid",
+      "branches-title",
+      "faq-title",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 4,
+      "[\"a\", {\"href\": \"/services/\"}]": 4,
+      "[\"a\", {\"href\": \"/branches/talkha/\"}]": 1,
+      "[\"a\", {\"href\": \"/branches/mashaya/\"}]": 1,
+      "[\"button\", {\"data-theme-toggle\": \"\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/\", \"data-safe-back\": \"\", \"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/#services\"}]": 1,
+      "[\"a\", {\"href\": \"https://wa.me/201101006961\"}]": 1,
+      "[\"a\", {\"data-book-branch\": \"mashaya\", \"href\": \"/#services\"}]": 1,
+      "[\"a\", {\"href\": \"tel:+201101006961\"}]": 1,
+      "[\"a\", {\"data-book-branch\": \"talkha\", \"href\": \"/#services\"}]": 1,
+      "[\"a\", {\"href\": \"tel:+201093008896\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 2,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "تركيب شعر رجالي في المنصورة وطلخا | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/hair-systems/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "jsonld": [
+      "\n  {\n    \"@context\": \"https://schema.org\",\n    \"@graph\": [\n      {\n        \"@type\": \"Service\",\n        \"@id\": \"__SITE_URL__/hair-systems/#service\",\n        \"name\": \"تركيب وصيانة شبكية الشعر للرجال\",\n        \"alternateName\": \"Men's Hair System Installation\",\n        \"url\": \"__SITE_URL__/hair-systems/\",\n        \"description\": \"خدمة تركيب وتنظيف وصيانة وقص شبكية الشعر للرجال في فرعي مزين مصر بطلخا والمشاية في المنصورة.\",\n        \"serviceType\": [\"تركيب شعر رجالي\", \"تركيب شبكية شعر\", \"تنظيف وصيانة شبكية الشعر\"],\n        \"provider\": {\"@id\": \"__SITE_URL__#organization\"},\n        \"areaServed\": [\n          {\"@type\": \"City\", \"name\": \"المنصورة\"},\n          {\"@type\": \"City\", \"name\": \"طلخا\"},\n          {\"@type\": \"AdministrativeArea\", \"name\": \"الدقهلية\"}\n        ],\n        \"availableChannel\": {\n          \"@type\": \"ServiceChannel\",\n          \"serviceUrl\": \"__SITE_URL__/#services\",\n          \"availableLanguage\": [\"ar\", \"en\"]\n        }\n      },\n      {\n        \"@type\": \"FAQPage\",\n        \"@id\": \"__SITE_URL__/hair-systems/#faq\",\n        \"mainEntity\": [\n          {\n            \"@type\": \"Question\",\n            \"name\": \"أين أجد تركيب شعر رجالي في المنصورة؟\",\n            \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"يوفر مزين مصر تركيب وتنظيف وصيانة شبكية الشعر للرجال في فرع المشاية السفلية بالمنصورة وفرع طلخا، مع إمكانية اختيار الفرع والحجز من الموقع.\"}\n          },\n          {\n            \"@type\": \"Question\",\n            \"name\": \"ما الخدمات المتاحة للشبكية بعد التركيب؟\",\n            \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"تشمل قائمة الخدمات الحالية قص الشبكية وتنظيفها وإعادة تركيبها وخدمات السيرفيس، ويحدد المتخصص الأنسب بعد معاينة الحالة ونوع الشبكية.\"}\n          },\n          {\n            \"@type\": \"Question\",\n            \"name\": \"كيف أختار نوع شبكية الشعر المناسب؟\",\n            \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"يعتمد الاختيار على مساحة التغطية وكثافة الشعر والستايل المطلوب وطبيعة الاستخدام والميزانية. المعاينة داخل الفرع هي الطريقة الأدق لتحديد الخيار المناسب.\"}\n          },\n          {\n            \"@type\": \"Question\",\n            \"name\": \"هل يلزم حجز موعد لتركيب الشعر؟\",\n            \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"يفضل الحجز المسبق لأن التركيب والمعاينة يحتاجان وقتًا ومتخصصًا متاحًا. يمكن الحجز من الموقع أو التواصل مع فرع طلخا أو المشاية.\"}\n          }\n        ]\n      },\n      {\n        \"@type\": \"BreadcrumbList\",\n        \"itemListElement\": [\n          {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"الرئيسية\", \"item\": \"__SITE_URL__/\"},\n          {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"تركيب الشعر الرجالي\", \"item\": \"__SITE_URL__/hair-systems/\"}\n        ]\n      }\n    ]\n  }\n  "
+    ]
+  },
+  "gallery/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogFilters",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 3,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#team\", \"data-safe-back\": \"\", \"href\": \"/#team\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "معرض الصور والفيديو | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/gallery/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\": \"https://schema.org\", \"@type\": \"CollectionPage\", \"name\": \"معرض الصور والفيديو\", \"url\": \"__SITE_URL__/gallery/\"}"
+    ]
+  },
+  "news/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogFilters",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 3,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#team\", \"data-safe-back\": \"\", \"href\": \"/#team\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "أخبار مزين مصر | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/news/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\": \"https://schema.org\", \"@type\": \"CollectionPage\", \"name\": \"أخبار مزين مصر\", \"url\": \"__SITE_URL__/news/\"}"
+    ]
+  },
+  "celebrities/index.html": {
+    "ids": [
+      "langToggle",
+      "themeToggle",
+      "catalogSearch",
+      "resultCount",
+      "catalogFilters",
+      "catalogGrid",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 3,
+      "[\"button\", {\"id\": \"langToggle\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#team\", \"data-safe-back\": \"\", \"href\": \"/#team\"}]": 1,
+      "[\"input\", {\"id\": \"catalogSearch\", \"type\": \"search\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "ضيوف مزين مصر | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/celebrities/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "jsonld": [
+      "{\"@context\": \"https://schema.org\", \"@type\": \"CollectionPage\", \"name\": \"ضيوف مزين مصر\", \"url\": \"__SITE_URL__/celebrities/\"}"
+    ]
+  },
+  "reviews/index.html": {
+    "ids": [
+      "themeToggle",
+      "reviewsGrid",
+      "loadMoreReviews",
+      "pageToast",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"href\": \"/\"}]": 2,
+      "[\"button\", {\"id\": \"themeToggle\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"data-back-fallback\": \"/#reviews\", \"data-safe-back\": \"\", \"href\": \"/#reviews\"}]": 1,
+      "[\"button\", {\"id\": \"loadMoreReviews\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "كل التقييمات | مزين مصر",
+    "canonical": [
+      "__SITE_URL__/reviews/"
+    ],
+    "robots": [
+      "index,follow,max-snippet:-1"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@type\":\"CollectionPage\",\"name\":\"تقييمات عملاء مزين مصر\",\"url\":\"__SITE_URL__/reviews/\",\"isPartOf\":{\"@id\":\"__SITE_URL__#website\"}}"
+    ]
+  },
+  "branches/talkha/index.html": {
+    "ids": [
+      "talkha-services",
+      "branch-offers-title",
+      "branchOffers",
+      "branch-services-title",
+      "branchServices",
+      "branch-team-title",
+      "branchTeam",
+      "talkha-faq",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"data-back-fallback\": \"/\", \"data-safe-back\": \"\", \"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/\"}]": 3,
+      "[\"a\", {\"data-choose-branch\": \"\", \"href\": \"/#services\"}]": 1,
+      "[\"a\", {\"data-branch-phone\": \"\", \"href\": \"tel:+201093008896\"}]": 2,
+      "[\"a\", {\"data-branch-whatsapp\": \"\", \"href\": \"https://wa.me/201093008896\"}]": 1,
+      "[\"a\", {\"data-branch-map\": \"\", \"href\": \"https://www.google.com/maps/search/?api=1&query=%D8%AA%D9%82%D8%B3%D9%8A%D9%85+%D8%A8%D9%87%D8%A7%D8%A1+%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D9%8A%D9%86%D9%8A+%D8%B7%D9%84%D8%AE%D8%A7\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 2,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 1,
+      "[\"a\", {\"href\": \"tel:+20502535810\"}]": 1,
+      "[\"a\", {\"href\": \"/packages/\"}]": 1,
+      "[\"a\", {\"href\": \"/branches/mashaya/\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "حلاق وتركيب شعر في طلخا | مزين مصر منذ 1995",
+    "canonical": [
+      "__SITE_URL__/branches/talkha/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":[\"HairSalon\",\"LocalBusiness\"],\"@id\":\"__SITE_URL__#talkha\",\"name\":\"مزين مصر – فرع طلخا\",\"url\":\"__SITE_URL__/branches/talkha/\",\"image\":\"__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp\",\"telephone\":\"+201093008896\",\"priceRange\":\"ج.م\",\"currenciesAccepted\":\"EGP\",\"parentOrganization\":{\"@id\":\"__SITE_URL__#organization\"},\"hasMap\":\"https://www.google.com/maps/search/?api=1&query=%D8%AA%D9%82%D8%B3%D9%8A%D9%85+%D8%A8%D9%87%D8%A7%D8%A1+%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D9%8A%D9%86%D9%8A+%D8%B7%D9%84%D8%AE%D8%A7\",\"sameAs\":[\"https://www.facebook.com/profile.php?id=61559147948668\",\"https://www.instagram.com/ahmed_elmzin1\",\"https://www.tiktok.com/@ahmedelmzin1\"],\"openingHoursSpecification\":[{\"@type\":\"OpeningHoursSpecification\",\"dayOfWeek\":[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\",\"Sunday\"],\"opens\":\"11:00\",\"closes\":\"23:00\"}],\"address\":{\"@type\":\"PostalAddress\",\"streetAddress\":\"تقسيم بهاء الشربيني، أمام محل LONDONE للملابس\",\"addressLocality\":\"طلخا\",\"addressRegion\":\"الدقهلية\",\"addressCountry\":\"EG\"},\"areaServed\":[{\"@type\":\"City\",\"name\":\"طلخا\"},{\"@type\":\"AdministrativeArea\",\"name\":\"الدقهلية\"}]},{\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"الرئيسية\",\"item\":\"__SITE_URL__/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"فرع طلخا\",\"item\":\"__SITE_URL__/branches/talkha/\"}]}]}"
+    ]
+  },
+  "branches/mashaya/index.html": {
+    "ids": [
+      "mashaya-services",
+      "branch-offers-title",
+      "branchOffers",
+      "branch-services-title",
+      "branchServices",
+      "branch-team-title",
+      "branchTeam",
+      "mashaya-faq",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"data-back-fallback\": \"/\", \"data-safe-back\": \"\", \"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/\"}]": 3,
+      "[\"a\", {\"data-choose-branch\": \"\", \"href\": \"/#services\"}]": 1,
+      "[\"a\", {\"data-branch-phone\": \"\", \"href\": \"tel:+201101006961\"}]": 2,
+      "[\"a\", {\"data-branch-whatsapp\": \"\", \"href\": \"https://wa.me/201101006961\"}]": 1,
+      "[\"a\", {\"data-branch-map\": \"\", \"href\": \"https://www.google.com/maps/search/?api=1&query=%D8%B4%D8%A7%D8%B1%D8%B9+%D8%AD%D8%B3%D8%A7%D9%85+%D8%B1%D8%A8%D9%8A%D8%B9+%D8%A7%D9%84%D9%85%D8%B4%D8%A7%D9%8A%D8%A9+%D8%A7%D9%84%D8%B3%D9%81%D9%84%D9%8A%D8%A9+%D8%A7%D9%84%D9%85%D9%86%D8%B5%D9%88%D8%B1%D8%A9\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 2,
+      "[\"a\", {\"href\": \"/hair-systems/\"}]": 1,
+      "[\"a\", {\"href\": \"tel:+20502253357\"}]": 1,
+      "[\"a\", {\"href\": \"/packages/\"}]": 1,
+      "[\"a\", {\"href\": \"/branches/talkha/\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "حلاق وتركيب شعر في المنصورة | مزين مصر المشاية",
+    "canonical": [
+      "__SITE_URL__/branches/mashaya/"
+    ],
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "jsonld": [
+      "{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":[\"HairSalon\",\"LocalBusiness\"],\"@id\":\"__SITE_URL__#mashaya\",\"name\":\"مزين مصر – فرع المشاية\",\"url\":\"__SITE_URL__/branches/mashaya/\",\"image\":\"__SITE_ORIGIN__/assets/hero-barbershop-cyan.webp\",\"telephone\":\"+201101006961\",\"priceRange\":\"ج.م\",\"currenciesAccepted\":\"EGP\",\"parentOrganization\":{\"@id\":\"__SITE_URL__#organization\"},\"hasMap\":\"https://www.google.com/maps/search/?api=1&query=%D8%B4%D8%A7%D8%B1%D8%B9+%D8%AD%D8%B3%D8%A7%D9%85+%D8%B1%D8%A8%D9%8A%D8%B9+%D8%A7%D9%84%D9%85%D8%B4%D8%A7%D9%8A%D8%A9+%D8%A7%D9%84%D8%B3%D9%81%D9%84%D9%8A%D8%A9+%D8%A7%D9%84%D9%85%D9%86%D8%B5%D9%88%D8%B1%D8%A9\",\"sameAs\":[\"https://www.facebook.com/profile.php?id=61559147948668\",\"https://www.instagram.com/ahmed_elmzin1\",\"https://www.tiktok.com/@ahmedelmzin1\"],\"openingHoursSpecification\":[{\"@type\":\"OpeningHoursSpecification\",\"dayOfWeek\":[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\",\"Sunday\"],\"opens\":\"11:00\",\"closes\":\"23:00\"}],\"address\":{\"@type\":\"PostalAddress\",\"streetAddress\":\"المشاية السفلية، أمام بوابة نادي الجزيرة الثانية، شارع حسام ربيع\",\"addressLocality\":\"المنصورة\",\"addressRegion\":\"الدقهلية\",\"addressCountry\":\"EG\"},\"areaServed\":[{\"@type\":\"City\",\"name\":\"المنصورة\"},{\"@type\":\"AdministrativeArea\",\"name\":\"الدقهلية\"}]},{\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"name\":\"الرئيسية\",\"item\":\"__SITE_URL__/\"},{\"@type\":\"ListItem\",\"position\":2,\"name\":\"فرع المشاية\",\"item\":\"__SITE_URL__/branches/mashaya/\"}]}]}"
+    ]
+  },
+  "booking/index.html": {
+    "ids": [],
+    "controls": {
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1
+    },
+    "title": "احجز موعدك | مزين مصر",
+    "canonical": [],
+    "robots": [],
+    "jsonld": []
+  },
+  "account/index.html": {
+    "ids": [
+      "logout",
+      "loginCard",
+      "phoneForm",
+      "phone",
+      "sendCode",
+      "codeForm",
+      "code",
+      "verifyCode",
+      "retryCode",
+      "changePhone",
+      "recaptcha",
+      "loginMessage",
+      "portal",
+      "customerName",
+      "customerPhoneDisplay",
+      "memberTier",
+      "customerQr",
+      "walletCard",
+      "points",
+      "cashback",
+      "tierProgressLabel",
+      "tierProgressValue",
+      "tierProgressBar",
+      "favoriteStaff",
+      "favoriteDetails",
+      "saveFavorite",
+      "bookFavorite",
+      "lastBooking",
+      "repeatBooking",
+      "whatsappMarketingConsent",
+      "saveWhatsappConsent",
+      "accountMessage",
+      "upcomingCard",
+      "upcoming",
+      "bookingHistory",
+      "walletActivity",
+      "reschedulePanel",
+      "rescheduleDescription",
+      "rescheduleForm",
+      "rescheduleDate",
+      "rescheduleSlot",
+      "confirmReschedule",
+      "closeReschedule",
+      "rescheduleMessage",
+      "faqChatPanel",
+      "faqChatTitle",
+      "faqChatClose",
+      "faqChatIntro",
+      "faqChatSearch",
+      "faqChatAnswer",
+      "faqChatQuestions"
+    ],
+    "controls": {
+      "[\"a\", {\"data-back-fallback\": \"/account/\", \"data-safe-back\": \"\", \"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"id\": \"logout\", \"type\": \"button\"}]": 1,
+      "[\"form\", {\"id\": \"phoneForm\"}]": 1,
+      "[\"input\", {\"id\": \"phone\", \"type\": \"tel\"}]": 1,
+      "[\"button\", {\"id\": \"sendCode\", \"type\": \"submit\"}]": 1,
+      "[\"form\", {\"id\": \"codeForm\"}]": 1,
+      "[\"input\", {\"id\": \"code\"}]": 1,
+      "[\"button\", {\"id\": \"verifyCode\", \"type\": \"submit\"}]": 1,
+      "[\"button\", {\"id\": \"retryCode\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"changePhone\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"href\": \"/#services\"}]": 2,
+      "[\"a\", {\"href\": \"#upcomingCard\"}]": 1,
+      "[\"a\", {\"href\": \"#walletCard\"}]": 1,
+      "[\"select\", {\"id\": \"favoriteStaff\"}]": 1,
+      "[\"button\", {\"id\": \"saveFavorite\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"bookFavorite\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"repeatBooking\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"whatsappMarketingConsent\", \"type\": \"checkbox\"}]": 1,
+      "[\"button\", {\"id\": \"saveWhatsappConsent\", \"type\": \"button\"}]": 1,
+      "[\"form\", {\"id\": \"rescheduleForm\"}]": 1,
+      "[\"input\", {\"id\": \"rescheduleDate\", \"type\": \"date\"}]": 1,
+      "[\"select\", {\"id\": \"rescheduleSlot\"}]": 1,
+      "[\"button\", {\"id\": \"confirmReschedule\", \"type\": \"submit\"}]": 1,
+      "[\"button\", {\"id\": \"closeReschedule\", \"type\": \"button\"}]": 1,
+      "[\"a\", {\"href\": \"/\"}]": 1,
+      "[\"a\", {\"href\": \"/services/\"}]": 1,
+      "[\"a\", {\"href\": \"/?book=1\"}]": 1,
+      "[\"a\", {\"href\": \"/team/\"}]": 1,
+      "[\"a\", {\"href\": \"/account/\"}]": 1,
+      "[\"button\", {\"data-open-faq-chat\": \"\", \"type\": \"button\"}]": 1,
+      "[\"button\", {\"id\": \"faqChatClose\", \"type\": \"button\"}]": 1,
+      "[\"input\", {\"id\": \"faqChatSearch\", \"type\": \"search\"}]": 1
+    },
+    "title": "حسابي | مزين مصر",
+    "canonical": [],
+    "robots": [
+      "noindex,nofollow,noarchive"
+    ],
+    "jsonld": []
+  },
+  "src/app.js": {
+    "hooks": [
+      "data-add-drink",
+      "data-add-id",
+      "data-book-branch",
+      "data-book-staff",
+      "data-branch-label",
+      "data-branch-pill-text",
+      "data-branch-switch-text",
+      "data-business-name",
+      "data-cancel-customer-booking",
+      "data-cart-count",
+      "data-cart-id",
+      "data-cart-qty",
+      "data-category",
+      "data-change-branch",
+      "data-choice-group",
+      "data-choose-inline-branch",
+      "data-close-booking",
+      "data-close-branch",
+      "data-close-package-details",
+      "data-countdown",
+      "data-drink-option",
+      "data-kind",
+      "data-open-booking",
+      "data-open-branch",
+      "data-open-faq-chat",
+      "data-package-choice",
+      "data-package-details",
+      "data-remove-id",
+      "data-retry-catalog",
+      "data-select-branch",
+      "data-staff-id",
+      "data-video-kind",
+      "data-video-poster",
+      "data-video-src"
+    ]
+  },
+  "src/catalog-page.js": {
+    "hooks": [
+      "data-add",
+      "data-book-staff",
+      "data-catalog-state",
+      "data-category",
+      "data-close-catalog-branch",
+      "data-current-branch",
+      "data-open-catalog-branch",
+      "data-retry-page",
+      "data-safe-back",
+      "data-set-branch"
+    ]
+  },
+  "src/results.js": {
+    "hooks": [
+      "data-result-branch",
+      "data-result-index"
+    ]
+  },
+  "src/hair-systems.js": {
+    "hooks": []
+  },
+  "src/branch-page.js": {
+    "hooks": [
+      "data-book-item",
+      "data-book-staff",
+      "data-branch-address",
+      "data-branch-hours",
+      "data-branch-map",
+      "data-branch-phone",
+      "data-branch-retry",
+      "data-branch-whatsapp",
+      "data-choose-branch",
+      "data-kind"
+    ]
+  },
+  "src/reviews-page.js": {
+    "hooks": []
+  },
+  "src/account.js": {
+    "hooks": [
+      "data-cancel",
+      "data-repeat",
+      "data-reschedule"
+    ]
+  },
+  "src/public-navigation.js": {
+    "hooks": [
+      "data-footer-branches",
+      "data-footer-copy",
+      "data-public-route",
+      "data-safe-back"
+    ]
+  },
+  "src/public-controls.js": {
+    "hooks": [
+      "data-open-booking",
+      "data-open-branch",
+      "data-public-cart-count",
+      "data-public-refinement",
+      "data-safe-back",
+      "data-shell-branch",
+      "data-shell-language",
+      "data-theme-toggle"
+    ]
+  },
+  "src/global-navigation.js": {
+    "hooks": [
+      "data-safe-back"
+    ]
+  },
+  "src/ai-chat.js": {
+    "hooks": [
+      "data-open-faq-chat"
+    ]
+  },
+  "src/deferred-video.js": {
+    "hooks": [
+      "data-play-video",
+      "data-video-poster"
+    ]
+  },
+  "src/public-assistant.js": {
+    "hooks": []
+  }
+}

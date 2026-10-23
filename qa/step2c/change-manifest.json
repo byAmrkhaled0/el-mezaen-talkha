@@ -1,0 +1,40 @@
+{
+  "modified": [
+    "404.html",
+    "account/index.html",
+    "branches/mashaya/index.html",
+    "branches/talkha/index.html",
+    "celebrities/index.html",
+    "gallery/index.html",
+    "hair-systems/index.html",
+    "index.html",
+    "news/index.html",
+    "packages/index.html",
+    "results/index.html",
+    "reviews/index.html",
+    "services/index.html",
+    "src/account.css",
+    "src/app.js",
+    "src/branch-page.js",
+    "src/catalog-page.js",
+    "src/hair-systems.js",
+    "src/homepage-presentation.js",
+    "src/i18n.js",
+    "src/public-controls.js",
+    "src/public-navigation.js",
+    "src/public-refinement.css",
+    "src/results.js",
+    "src/reviews-page.js",
+    "team/index.html",
+    "tests/d3-recovery.test.mjs"
+  ],
+  "added_application_tests": [
+    "src/public-status.js",
+    "tests/step2c-public.test.mjs",
+    "tests/step2c-source.py"
+  ],
+  "added_evidence": "qa/step2c/* (listed separately in ZIP inventory)",
+  "deleted": [],
+  "unchanged_files": 302,
+  "protected_compared": 302
+}

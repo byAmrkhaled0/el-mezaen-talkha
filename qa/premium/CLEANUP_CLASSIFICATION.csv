@@ -1,0 +1,399 @@
+path,bytes,sha256,classification,reason
+.firebaserc.example,66,6da7f31245237470e63fb2611f00b703879435443ce0848f7c89f37e18415cef,KEEP — required for application runtime,Application/configuration/assets
+.gitignore,730,ed0ae34310c7ac1412e9880368b50e1d80c0fce219c2014bb4a2e289d1331ce5,KEEP — required for application runtime,Application/configuration/assets
+404.html,1232,f63a3f36b63a930fe117113a8bf523ba2d3bbac6b9ae73b6f6b1d0d3619579a4,KEEP — required for application runtime,Application/configuration/assets
+PHASE11_1_CSS_AUDIT.json,236,e973002d63cae9f5000a5d10ff1ae02d7348734c176af75bdf197e1e8861ea96,REVIEW,Retained conservatively; security/operational documentation or generator output
+README_AR.md,5161,fec280a3e2ab410d42b63c238f0ed08fdf3b7e4d1f854e612cad96b90acfd4bd,REVIEW,Retained conservatively; security/operational documentation or generator output
+SEO_LAUNCH_CHECKLIST_AR.md,5509,ded1eb7080340a512d7acbfc1460a19360f3f2c16366c30f6d46aa7803c2831e,REVIEW,Retained conservatively; security/operational documentation or generator output
+account/index.html,8761,5d6790357ad7e3eadb8815dfa7a9e03f2b12f4835ca6344d3c28919d7f031916,KEEP — required for application runtime,Application/configuration/assets
+admin/index.html,131850,389bf8fce0e05c7d243bd2f47875b38550aa5d65f13a891f9d271002f2333949,KEEP — required for application runtime,Application/configuration/assets
+booking/index.html,551,0d9b1c4713a39bb3b4e85dd4784959792f4499b18a7f6a4d446b0300d8cc4bca,KEEP — required for application runtime,Application/configuration/assets
+branches/mashaya/index.html,12805,e2ca9cb7fafbbdbf2e10d491ac8e98fa713604c6335f49911556701cf665a81d,KEEP — required for application runtime,Application/configuration/assets
+branches/talkha/index.html,12361,e39d6019a00d2b9563fd284db69c721ce230f5eb55e81f0193799e148e7569d7,KEEP — required for application runtime,Application/configuration/assets
+celebrities/index.html,6994,9217678d3d060e32ca9edffe16a5bc0751de2c3aa0ce888415a9ac0c1c1dfe86,KEEP — required for application runtime,Application/configuration/assets
+docs/phase11_3/PHASE11_3_AI_AGENT_AUDIT_AR.md,5686,fba6dd162efeb0e9a6ced4d0c2943455a9518126f4c55eb27b0aeced30e3adb9,REVIEW,Retained conservatively; security/operational documentation or generator output
+docs/phase11_3/PHASE11_3_FINAL_REPORT_AR.md,5456,2fbfa13e9b25437644b378bf206b66c2aff8ce08b3b90f4e17b8b2325829a6cb,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+docs/phase11_3/PHASE11_3_ROUTE_APPCHECK_AUDIT_AR.md,2973,0bd4de9695ae38c8e71acab707a2bbdecab7cbcbb840c9df8bbe418f42707acc,REVIEW,Retained conservatively; security/operational documentation or generator output
+docs/phase11_3/PHASE11_3_STAFF_BRANCH_DATA_AUDIT_AR.md,2266,33947135058cf2574de0cc0dae566bf33f0395f1db1a3928766a8ccb09861234,REVIEW,Retained conservatively; security/operational documentation or generator output
+firebase.json,5801,e6160dc31eb9dcc0411967f5de0e97fbba5dc34891e32378f898b210ea4d24ea,KEEP — required for application runtime,Application/configuration/assets
+firestore.indexes.json,61687,6cb0de3fbe36850422e7e588e03c7b64f7a5529c069036b8480f57e3aa3d3666,KEEP — required for application runtime,Application/configuration/assets
+firestore.rules,605,c8c74afdb9ed73c15631363e6a55b0e8de8267d7a108f2a485294ee2ac79b58d,KEEP — required for application runtime,Application/configuration/assets
+functions/package-lock.json,121309,95e3e8f7f5520ca034f72ee4342a7e9535a937f4f322909cdc9cbd0d86d9de49,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+functions/package.json,534,1ae4cf07a16475a3fcf6b3f76d1b894750324e278f565ae694ce844b253ea7de,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+functions/scripts/branch-map.example.json,137,f9a2ae9a623f574a36940e378e474a2a283904997ba61a04edc94232ded308e9,KEEP — required for application runtime,Application/configuration/assets
+functions/scripts/catalog-migration.mjs,13428,8aa8782282e72098a1322a35c69d9efe3d3a3411c469a9b91bf7de4385ac179a,KEEP — required for application runtime,Application/configuration/assets
+functions/src/account-center.js,2498,49b9ba99c41968a8c4f1c0fd6995653ccbfc4ea6a369c057c75d2b7b2f9056fe,KEEP — required for application runtime,Application/configuration/assets
+functions/src/advance-posting.js,15435,4c6673ac3ee6c53700b1f8af631e1763c7339758875575df1137c797a521e4cc,KEEP — required for application runtime,Application/configuration/assets
+functions/src/ai-agent.js,18548,dd8e43615a2276c1b95f8cc7041ac615f101fe31671ef917dc30e2a17ebf31af,KEEP — required for application runtime,Application/configuration/assets
+functions/src/authorization.js,2370,3540eeec4c6860f8f276db7c0b83bd81b51e353e3284d0ebd94f4b5e3fec9ecd,KEEP — required for application runtime,Application/configuration/assets
+functions/src/booking-help.js,804,1d0a37af89aab4ddf2619ffd513d230b8f72cc5f009ce53859f22cd7436c472c,KEEP — required for application runtime,Application/configuration/assets
+functions/src/core.js,21725,8d3c7a8b7a195c41451be60afdc5f6aa75f128792fe2c28b20a268735ea19232,KEEP — required for application runtime,Application/configuration/assets
+functions/src/financial-closing.js,5657,8198d39d51988f674af54a512b0965b55ab626e6cfb4fe1774165c23d901fe6a,KEEP — required for application runtime,Application/configuration/assets
+functions/src/index.js,354954,3a0b5fe3ce2be4a77d479370a44df6ca280df79018ef9331ddbf8f45663f63ef,KEEP — required for application runtime,Application/configuration/assets
+functions/src/leave-integration.js,7264,ec5e01286816e1b14f6f8f69e8aacbe3e8192748baae18880e9f1bc5c1590759,KEEP — required for application runtime,Application/configuration/assets
+functions/src/managed-media.js,1414,893bc3b675cfa3e13755b200b894bbb524b9af0736be9026ed35ce0ee0783619,KEEP — required for application runtime,Application/configuration/assets
+functions/src/marketing.js,3627,1c7d334749f92236f8ead8ac71fe980b3faac6c9e3756d247851b24967b8571c,KEEP — required for application runtime,Application/configuration/assets
+functions/src/operational-push.js,721,1b86a52c14134b648bffb171ca997f093d9977b9e73ba477c8d5f80015f057ab,KEEP — required for application runtime,Application/configuration/assets
+functions/src/owner-mobile.js,1659,3a872614717c3356dc3d6daa7828d2780cdf1b93d43d372cad8a9e392e197489,KEEP — required for application runtime,Application/configuration/assets
+functions/src/payroll-posting.js,15227,8d36deb5a7e90fbd39b126d6b2ae3219e12acaecf2756d278824f72c887bee10,KEEP — required for application runtime,Application/configuration/assets
+functions/src/privilege-change.js,402,34a628cd366ccfe8c7bda9adf246f79c9280a00de6b5fa91fa44eb95e0b3f225,KEEP — required for application runtime,Application/configuration/assets
+functions/src/reporting.js,2908,4b5f91b5d95749e7bd7ddcad3270c6ec4adead865514eeb51f17723411944e02,KEEP — required for application runtime,Application/configuration/assets
+functions/src/scheduling.js,7540,a434e636180443dd942be655110285e57bc5188fb76b20d7c11ed0a288f68774,KEEP — required for application runtime,Application/configuration/assets
+functions/src/site-media-settings.js,1245,48314773e36733f1aff9fc83ae4c7cd1a80e2f7acd7c4afb90c816a7d3ce6862,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-access-state.js,2706,7b2b99acd6dcac094d9f5d78183a60677fe8db0bccc4a8ecbb40795db1da88b8,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-access.js,17851,64cfb82311b98d6922f6d8f72c848a992e873dc121666db3549403382b45218b,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-context.js,651,e1a4552a14b46e3b9c9b45e9a0a2f55c1e53090f96d56d6297b95867e6051b37,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-notification-delivery.js,3658,2fd7b28331f4259676803a52ec02ee93a08082e336c747eba4dfe2a3eb62dbcf,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-reminders.js,1854,046ebf3a68a3b9d83be59dc13e68808123f862edb0412fb2ef6ee8237e560582,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-requests.js,20020,1b60359b4ef24c25ca0d65e1deb7296c4ad487a3b1c5815c979b5c145d3c65ef,KEEP — required for application runtime,Application/configuration/assets
+functions/src/worker-username.js,397,3baab7eb6879ee13e02aa31a8aa29c1e322d130de1b386322870a81ade289feb,KEEP — required for application runtime,Application/configuration/assets
+functions/test/ai-conversation.test.mjs,8263,1f3e4ef7743713e6b8ebcc3a303656be150354d4b1a72fb1aedc4225bcd874c3,KEEP — required for application runtime,Application/configuration/assets
+functions/test/authorization.test.mjs,3923,fa8e027d66affe86f892ccb132233c531fcd61adb467a909c1cf1e86e5e51649,KEEP — required for application runtime,Application/configuration/assets
+functions/test/core.test.mjs,15338,10cf677a96de56bb1c8216ed948cbbe594dd55be0c2a51ad6896dede673ed3c1,KEEP — required for application runtime,Application/configuration/assets
+functions/test/financial-closing.test.mjs,1465,712eee57779a870a34e9df7dd7414b603cb273d7d7e1ea878ed756d12564bae4,KEEP — required for application runtime,Application/configuration/assets
+functions/test/marketing.test.mjs,5354,e18cd528980bb4d99eb4e9e1e73968679af2322bb96db693ef1b22ddab3b9da3,KEEP — required for application runtime,Application/configuration/assets
+functions/test/operational-push.test.mjs,1213,8a1d78845aec47362f72eb673582b5e927ccc78401cb9a1779742e2877aab313,KEEP — required for application runtime,Application/configuration/assets
+functions/test/phase11-1.test.mjs,1043,7fb6a1d8470dede65ada44628c52fb22a7e428ccc3f7e6a44b93816a34646515,KEEP — required for application runtime,Application/configuration/assets
+functions/test/phase11.test.mjs,4134,0c653c521a1c89ccefc8fd1bee0dd5048b9a599729983e46da5ccc66c6ee1bc0,KEEP — required for application runtime,Application/configuration/assets
+functions/test/production-policy.test.mjs,2206,810255004676774c71f0856ed4247503fdabfcf759675b29dc492de56316d403,KEEP — required for application runtime,Application/configuration/assets
+functions/test/reporting.test.mjs,2403,6bdc18404eb72088370166f43c30163aa0be28b114ce4a3cb669dddcefe9bdbf,KEEP — required for application runtime,Application/configuration/assets
+functions/test/security-v95.test.mjs,2364,eefb58dbf73c5d520ca48bc9b03a5eb3371d4b01ee5d807de2a22657b9730b02,KEEP — required for application runtime,Application/configuration/assets
+functions/test/site-media-settings.test.mjs,2503,ebdd07ac9335128fed80e10adfa62f9a0e1944a2fb8bb12e8412d69a601000d0,KEEP — required for application runtime,Application/configuration/assets
+functions/test/worker-creation-fault.test.mjs,2031,a605e75c04fcbd013c74368680b6f5b8774d23e6ec137c7c671471bfae75cddf,KEEP — required for application runtime,Application/configuration/assets
+functions/test/worker-username.test.mjs,1123,1d331c93cd32f31fc15385a98193348372ad0e0382ac433db3ab7c729bcc9b9e,KEEP — required for application runtime,Application/configuration/assets
+gallery/index.html,7050,9f1a8a5bf473751cfd068fa917e3a1155b3006acbe7f33c0ac3dac1f5355da31,KEEP — required for application runtime,Application/configuration/assets
+hair-systems/index.html,17549,e8a378ecc29a0726c5918d39bd8d7fe7555824b1c8d79c1d1e29eb4555163388,KEEP — required for application runtime,Application/configuration/assets
+index.html,45275,d25840978aa8604f3880b85bb37a1aa5cbef45df20ac591685df72993b7c87cb,KEEP — required for application runtime,Application/configuration/assets
+login/index.html,4326,605ea119c3709af5547510d14567ece644bdee9bd460b17b3d088df8adc4b1bc,KEEP — required for application runtime,Application/configuration/assets
+news/index.html,6905,2d40e7a7193d8bf9a02843251b7f552fe2912720b2ea529c95b5c2eca312e71c,KEEP — required for application runtime,Application/configuration/assets
+package-lock.json,88245,7f52b37a4e0379c91acce2c68a20b9e3efcd55d31aa5454ef399f151ea346701,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+package.json,1751,365f07c4fd62f244462f322d37a86760965c43013089606521017d2826bcbd71,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+packages/index.html,6497,91c5207427d3562fa23205c27f84dfd028e53d60ed6850f0d90ba81337cc93cf,KEEP — required for application runtime,Application/configuration/assets
+public/admin-manifest.webmanifest,821,5c7fdd4c42ca024a3f76f2b43d0f6dbc9ff9ff8b060a66d9fd1c2e73adc7d71f,KEEP — required for application runtime,Application/configuration/assets
+public/assets/apple-touch-icon.png,22325,d4972b9c31b09a01550a53fc5fed8f67fbc7298a57dc8b1ff5a8c9bd18b17492,KEEP — required for application runtime,Application/configuration/assets
+public/assets/celebrity-1.webp,75674,a5c67998a633453b3536f0975e0f6582e106676c4ee6dd7d445ded3b51a46ced,KEEP — required for application runtime,Application/configuration/assets
+public/assets/celebrity-2.webp,35366,654258b7d3dad325df568c8a9c2e40107024e0bddfa6a7f6472791ed03312bc1,KEEP — required for application runtime,Application/configuration/assets
+public/assets/celebrity-3.webp,35750,65a68d0540b6fba109382d70a084a9cc5ea8b5d2f2967b534a15e2b08c780160,KEEP — required for application runtime,Application/configuration/assets
+public/assets/celebrity-4.webp,75572,12a464c1d50a00aa97e425f73ef4dc7330d8c633043d089a5196c1b4f544dad4,KEEP — required for application runtime,Application/configuration/assets
+public/assets/el-mezaen-logo.jpeg,22840,aff8afcf5f8712b1f75d953f0fb1ce8012c9466b17edc9b730fd32e7e6e61cbc,KEEP — required for application runtime,Application/configuration/assets
+public/assets/el-mezaen-mark-v2.webp,8116,bf47197865f24c87439b5e2d384f34d8fca5d00b4e353c9230074892032df1d5,KEEP — required for application runtime,Application/configuration/assets
+public/assets/hero-barbershop-cyan.webp,28690,aac3a7f3065f2165060d7ecb041ebaf5b7ac99ad2ad25250c828390b6270df79,KEEP — required for application runtime,Application/configuration/assets
+public/assets/icon-192.png,25842,efb09869081042b22f887a2735ad982446e735cf9b3abc907793eadfea00c97b,KEEP — required for application runtime,Application/configuration/assets
+public/assets/icon-512.png,153108,9d7a9324abbe58aec9e48f012fa46fe3899fcc24a00ffc844bf3d15f516db67c,KEEP — required for application runtime,Application/configuration/assets
+public/assets/icon-maskable-512.png,109917,42d218aba2d66df0161dc82ecb4c8b73179e14475d6692f038b9d52110dbb92f,KEEP — required for application runtime,Application/configuration/assets
+public/assets/icon.svg,11066,e1848ffa8b288b5146d00b9e49994a2dc60b661f0562ae57c020be5d5f9b1b14,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/SOURCE.md,289,dacf0050ac91049293abad44b56077884f163d1525a5e7186114a931bd497d92,REVIEW,Retained conservatively; security/operational documentation or generator output
+public/assets/owner/owner-about-car-480.webp,38820,6dab5ef41ece3b83bb5fb1218d4c4c84c78fdab804ba073055758f1676d26f0b,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-about-car-640.webp,51524,3d50d22fb0c0a0eaaab46fedeab4547b57451a6cf261f539e29bfa73d72da44a,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-about-car-960.webp,84740,1f367f2b3ba976876db3d95610f97c34f51dfa59883f2c173c76f0352eae4bde,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-about-car.jpeg,119912,670d31de9d05b9f7bd38670aadd9bc4e7107c1429f24e8de5a4a4e0f45359777,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-hero-studio-suit-480.webp,15278,60e850965e26e0377567e9c74f488f999b21eb956c1679289b4ae57e1187b268,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-hero-studio-suit-640.webp,22630,c6beaf846a7375fcca86dd6279dfc00b950416b15bc5af3ecf4bc40e1ba7e113,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-hero-studio-suit-960.webp,39292,d7c590d2e259a611fab17f0253a6de21025ede0b3af1cacad023a20ced126d77,KEEP — required for application runtime,Application/configuration/assets
+public/assets/owner/owner-hero-studio-suit.jpeg,67077,898e76366ce5ad600663d2b3681763a15ad845aef070380c7b0aa9255b148575,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-beard.webp,53998,1e52a3eaf970779fd6fc9e1d1569270e9215254c0c6bb7f5a6974f7e188db953,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-expert.webp,28426,66815eb6d6f5c46b03abf891b70b3635879de6f72b852bc01bf1c59f1d718736,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-facial.webp,43954,6431d617c47f2cb52c19ba61d05e1c0486faad819cd77ba19a9a70936cb5c156,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-haircut.webp,68244,07e3b65b8d45fb8bc2c87da51be7fd8e17b13c2e7f507ca3d553951e96765051,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-mashaya-450.webp,49406,4f0b16b810810036796bd57e058bab0e2f90a6660dc41394a28d7f394f0c2336,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-mashaya-friends-250.webp,57436,7ce4339887933e648e29b1cd09545939a0bf6e2998e1570e968797c3336ca07b,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-mashaya-silver-600.webp,58764,5b3dc8703406879ea3956e3b238b1264c2d977aaf721737e98ac4cc1c10cfed6,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-master.webp,33768,bd5ff6d10bef02b228766c44a19a41c133e98bac3bed3024d46d2dd913857099,KEEP — required for application runtime,Application/configuration/assets
+public/assets/package-premium.webp,140178,a8ac246b72f2217d05e85d274c77a10a8d5ed4599a0bbe57a5124daad87dc643,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-1-1280.webp,79534,1fcbc653fff133436f34f3cef506c1e0631a1f8e8be2a99c35ae644389d10730,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-1-640.webp,30452,dc9dbefa615df952732b07c9ccb683cdfc92f3a875baf075a238d608cb991636,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-1280.webp,79534,1fcbc653fff133436f34f3cef506c1e0631a1f8e8be2a99c35ae644389d10730,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-2-1280.webp,111486,a0cac7fa19e076cf524fefe1544c0f03196177eb5cd796382f3ea113ebc757c4,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-2-640.webp,36342,580f01472ca6d9b1e670cf8bfebcf94ac164fbdbdcef63b4dd5834d51cb39fae,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/beard-640.webp,30452,dc9dbefa615df952732b07c9ccb683cdfc92f3a875baf075a238d608cb991636,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/booking-1280.webp,81342,83dc5b363a7145f1aeaa659db4e5362b3b170e28a6223141ffe9f4aac4d80342,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/booking-640.webp,33530,47b1773cb7c912158dcfb654c296d8fdf8fab73b5edf769a89c288325fbfb29d,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/branch-mashaya-1280.webp,173958,47c12c856c50e173cff0d4d8d565955aa5cde353f2497157f33c5709558327ff,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/branch-mashaya-640.webp,37180,6256b0aa789183dadc8be15a0dde074009d4e7de518145df9a68f76fb8ac6f64,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/branch-talkha-1280.webp,152448,f9573f8351363a94f7cee94c42c95aa2ef1c3086a8abbbdb33a60ce1282d9159,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/branch-talkha-640.webp,36648,db6abffb2b8604f0e91325a0c2c9e38c6d3dc350de85a3161a6fa2e1da8fdfe9,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hair-system-1-1280.webp,70008,dde1d8d7a2dc374c4a32d8dfbd6c1a912fec99a55cd57ba7a986b2b33a205236,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hair-system-1-640.webp,27532,04f02161d3c7830403930c20698cdb27f4cf271c9a39412a242020e17d197c53,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hair-system-1280.webp,70008,dde1d8d7a2dc374c4a32d8dfbd6c1a912fec99a55cd57ba7a986b2b33a205236,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hair-system-640.webp,27532,04f02161d3c7830403930c20698cdb27f4cf271c9a39412a242020e17d197c53,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-1-1280.webp,72670,69dca25d78bbafe49bf1acc05e51190b93c374a5696db0d4ac134a1b94e7200d,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-1-640.webp,26712,6f766bc4580eec60217005350b5a2b420b0246a33609500cf067c53c6c90f6c4,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-1280.webp,72670,69dca25d78bbafe49bf1acc05e51190b93c374a5696db0d4ac134a1b94e7200d,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-2-1280.webp,76768,64f263d4c2e741e9a9c59376c9328155f8b1b4b67d5a4929692fca5e6c452271,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-2-640.webp,25272,9dc5e070b158e44c44ad0e10ba3e095d108a5b670957f83ab7a94e77b288f102,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-3-1280.webp,67156,1d8f730f515c1b821d66715f20b9e5a62c7f55f8d65cf8b39ab65a49982e52bb,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-3-640.webp,24322,79f27f7796450202d853672c6d705b177759229a5bf1352d3b29ca34a00984ad,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/haircut-640.webp,26712,6f766bc4580eec60217005350b5a2b420b0246a33609500cf067c53c6c90f6c4,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hero-1280.webp,70534,4a3d46e1f7f9946c1a3767d688b52cf99445356e5ae806984f375f6157d68195,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/hero-640.webp,26880,53743220b55f7d0fc2984882ddb7ab2837cf37772e9c4f7e371f56189b6e28c7,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/interior-1280.webp,171604,181baa9598da0e8f351e7a9e190ec489222a7fb8ef6be4d2519d1f6255ef49ae,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/interior-640.webp,52750,79edfee963de96d504d84ce628073ea4ad193235020322295b099ba15ca7399d,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-1280.webp,123564,48ba48c373bafaf6c44922dfe3e3bf1befd82afca873255607848b7fc5695312,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-640.webp,43886,25c02b7b99761981d69377621d50fb4680c3ab592aa322f03545f3f0faa2d442,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-1-1280.webp,123564,48ba48c373bafaf6c44922dfe3e3bf1befd82afca873255607848b7fc5695312,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-1-400.webp,18890,d49e25f473f31f6514ee306fa55c5e4546178265a1e0f622512b8dbbde73f0f9,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-1-640.webp,33252,9979e73f83ffe65ddfbe8adccd7e87573a9a441b95da1d50c46346533cad58a3,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-2-1280.webp,109828,a062a122306473fbf4ca2e4e74a46625f5bff195ce42f80c74eb43d590739856,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-2-400.webp,15144,a94880471476c7665b42c6553ccb3e45ba6e3d0ccbf8c2b179e8661a3e0e9b8f,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-2-640.webp,25962,a26933c1e0db973fe14d97340b33d1e98d352397f8a51e013d8305222c7be962,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-3-1280.webp,158852,3933fb69cab9f12128bcdc63e3ef5c90bdab2cb3b949149de9d7d2b3d7481b29,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-3-400.webp,24442,8ee93fe15b22a215c00c8a793ba4cb6c1080ebf2b98c62dcecfd9415486ceb33,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/package-premium-3-640.webp,42772,0225307da41f165d266e7f5f2f016225a4ccfa8950a743dfa9f9606d538d8a9a,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/skin-1-1280.webp,95680,ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/skin-1-640.webp,35778,56d5568ef5f4db13704dc4d9953e2777d8bb117481824492df574ffe37ce63b0,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/skin-1280.webp,95680,ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/skin-640.webp,35778,56d5568ef5f4db13704dc4d9953e2777d8bb117481824492df574ffe37ce63b0,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/styling-1-1280.webp,75760,f94a2e5f80f6ab0893781e0530e4ad6600d773bf80534699094f31d61f25cb67,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/styling-1-640.webp,30076,294343f1528252b382f2f7acb55c0a7ae284c8e36c4258849f3b24c8d45edcfc,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/styling-1280.webp,75760,f94a2e5f80f6ab0893781e0530e4ad6600d773bf80534699094f31d61f25cb67,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/styling-640.webp,30076,294343f1528252b382f2f7acb55c0a7ae284c8e36c4258849f3b24c8d45edcfc,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/tools-1280.webp,132662,f606608347c7bae4087214012590647dffde82fab2d2e28ed85afd4697b12c62,KEEP — required for application runtime,Application/configuration/assets
+public/assets/premium/tools-640.webp,48538,e36b2c8a79731e1b74479011f4a4d5d3ebecda4091de4bbcb82f7c344547ca3f,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-adel.webp,4866,f828b957be4b1ea370146a1cc6418510a647a7f0a8c60980a686fd17727c32d8,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-ali.webp,4898,cc318a2297134b35934a286002440ad28b11c949325cbe43d3a253074ad00240,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-el-sayed.webp,4720,872733cf5e310f19c813ab2daa7059e17ad1d29651fc946b4a1c5cbaee0e3a5e,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-el-shawaf.webp,5830,3eeb32d7ef0d300debeea9ff9326481e99d925b8171977e49af5581dc580eab3,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-fares.webp,5704,ca0d8582719d8ea6cc43838113419d3ce506532f612d5fcc134f3dbaddfb6c05,KEEP — required for application runtime,Application/configuration/assets
+public/assets/staff-mahmoud-amer.webp,6076,5051c9f71b01264cf75eb2f787d5809e89a6a9689f308e3bace2c53056bf015e,KEEP — required for application runtime,Application/configuration/assets
+public/favicon.ico,32038,c0f1a423f564354dd188a4f3a914ec08978afba5f12480e759e6d5fe38de1d47,KEEP — required for application runtime,Application/configuration/assets
+public/firebase-config.js,1065,775505eb0707e88c46924045a968d7ff007c6846caa9b8a18e81f22d66b0cc65,KEEP — required for application runtime,Application/configuration/assets
+public/firebase-messaging-sw.js,170,49967fbd5f20465797c39956bc8fd38fe6a595888885b7facdd921c45284b701,KEEP — required for application runtime,Application/configuration/assets
+public/hero-bootstrap.js,2255,dc71267f7816909c588da0c61d57942b32ad3853797020e5a8eed4b6683b2001,KEEP — required for application runtime,Application/configuration/assets
+public/llms.txt,2954,0eefb68bf7f86f6638dfa2a6c8772d81f1df421a5329cd4c324979ac16447b1a,KEEP — required for application runtime,Application/configuration/assets
+public/manifest.webmanifest,891,9c78ee4eb927f45012ecb503a6274ec0f86dbc130b495de03631fd464e4b3e39,KEEP — required for application runtime,Application/configuration/assets
+public/robots.txt,409,37d0883a93da2736bbc3402bf724750f00822416d67acf2106af85b6984317cf,KEEP — required for application runtime,Application/configuration/assets
+public/sitemap.xml,3648,81a6bcb9a92c5dbcff4a10af8f1d4998ac4a49c325da7029c89eb5c5b5d160c6,KEEP — required for application runtime,Application/configuration/assets
+public/sw.js,4793,c1bf1616d792ffea274f62e77daac96e8e973df40fb70dbdb079a58fcee74819,KEEP — required for application runtime,Application/configuration/assets
+public/theme-init.js,553,97bae31ae10af1a82ea210c7950f197c5885189d54751766673fc45c9734b4cf,KEEP — required for application runtime,Application/configuration/assets
+qa/premium/ADMIN_READ_ONLY_AUDIT.md,5969,280e18a9776eba146b41e2f4216a03e6127a20d8bde7345fb00b84662dfaf902,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/CUSTOMER_JOURNEYS.csv,12020,e2dbe62ffa01b3aff323828de2233cee2fde079411aca037ae76910f6a4a06da,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/EXECUTED_COMMANDS.txt,1732,684dde8aa9d1711f32cd940e178a031d54e750fb2568a400d1dfb7a4f1bfa3c0,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/FEATURE_PRESERVATION.csv,335834,b386e8d38f42ead884b8d4c8f8f7106145708247c94f36ae7ea29ed6308dc96c,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/PERFORMANCE_A11Y_LOCALIZATION.md,3062,cdfbb0003c755bdc5ba57ac910c54107f12e48bfe07014899ec56a2779078047,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/QA_GATE_RESULTS.md,3085,4abc81e42d35119f570650b720b0c36e4c3648765af9d3654291e6f514286072,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/WINDOWS_QA_AR.md,7708,577363bed81ba0352f34845b495776f59a8134010110343fc49e5e9b8aee3ca3,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/baseline-full-safe-tests.log,535556,4e1e97a170bc2db3c98cb40cf984936665a028f76c7595ba7a18c40de6ba50fa,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/before-files.json,37931,ddee2cb5c6de3e2a088f104e77491bb3549be035601ba86517e285881209ffd6,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/booking-functions.json,2098,8061a03a9eb498f584ed13250c7657f6895fc653f6edae07472b3cd4b8d4f63b,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/changed-files.json,568,8332d7e3c58ec9cc0b7cd256c39922553add4809b5b0304c44a8d74b98dfd915,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/checkpoint-A.md,731,a4b06db2fc98d46480eb4dbace93298e7c5b7a1af9d77780cb4ce55875c71d7b,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/environment-gates.json,340,cc7c19e1a27b121ca6876f305b7e00fb17cae3b307dda2664df9707c7ea36b89,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/focused-tests-final.log,40734,ca0fa3345b212d37773d4584e8eba4016ea20fb7ccc50594ca74e09d3cac364b,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/focused-tests.log,40468,408d33242b3f54f8f0bce1ffc48ba4a8b4c103c8a4d86663d17422a3a4086e27,EXCLUDE FROM DELIVERY,Superseded current intermediate logs; final logs preserved; original unchanged
+qa/premium/full-safe-tests-final.log,537385,ad133d871234fa46bd12ff61c7ce2144ac9ff57aad55730d916380951f5609eb,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/full-safe-tests.log,549341,0ad8512a4e5ef16f258dd19c7bee9fe41f4a05a620610354dfc7f8703114dc33,EXCLUDE FROM DELIVERY,Superseded current intermediate logs; final logs preserved; original unchanged
+qa/premium/package-local.py,5138,2370a70f4ac9e3b41fef68cb03bcf2514cda89a7487e89566c23ce7da4d6d48c,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/premium-source.log,2618,902cfaa1829a45a9c9980d52428a8c982b26725fb08a4393665a4cf40350a481,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/protected-after.json,14990,0e6d518ffb6c8e526fd024bc7fb86eab4055028da6805cb024c7215f409f0111,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/protected-before.json,7080,3e8f032b1aeb1216a73faa40fe6ba1fe321622ae90ec0f0598ba15111ecf5bd3,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/responsive-acceptance.csv,18881,0de715b0a88d9028a64a956e96eb1b6e046735e5b484c8172fae6175f85ebccf,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/safe-test-selection.json,2247,0e407ea12d5c4fd68b57fb7214e2de56a05f512641b3677bdfea798c98d1d8dd,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/source-changes.patch,84730,eb684fac23975630adbffe1b7e81b21a5967c2a9a17ca6b213c62b0282dd1e60,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/step2a-source-final.log,3301,d426aa01d693d59fcbf05108006c1124c375a02070376049f055febdee3d8afc,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/step2a-source.log,40301,f3c0db081d574ca7f62d9bfed6b6573b60adcf55ec4722578f127f3c99de5e2d,EXCLUDE FROM DELIVERY,Superseded current intermediate logs; final logs preserved; original unchanged
+qa/premium/step2b-source.log,1351,dafc8237487aa421830f3e19c40b5d3ad8c2cf8f47f03223fb39d33257a7c708,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/step2c-source-historical.log,2372,635f175a01f923b4eb2c680646a666782c5a3911ee54efd8fdca3dae6a83fb4f,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/syntax-checks.log,289,789cfc11a5616f345a60d0dfb1d22a8990067222a02078cf7fe25e0445a8306a,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/premium/unchanged-source.json,33706,aba1bf8c66a460433bfe379c7e961ff362b70e57f93426358e06462710f8b6b3,KEEP — current feature-parity evidence,Current acceptance/evidence/reproduction
+qa/step2c/BLOCKERS_AND_WINDOWS_QA_AR.md,6106,5f47c9ff6404875958776d021e6c5d487fcecb8d63fd2cec731828cfd376fb3e,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/EXECUTED_COMMANDS.txt,1229,808830b2ecc249c271f3760fe35032ebc5be1198b3376c5cb7bd3cfdb5961823,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/FEATURE_JOURNEYS.csv,8118,08435af850139e6e4576ebaa2557dcb1be9e3a875da84f4d80cc33f06336dd04,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/FEATURE_PARITY_MATRIX.csv,287388,d060da69c3d6088e93434ab437650189f589b6ec4b7c5178148f58ee578f3f2c,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/FEATURE_PARITY_MATRIX_BEFORE.csv,242143,10193e82504ca4598d216cec135ac5785ad9f64be93353ee03d5907eb3a771e5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/PUBLIC_BUTTON_INVENTORY.csv,232601,de48eddbeb38cb9a0fdf9e6d4180515cec04ef74add21a22a7876fdc30ce4cf5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/SEO_ROUTE_AUDIT.json,5733,454632249786392dad7a07eeeb301f04dc3a371ad2b6eec55323840592bfb030,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/added-translations.json,14345,5a15b16e07e45f343ba75c379841c46b1f6f295ac3a4414d2c62368173c9168f,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/all-project-files-sha256.json,78507,f9d32492e4f5360286c64e4e4fbe636eb22510113b395145581feb1532abbff5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/baseline-contracts.json,44872,c5d16cdcef53112421f9a4cad5cb90589577df7ca54596cd9f7068d61d71b9e0,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/baseline-files-sha256.json,34245,13e84e1882740583494a93be5e4fb543294ee9f28c6c027c0ce37df32bfb285e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/baseline-integrity.txt,88,a1817d47a8a8d249ec603d89fab40ebbe5bcd0c82695f9a16524af54826e9c34,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/baseline-inventory.json,358712,4310a9e8c11fd799fd1917a28fde540f638370092a46102dd2597c345503e626,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/baseline-tests.log,35823,b216d2c189bec3629e82e71a8fdfba8ea54a1a1311b4cfe7dbb36e7b9a2c1cdf,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/capture_contracts.py,1560,811d85684a127084b02f4be5acc7a6cdba526438fe293af2431892b306df0cc3,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/change-manifest.json,1017,65c68e490d8974fcc418f65a1220605937bd67e428be9d3400aee01dcf9b351c,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/environment-gates.json,470,34511382e251edec0b9462f1f844553a60a7d9bd2042cb4847286a6a16647bde,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/existing-tests.log,47053,53349ffb4ceee98669c10aa11ed9e0858079591f3b0b18d10232b58bd504b81f,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/final-node-tests.log,38869,21902fd14200987c551f855fb5bf5a2b751313b39f41aa615bef510d171aba14,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/finalize_evidence.py,6867,30460257659b360b65ef9cfa73e5e92e03d9087ecfafeec70f71dd5ca2385cd3,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/footer-contact-provenance.json,1231,b80d2f2e598f88e8f10f27f4e11579be1362a287fa5d67bb3624b4bb1c174341,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/inventory.py,3476,79946f61c5f0a59daa13ae87116776a8d32855d75b63b1f22105fec9867e6a2f,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/new-source-tests.log,1401,18b5a6b3c59ea04c7f7d0185fe984464802bd2ccd25fa2b18eac97da65830a5c,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/new-tests.log,3139,53b88d307e413291b9d6a1d45a9fa455c0c92a43441b77b3635a177daaf1bdef,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/protected-files-sha256.json,80061,6b8409730ce0eee6f5e4e35b7490d15e17f2bac355d11f303638204180e9a717,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/responsive-acceptance.csv,18881,0de715b0a88d9028a64a956e96eb1b6e046735e5b484c8172fae6175f85ebccf,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/source-changes.patch,260675,82ad6c7d61add996081bb9ba39342387e96039457fc487e711105daa75d884e6,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/step2a-source.log,3301,e00290586d55d5b24520716d28df5bc88fa9619a5f899245e34e0b0a98221eb7,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/step2b-source.log,1351,fa5693da52823e45f14f0db5e8fbcf5a0c4419b9d7d84b1e0635dcda8dccbdaa,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/syntax-checks.log,349,aa6badea7b31e82a11e3a0b1bb73b590b48fa7c243462c10f85c253e26e29910,ARCHIVE,Historical non-runtime report/output; active tests and fixtures retained
+qa/step2c/transaction-functions-sha256.json,3125,1cd912cc7759331ebd59ed5e3c95d934651c009e8fa76349f767e347e573f6e7,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa/step2c/translations.json,31797,de2fa2e6c76ae327c40703f2e99ad56e9236a04c69ea3bbadb940be6fa23f0b6,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/README_AR.md,1000,7c28b0d4070a8d4d5c6cadc49c676b183feb8fca8a384ad9b2e08c75759d296b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/booking-frame11_3.mjs,2714,b4adb49fb7c391ffe3bd32980a40dc75165984281c8264dac4c9ce7c6ef96096,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/closure-qa11_3.mjs,11375,563bd9c51bc3aa0aa9fc5e0078c5b5b14c8e7f180bee0353d9cf8363026f8a4e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/final-closure-browser.mjs,14069,8732ee62d6116a8f56c5495e09de96a7dc4098a3b4371cf46c7e34eb86420871,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/final-performance.mjs,2845,b38054ad0fa3a0d3ccc5698962d84a07dd01157849dbc49bc0716982512c785e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/final-route-audit.mjs,4698,c32d67917cd2ac4eede8bef2e6f022223dfed1b96c9c0428fc94f37d82e6fe7e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/package.json,170,bd90fc3cf754ee75e6491aaa11bea79d4dd50e96f2a79fb557da9a127137576b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/phase12-3c-browser.mjs,12941,f164922e30647ae6f24f90ff99d2db5c20d686990a8491eb0ce0c6e06e214703,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/phase12-3d-browser.mjs,8947,e4a4c396194dc5346fcf289b8be7e04154c2e69d4bfe425455551753f3f2a8d5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/phase12-3e1-browser.mjs,10149,80006f4d2bfd6c46d133eafd3edaddd15c3d5d24096b213ebf3cb69b79516652,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/phase12-3e2-browser.mjs,11235,e6af941f125e6bf6ff4e7d7e0d198bef7c63f7f98f4bb12da38966a1909bde0f,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/phase12-3e2-payroll-browser.mjs,10419,82a946afbf4f00cd19d6972dc3c655d788c09f6fe63e7cb1bec6b5c1067ef2ad,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/route-collision-qa11_3.mjs,3510,9029bf494efe5ad96696f4deb3249458c582f8a666b85afc61683d03d8ffbb4e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/visual-qa11_3.mjs,6742,ce589c2c0b5a957ba3a6de28121e5f72e012f2d715e5e937ba77bfc03310ee17,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+qa-tools/workspace-qa11_3.mjs,11769,5fbad45cf8640d0e85130f2dea5499e096de71e937bc12cbacd41ccecf0c62e2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+results/index.html,8252,b313aefef12a17d8cfa6f9d036b9e844080c422da39ee2bc229af7fdbf7a5f51,KEEP — required for application runtime,Application/configuration/assets
+reviews/index.html,5373,bb2bbe636f47f044b6d08c12ccb7b5220f4ee2b414061ef57b6e02cbec6ec536,KEEP — required for application runtime,Application/configuration/assets
+scripts/clean-dist.mjs,92,29f3abb4ccf640189930880c200bbf3ebd907fd899aa69f8d31e2c2363ffd71a,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/consolidate-public-css.mjs,1858,5f340d353c10af14dcf609a143c9c8e154eec25df7b9fa84aad0cc9f4fbd6717,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/final-regression-gate.mjs,989,c767e5431f373944ba076b948dfb03fce50148654852f9c47518d264e03ab4f5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/generate-seo.mjs,5647,077e90606cb23bbb706b53512f470a28841d1b798c1b64fd4c28a6f3dc1466e9,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/link-audit.mjs,1766,d7e5e935a5c9dbf2a1b3a2db54ccbf36dfe814e9e428708635ccd09e85ba9351,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/package-release.py,2396,9aa40d03dd2711fde96da078f5d2cd9e53650c11ec919a3dd03ef886849d38af,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/performance-audit.mjs,1786,dca84638bd1388abcfbf75fa224c0634896806ca3d2c2a0621c46713dde2a0c9,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/phase11-data-audit.mjs,1048,4ae12585de3430b9ea1001ebe976433436f0a61fff1978611b878c07b4f7c4fa,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/premium-assets.manifest.json,5032,193d08b5664923a4a4763df8f8a5b8fdac3fae734f38bbed5e715a20a361d123,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/prepare-step1-demo.py,1671,756170d663216d450f994ddf4354f6759f34c6c2f52f96e1c457d647185ee0d2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/smoke-test.mjs,1006,d7bf53eb48951662282a467a01600c1e8f892fa888433934cbbf527788700413,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/verify-build.mjs,7514,3f8b62d375272db6f71f4d32e4bc6ba636dd684c73d3fdd182d724bbdc977198,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/verify-firebase.mjs,2375,fd5026dc75e880373162cc66a28a4029077cee37cb562886c248a6bb0788274c,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+scripts/verify-premium-assets.py,1368,554e82dfee5074302651b169be5dad84f20725063b62f55bb188d70743a20724,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+services/index.html,8881,da5237b5aa73a425b2c7d99a0952d041e8785266267a10ecc42f4e5774a47ae0,KEEP — required for application runtime,Application/configuration/assets
+src/account-copy.js,7831,7b7ad1d104b6aaf4b4522d67919edc6551242a6fd189d007cad928cabddd9c6b,KEEP — required for application runtime,Application/configuration/assets
+src/account-favorite.css,607,0fcd4e1ffffd073e18b3ad991725af5c81b7b1bf675aa77722e05dbdfa12a923,KEEP — required for application runtime,Application/configuration/assets
+src/account.css,5319,6c63bfba1c402c3ee4d6b328088cd9b9b919bc60df004767c15a38075e615ee1,KEEP — required for application runtime,Application/configuration/assets
+src/account.js,23742,ee65174d8251564b8ea9fb97d1fc91195b3e3818ee3a5bd2b76b9b173503854c,KEEP — required for application runtime,Application/configuration/assets
+src/admin-api.js,26265,725d9d774a204c965866f80b97462a523678bd44bfb64b25874c67abbdbc8327,KEEP — required for application runtime,Application/configuration/assets
+src/admin-session.js,1713,0bf7ed9807486599bd4789d69a3da98749ae4e1e61295fe8d1b08c97b8327b9a,KEEP — required for application runtime,Application/configuration/assets
+src/admin.css,164763,8675375d5ddc4305b4b4d085d75554de4dfc5964e89b2143e13feaf72442d808,KEEP — required for application runtime,Application/configuration/assets
+src/admin.js,360974,b059106e8b90b5591914b2a9e927e4c0b3420a21004a88e1ed6cf8b221ae731f,KEEP — required for application runtime,Application/configuration/assets
+src/advance-center.js,3991,d37674fa420a295d231279919a15801db388d22484158e1bf7e8e601b8e338be,KEEP — required for application runtime,Application/configuration/assets
+src/ai-chat.js,11347,5f77bd1e805a8710b63e113cfb4b461a49036127283e464b4bb05e8d4344f23e,KEEP — required for application runtime,Application/configuration/assets
+src/ai-dev-provider.js,2704,ae8379186565dc0281115d7b5e1fa0ddca0c529a8268f999e8d356ddb2cb17ea,KEEP — required for application runtime,Application/configuration/assets
+src/app.js,94805,1bc2025d0ce4360ba46dd0999d15805851585949b4fcad7c9742c6d0ba55faa8,KEEP — required for application runtime,Application/configuration/assets
+src/assistant-fallback.js,2539,50192180a99d15fc4727df7b27061c38447210fc969b4847e579b398a1c51a78,KEEP — required for application runtime,Application/configuration/assets
+src/branch-availability.js,403,b93f98bee9412bb52e29930e7e5b05032d67aef1fb2f942958d0a8a0b9f920c2,KEEP — required for application runtime,Application/configuration/assets
+src/branch-page.js,8532,37a65fa3560649453aa878d13dd8f3857b70de7366ded15edc8995b6001d8855,KEEP — required for application runtime,Application/configuration/assets
+src/cashier-shift.js,494,e1f657661550a39a462f26fa0a89b182c6da50dfa2d80197069241ec0ca59fec,KEEP — required for application runtime,Application/configuration/assets
+src/catalog-page.js,29918,6270f9991071d46b52a8deedfd1670844ffe4423c2c33277350cdb4e8ba80e86,KEEP — required for application runtime,Application/configuration/assets
+src/cms-media.css,1824,fcecc5a933ed40fc4a4dbb2533274694681e4bb8cbfaf2f826e58aaa9c11dcf5,KEEP — required for application runtime,Application/configuration/assets
+src/deferred-video.js,1918,45bd9491337f2fc56e3228c4528b104dc628e177fd38a8e5674c4155c276d80b,KEEP — required for application runtime,Application/configuration/assets
+src/faq-chatbot.js,5192,bdd1ec1aeb8427145d79437be9c99d6b27044846a07db392ade68ec0a04ae5c4,KEEP — required for application runtime,Application/configuration/assets
+src/faq-knowledge.js,72,615737928be5cbcb4eed440b40bc7c9ad186d7061b51c9f99ba07486551d138a,KEEP — required for application runtime,Application/configuration/assets
+src/firebase-client.js,19796,11bf634e6c6851213bc5f8a92814be3bf75e545d8766b0f31866ed05aaeeb79e,KEEP — required for application runtime,Application/configuration/assets
+src/global-navigation.js,1409,a92bdd99045b751979fda4bf977c65b24440c4a33935a37d7b6e2179892cc54d,KEEP — required for application runtime,Application/configuration/assets
+src/hair-systems.js,3747,f91e5289b0814864e0c7087330e82ebdda75abb3603007a65a43cb52a555ff92,KEEP — required for application runtime,Application/configuration/assets
+src/homepage-presentation.js,4314,f83acf8fad7519c36ea3f7b52bf734093b3b450cbec442969814a0e77e45768d,KEEP — required for application runtime,Application/configuration/assets
+src/i18n.js,30500,0bc7c91ed111fa45937f54726d9d77f17213afd7edc50acfebae6dfd5eee4765,KEEP — required for application runtime,Application/configuration/assets
+src/local-demo-catalog.js,4256,61f5dca63b05424d99b0c63558cf2450223c01ff4fcfaefcdbc5199fa980a6f3,KEEP — required for application runtime,Application/configuration/assets
+src/local-environment.js,1656,9d881dfe7a80543478af5eb150ff62d41e2b65c6be9fe09fdbfd1b91cd26987b,KEEP — required for application runtime,Application/configuration/assets
+src/login.css,3257,f110593b2815562d2eedbebf76d56545638a894d131b35f73e91159bd0e37c02,KEEP — required for application runtime,Application/configuration/assets
+src/login.js,4358,0ce25f792af1d4a818691af9539bb7cb7c607a53a7a5a9837afb5a58dbb31417,KEEP — required for application runtime,Application/configuration/assets
+src/media.js,2643,4de4b0c18f126e789de82687727bd9a1b847365a51b290da2b7133a471a24ba9,KEEP — required for application runtime,Application/configuration/assets
+src/mobile-management.css,10644,3ab6f95c17a2f56827f579f89bdfdfd47c9993f485f29a1ccfb298ad102e45d7,KEEP — required for application runtime,Application/configuration/assets
+src/navigation.js,757,d20eccdd4021fe4c1f8afbd70ca930e683aec2437c94bf2a6b0dd01708c69679,KEEP — required for application runtime,Application/configuration/assets
+src/package-definitions.js,6647,5b70c70cb9a0915d822ad76f8050a89f000f72e1beb4d83dfca3c08f9e056383,KEEP — required for application runtime,Application/configuration/assets
+src/premium-components.css,24951,071ff6719349830898532829b3c5549a1ee917b316710041b13b97f1aaf549ac,KEEP — required for application runtime,Application/configuration/assets
+src/premium-media.js,1748,78c50807be9de7f45c95a6bdea1ae27413af0a28f7d1298e33f12dc9dc9981f1,KEEP — required for application runtime,Application/configuration/assets
+src/public-assistant.js,837,84917e3c68a611e0d459d7d5183769cea0bc5a9a6eb7a24830e71c8651e4931c,KEEP — required for application runtime,Application/configuration/assets
+src/public-branch.js,2791,3e97e4f409a652a68f239265d6abd133bac9a367965692bde43470db0f387ff1,KEEP — required for application runtime,Application/configuration/assets
+src/public-cart-count.js,223,3a03aeb1db9145e359e00023b7ba9e89337ff1960bd3dbe9ea5ce44a702dc9f7,KEEP — required for application runtime,Application/configuration/assets
+src/public-controls.js,8074,322ed6460ce1135b07d506ac7cee551d327388907492fc482b77079cec7f2820,KEEP — required for application runtime,Application/configuration/assets
+src/public-navigation.js,15236,e73d0cf5c87dbb34ef6753a748ee653144041c88d18e26e77b86683e170ecf31,KEEP — required for application runtime,Application/configuration/assets
+src/public-refinement.css,35905,32b72c5dcf2c8a839a9f99fff4d9036cd4d660d66f2aa455f3420781e33bb8fe,KEEP — required for application runtime,Application/configuration/assets
+src/public-status.js,1827,0805ac7f4f35b49c86b654ed2f11f9d792ac38c36ce016ad58505f82801571d5,KEEP — required for application runtime,Application/configuration/assets
+src/request-center.js,16952,69e2bf16d2d3b6d5a25af8cd8aa4ed9307800f7dfeea81f397a6f34e9f29891e,KEEP — required for application runtime,Application/configuration/assets
+src/results.js,8189,652e3aab468283ff4f0b37e3d40219a4c76c7ba13bb76e709c5bcde907d4dd8e,KEEP — required for application runtime,Application/configuration/assets
+src/reviews-page.js,4043,5c5afaac1d2d10498ffd436f276f78ebdea30c940d6c0635aa02fdbbd7822152,KEEP — required for application runtime,Application/configuration/assets
+src/seed-data.js,23521,ac00996c5b519796d0c619f8fb544d1fe3d542598719dd683e00f829ef167163,KEEP — required for application runtime,Application/configuration/assets
+src/seo-page.js,766,5c78d0fda7c2160d4307e6ececf4ab1ee6c58a38e1e1c5564684830d1640e319,KEEP — required for application runtime,Application/configuration/assets
+src/site-media-editor.js,6786,2cca8010f09b03a142ac3d21567a86ea5edaf794e7ddaf8caf5ae2e55a1e85d9,KEEP — required for application runtime,Application/configuration/assets
+src/site-media.js,2532,ac89339f5cb5946ef64b187d02bd883fd6caaf4c6f9b0a3e1f2d6ea68af251ce,KEEP — required for application runtime,Application/configuration/assets
+src/staff-data-health.js,1352,2e673b146095a4f228e26c35c3c67c21f0a441351cc271da7d06b01a2f9efc82,KEEP — required for application runtime,Application/configuration/assets
+src/staff-routing.js,449,182b99850275f0ad20c524c675f15e50b87d595cf666dc778d57d523eff8de8a,KEEP — required for application runtime,Application/configuration/assets
+src/staff-tab-state.js,211,9bf9b1aac14a8fbf5a3456886ba1f79cc42d0d99fa23cbd0788d5536c669dc5b,KEEP — required for application runtime,Application/configuration/assets
+src/styles.css,86286,708c45ec2ca28b9ab0887b238aff5326b12c0a9a5be74f10eaa1f7de6ba44fec,KEEP — required for application runtime,Application/configuration/assets
+src/worker-requests.css,2146,b6c8a5138b7a47b64623dbfd6a02cdb0aea35e9eeb61d24d6e189c33c8538cd7,KEEP — required for application runtime,Application/configuration/assets
+src/worker-self-service.js,1523,ff655925214d5f90ccb0ad5cdefbe5148bd93d5da744a7a00e760c6d0cfcb8da,KEEP — required for application runtime,Application/configuration/assets
+src/worker-theme.js,1970,ab2ddf8a6023a512701950b458a3503820531ffdf979715aa258b71ffec669de,KEEP — required for application runtime,Application/configuration/assets
+src/worker.css,7213,a32dd2dcc34377ba4675d04caa0bab0dcc276d3c155ee1934b6a77d1f78a10c3,KEEP — required for application runtime,Application/configuration/assets
+src/worker.js,14819,7aef5ac94b0b9edeee770a24fb79c13edb0bae95ff8942e3762cb3b2f1696563,KEEP — required for application runtime,Application/configuration/assets
+storage.rules,5054,58a43d852efc7f56ba182101e714ba15087fa07b0cacc8d5e8d6860bfbf63765,KEEP — required for application runtime,Application/configuration/assets
+team/index.html,7943,a6b5cb5984fd1b6d744124dbea5d8d192642e4ef69055a8feccdf07cd03cb3c7,KEEP — required for application runtime,Application/configuration/assets
+tests/admin-regressions.test.mjs,12897,8be8b18a352f773338364def51e667463514441d3141f03c7731c0d779f0be43,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/admin-ui-v4.test.mjs,4824,258ca47ca1761f3798752fefa794c40d5d7f55fc74083b50207c70722948bd1c,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/admin-v42.test.mjs,7339,33ea0b6c8e66eb1b510328cd77329e85eb570b5109926a400d076357f18d4ebf,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/booking-journey-regressions.test.mjs,3587,321fdb9deaa5c5ab1a740f144f02bfb09bdefbde52eecf194253f13df460cc27,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/branch-lock-v5.test.mjs,3121,7a2cb8ec482bd2ba3038ffffe261142dbf819e6325d0cb20a080bbb3df07830a,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/cashier-v43.test.mjs,4287,c73ea48c2b1f8118eccc5530bbcff02bb802c03084fd62ceef257ebf1dae6552,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/cashier-v44.test.mjs,4927,296776cf02cbbeb1fddf023092ceb157a50ca0f838094d9c65dea760b89bcc77,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/catalog-gallery.test.mjs,2653,1c0f908dcbb7174a3cff2f3d93c303dcd220468c1a0f8610f8898bf5e8a7f463,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/customer-account-regressions.test.mjs,4734,0baf1aba495f4c0e91729bdee0ddec76d33ebe5c6f9fea4f8e65a1cc9e278b14,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/d3-continuation.test.mjs,5921,f3501031ae4169023c4dc233bb2f8a670bcf37e21e38081f7ff2898b9bae0c1b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/d3-recovery.test.mjs,5849,fa59b0236dd4bb2853cfb377bb1b637bb99a54f1ceaa1afd68bf0546f301b75b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/delta-ui-targets.test.mjs,3062,b006ba6d7132a2bf6f2d085bd83abbd0304d3b26223b046d0daabf5eda7dac87,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/final-closure.emulator.mjs,10584,600300d9358c882ae00b1dd8a2a5d460bd73378df0545174e579cfbddd79983e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/final-closure.test.mjs,4181,afa087ce3c203433bc4d5a26364f80f1b212d90ef949c1b7875da998519b2fc7,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/firebase-rules.emulator.mjs,16186,75ebc389d1a6954b4e188f5e1e4dc5c932016cf70513f0fe47f67fe39c8aaf44,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/fixtures/admin-v3-bindings.json,12218,eb056610264a670aa8c38842889ec8b372b60ae1244720288e5e33a49fff7e97,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/hardening-regressions.test.mjs,10109,1c488c9da835ad09f4ace437c65ef3ed6fd2fc0e6511ff52c67bcde41923a715,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/media.test.mjs,1029,da5541d5bfaaf2719e483c77b25150322881d7022e6514e65d5621b1151b22a1,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase1-regressions.test.mjs,10742,8bcabd557df34e14522054fde20e83ab1b914f09173f1eddb8c2b96dcf6a3b66,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-1-hosting-smoke.mjs,1217,e88a4b51d42b5a7cccfcff9fbf19076623cd54c77ce1b0a88d10bffa902eb41e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-1-visual.test.mjs,4137,64b4fc205bcfe7dd27a4518596ef689765d52414641c117a365a9a67104463be,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-1.emulator.mjs,3697,8bf67605d64ff2c4105d19d5ea49413d1c0fe520676b153e262dc489b04c4331,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-2-visual.test.mjs,2816,263adfaa0a26e2fd24069a282f842a270b0b0917d6d665997899e0c28e2fb972,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-3-1-release.test.mjs,1951,95741b9b4280f0b0d66ae452e7d2b2bbf3c5d1a72530333bbde18cafe14b6960,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-3-routes.test.mjs,1494,7306a31f39c46974290b87393ec20c5ed87ff0318ad63ab4f9ced824cc460c0d,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11-3.test.mjs,5957,4516672ff6e349afcb8a11aa63098e2d3d5a29a5a0c705351711da6ae5689dcf,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase11.emulator.mjs,16216,7fed563edb90ac5a90d24d4629373ba19d62badc8e26ee4d19b52b4d2489d857,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-2a-mobile.test.mjs,4286,e0255bf69acd84db98de0e2109a0dd2bec59b8377da0a30134851b85dabd7e0c,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-2b-mobile.test.mjs,2025,210557acd0a8641c014b1f09f7668665293e37205da3a93058fcd2d8c6527e73,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3-worker.test.mjs,13252,ee76634cc9ec074989edb5faca106d0db5ff0b17f04cdb6b4f48724b8bd4bf5e,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3c-build.verify.mjs,1770,6a1766f32421a7a233298692a78ffbea6d5f1593a63ea6efbdeb58c4d19f71b7,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3c-requests.test.mjs,17839,3ed6e7ea3d0c0c0bf38766738d07898ad2f25fb0bd5c6785327cab23a9dc6981,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3c-verification.emulator.mjs,14402,2263ac5c25e27a0f49cd9280c9d31f0640b4a2ae3dc0dcf5ec27493eccde5691,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3d-baseline-race.emulator.mjs,5613,14a2bfdc77a3012ba4c447b3712e95e14a288bd249c564fbb86f47ba8fe82434,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3d-scheduling.emulator.mjs,24493,8ca0b9304420f9615ac3a47793bd654d6b6f2c09c4644a82dc032fa23b69af5d,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3d-scheduling.test.mjs,5021,59827ec13ecbe8486f27a105aba97718658a3690e45649f55b27fc228179b4dc,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3e1-payroll.emulator.mjs,19770,da9fa2dab64c7dc09a6d87a9136d882278cc7945336250ca308fd25e3640db54,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3e1-ui.test.mjs,6136,8e6f762251730213a973efc90a1f0449fb79c33690febd7d2fb69a77df3ccca2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3e2-advances.emulator.mjs,29371,2ff3d930118150c8f21500827fefef1b646ad595490fdb4f72a14b8db1cd8e02,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3f1-closing-ui.test.mjs,4496,6ad29042d2cecb6b3523bb0eea4788faae14bb731b6f9880d002ba8bbe3e3221,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3f1-closing.emulator.mjs,18034,aeae4754ccb276520aecd7efb1f059a35be2507c5b1b5362ad8bf529cbe9f743,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-3f2-expense-closing.emulator.mjs,15124,5180b71226809364bead17447a130ef4533238c4351343f8822f0f350e4a9a7b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4b1-media.test.mjs,8680,aa750695c7ab11699f8a08228d8bd31b80644d4e9f4121e010e06864833c26e2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4b2-public.test.mjs,7432,ff39116cf354d745f471d47fec4a1f01a20c249c29eecfd01c63e8e423a41249,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4c1-ux.test.mjs,21593,90b0cb75818885a8b6a4cc726b222ec39b4ff210fb3f88282b3b5106cbe9e207,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4d-public.test.mjs,6060,12f0f2c239aeb184cae05278e9b8b53db32cdafc10d5ca9e9e9038b156707996,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4d1-homepage-dom.py,2410,14313687da21369772e50b58f32db40832e085a4bab703eb3d625e36b9f4d014,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4d1-homepage-dom.test.mjs,580,46aa0baebf55d0cca2092324f2f4334e9114e8cd738efe97eaf5b9793bb6aae2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4d2-compact-demo.test.mjs,3682,0adc37c96ae24014e30ba03e0446e713f791fd3fe2f04daab11c94440d422f5b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/phase12-4d3-layout.test.mjs,2081,003d999cf032c66f2a67ee3c18bd14e0ffa633a433bc91ddc7f244ba6e5f31d0,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/premium-customer.test.mjs,4383,e0e3776a7ee0ae0cefe7cd462a63bdf13e116adec9d4f9514bd01edcf04517d1,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/premium-source.py,3570,48a341dc020fc83140959c4162241fa0804330c215a82c9b184cdd0fa57516e5,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/production-security.emulator.mjs,15322,88d2fd2baecdf03e7ebd2f13bbdc7012b3c0e00de3b407d187683315ecf0d2ad,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/security-v95.test.mjs,7807,287ac2dddbc4a6ae3c7d2237c60ac94f3d4a8bdf227f07e4d656c273eaa47c5b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/seed.test.mjs,5036,e6483e992dab8bffa17e261e6ca754e4c16c61f08917a52ed68017ae3aed1f6b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step1-public-branch.test.mjs,3361,356be6c4ea1ac172d273109b825d0ccfbc272eb508b79cc6df50456faf076aa9,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step2a-public-source.py,3758,fb0c15643022a95bc2f85c7d5ed004fe0210ec30922882f8ace3989b99e5317d,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step2b-public.test.mjs,5203,bb9579b4f7157ea793550c3b38351522eb7a7740583dbe0fbd5e9d9718c8571b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step2b-source.py,4390,1aac0a8ae80d2704d6f9b33a870e64c8051bffc883cffb5f6491d718ab63a5d1,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step2c-public.test.mjs,5900,f7e1b938477607579dba8f2b7d67902b8acc0d13fc7b4439672cedaf75f9aa08,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/step2c-source.py,5380,8291dfc7a091b7985fb61f7d6c026e90f633e076015000c7aafe80761be73c61,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v6-1-production-gate.emulator.mjs,49903,611dd5f07d5e5e466adf262e79243568e0a07bc19f2155cbcfe58721fe07ff26,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v6-branch-rendering.test.mjs,5037,c7ff1d43c0c0006ea07cb8f091366b05e561e0231d14f6bcce44a654252c894b,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v7-reporting-ui.test.mjs,2157,c6c01912869d5750190eda5664d7784e9f2b3982fa38bdf05f93637af6895644,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v8-1-appcheck-session.test.mjs,4772,0a8c42cacadb36ff90787a55c2da00a392da12894fcb9d95cb214c52b51fc087,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v8-marketing-contract.test.mjs,2337,b3309e8cbdb6d5df34b18a73b670668bc6a638d34854f1a986aa9157d1b597ef,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-1-cashier-operations.test.mjs,6992,665b8247cb04b6bd3d94ea22264b7034219b4bd066a290bf9086eae36f020a09,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-2-cashier-addendum.test.mjs,5132,84dcedc661b23d18ccf07b27adefee43d3bef648a8016bd22c3d204c69de55c2,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-2-cashier-final.test.mjs,5782,39d1a7fa5bb7d39dc3e3276a002442244948dc72dc1e3b006e2bb8201c52e2b7,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-3-mobile-operations.test.mjs,5566,82f5e251b6a267dc66b371b74d6ebaaad41d1050411960e5187202401b5dc494,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-4-mobile-content.test.mjs,4368,461b3faf09d171d81f0578ab823be5d0e89f8527e1411891a23498bf5e362338,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/v9-public-ux.test.mjs,8366,037d07a5ea3d0504a72fd9e67f4b7e58d5bd47fde033c9833f261c198babb39d,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/worker-mobile-theme.test.mjs,2488,0c66e169cb5a3c4d7c5e41ed91d43ace3c439a70d7a3e52c27cd95530485c5cc,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+tests/worker-requests-memory.mjs,4633,e2aa9ab9bd069ed8bbe291369a2481dab71a92137f357976b7a20b789081b6e4,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+vercel.json,8495,96806707fe7113cbefe82ee3529c3a2b89d7efada74d3b5d7cdf82af5181b56a,KEEP — required for application runtime,Application/configuration/assets
+vite.config.js,3894,fdeb21944b982d0e726a1bc8196dcee974397e558accac27be5645b743c6b1ad,KEEP — required for building or testing,Executable tooling or conservative fixture retention
+worker/index.html,8092,135060d4516792437ab8d731d0224214a77b97bcb2963dc39090c56935c27e91,KEEP — required for application runtime,Application/configuration/assets

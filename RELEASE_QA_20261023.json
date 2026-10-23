@@ -1,0 +1,137 @@
+{
+  "dateCairo": "2026-10-23",
+  "productionModifiedByAssistant": false,
+  "frontendUnitTests": 786,
+  "functionsUnitTests": 143,
+  "emulatorSuites": {
+    "financial": {
+      "tests": 43,
+      "pass": 43,
+      "fail": 0,
+      "skipped": 0
+    },
+    "day": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0
+    },
+    "worker": {
+      "tests": 42,
+      "pass": 42,
+      "fail": 0,
+      "skipped": 0
+    },
+    "security": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0
+    },
+    "closure": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "skipped": 0
+    },
+    "requests": {
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skipped": 0
+    },
+    "scheduling": {
+      "tests": 45,
+      "pass": 45,
+      "fail": 0,
+      "skipped": 0
+    },
+    "advances": {
+      "tests": 44,
+      "pass": 44,
+      "fail": 0,
+      "skipped": 0
+    },
+    "payroll": {
+      "tests": 34,
+      "pass": 34,
+      "fail": 0,
+      "skipped": 0
+    },
+    "dayclosing": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "skipped": 0
+    },
+    "expenses": {
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0
+    },
+    "pagination": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0
+    },
+    "profiles": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0
+    },
+    "workeraccounts": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0
+    },
+    "repair": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rules": {
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "emulatorTotal": 371,
+  "build": "PASS",
+  "buildAssetVerification": "PASS",
+  "linkAudit": {
+    "routes": 19,
+    "linksAndAssets": 644,
+    "status": "PASS"
+  },
+  "browser": {
+    "mobileHero": "visually verified, local demo data",
+    "loadedImageNaturalWidth": 588,
+    "desktopDocumentWidth": 1265,
+    "desktopScrollWidth": 1265,
+    "capturedConsoleErrors": 0,
+    "scriptPolicy": "same script-src as production",
+    "previewOnlyDifference": "frame-ancestors self instead of none, to inspect responsive iframe; production policy unchanged"
+  },
+  "cloudInventoryBeforeDeploy": {
+    "readOnly": true,
+    "activeExports": 110,
+    "localExports": 120,
+    "nonModelExpected": 118,
+    "deferred": [
+      "customerAiAgent",
+      "adminBusinessAssistant"
+    ]
+  },
+  "notVerifiedLive": [
+    "post-deploy user journeys",
+    "real SMS OTP",
+    "real-device push",
+    "AI provider connection"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "node_actual": "v24.19.0",
+  "node22": "BLOCKED: not installed",
+  "dependencies": "node_modules absent; no network install",
+  "build": "BLOCKED",
+  "browser": "BLOCKED: verified whole-process isolation unavailable",
+  "sdk": "NOT EXECUTED",
+  "production": "NO ACCESS",
+  "performance_targets": "UNMEASURED",
+  "screenshots": "NONE"
+}

@@ -1,0 +1,20 @@
+{
+  "retained_files_compared": 395,
+  "protected_files": 70,
+  "protected_identical": true,
+  "archive_crc_and_sha": "PASS",
+  "runtime_assets_missing": 0,
+  "build": "BLOCKED",
+  "source_link_checks": "PASS",
+  "node_clean": {
+    "pass": 498,
+    "fail": 5,
+    "failures_same_as_baseline": true
+  },
+  "python_clean": {
+    "pass": 35,
+    "fail": 0
+  },
+  "screenshots": 0,
+  "production_access": false
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "candidate": "docs/phase11_3/PHASE11_3_FINAL_REPORT_AR.md",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/premium/focused-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/premium/full-safe-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/premium/step2a-source.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/BLOCKERS_AND_WINDOWS_QA_AR.md",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/baseline-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/existing-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/final-node-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/new-source-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/new-tests.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/source-changes.patch",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/step2a-source.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/step2b-source.log",
+    "runtime_build_test_references": []
+  },
+  {
+    "candidate": "qa/step2c/syntax-checks.log",
+    "runtime_build_test_references": []
+  }
+]

@@ -1,0 +1,234 @@
+[
+  {
+    "source": "index.html",
+    "title": "حلاق وتركيب شعر في المنصورة وطلخا | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__"
+    ],
+    "og": 9,
+    "twitter": 4,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "404.html",
+    "title": "الصفحة غير موجودة | مزين مصر",
+    "description": false,
+    "canonical": [],
+    "og": 0,
+    "twitter": 0,
+    "jsonld": 0,
+    "robots": [
+      "noindex,follow"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "services/index.html",
+    "title": "خدمات وأسعار حلاق في المنصورة وطلخا | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/services/"
+    ],
+    "og": 6,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "packages/index.html",
+    "title": "كل الباقات | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/packages/"
+    ],
+    "og": 6,
+    "twitter": 0,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "team/index.html",
+    "title": "فريق مزين مصر | حلاقون محترفون في طلخا والمشاية",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/team/"
+    ],
+    "og": 6,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "results/index.html",
+    "title": "نتائج شغلنا | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/results/"
+    ],
+    "og": 7,
+    "twitter": 0,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "hair-systems/index.html",
+    "title": "تركيب شعر رجالي في المنصورة وطلخا | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/hair-systems/"
+    ],
+    "og": 8,
+    "twitter": 4,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "gallery/index.html",
+    "title": "معرض الصور والفيديو | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/gallery/"
+    ],
+    "og": 6,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "news/index.html",
+    "title": "أخبار مزين مصر | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/news/"
+    ],
+    "og": 6,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "celebrities/index.html",
+    "title": "ضيوف مزين مصر | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/celebrities/"
+    ],
+    "og": 6,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "reviews/index.html",
+    "title": "كل التقييمات | مزين مصر",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/reviews/"
+    ],
+    "og": 6,
+    "twitter": 0,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-snippet:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "branches/talkha/index.html",
+    "title": "حلاق وتركيب شعر في طلخا | مزين مصر منذ 1995",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/branches/talkha/"
+    ],
+    "og": 7,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "branches/mashaya/index.html",
+    "title": "حلاق وتركيب شعر في المنصورة | مزين مصر المشاية",
+    "description": true,
+    "canonical": [
+      "__SITE_URL__/branches/mashaya/"
+    ],
+    "og": 7,
+    "twitter": 1,
+    "jsonld": 1,
+    "robots": [
+      "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "booking/index.html",
+    "title": "احجز موعدك | مزين مصر",
+    "description": true,
+    "canonical": [],
+    "og": 0,
+    "twitter": 0,
+    "jsonld": 0,
+    "robots": [],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  },
+  {
+    "source": "account/index.html",
+    "title": "حسابي | مزين مصر",
+    "description": false,
+    "canonical": [],
+    "og": 0,
+    "twitter": 0,
+    "jsonld": 0,
+    "robots": [
+      "noindex,nofollow,noarchive"
+    ],
+    "baseline_metadata_preserved": true,
+    "runtime": "BLOCKED"
+  }
+]

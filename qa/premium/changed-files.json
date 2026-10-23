@@ -1,0 +1,22 @@
+{
+  "baseline": "STEP2C baf35c75e401020951748fa11747d1d64bb1d3f1a786ca265af373e51554805d",
+  "git_revision": null,
+  "modified": [
+    "src/app.js",
+    "src/branch-page.js",
+    "src/results.js",
+    "src/account.css",
+    "src/public-controls.js",
+    "src/public-refinement.css",
+    "src/account.js",
+    "src/catalog-page.js",
+    "tests/step2c-public.test.mjs"
+  ],
+  "added_application_tests": [
+    "src/account-copy.js",
+    "src/public-cart-count.js",
+    "tests/premium-source.py",
+    "tests/premium-customer.test.mjs"
+  ],
+  "deleted_working_source": []
+}

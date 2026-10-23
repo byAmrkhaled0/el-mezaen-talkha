@@ -1,3 +1,5 @@
+import {monthLedgerPages} from './month-ledger-pages.js';
+import {backgroundRetry} from './background-retry.js';
 import {branchWorkerAccountHandlers} from './branch-worker-accounts.js';
 import {parseCustomerProfile,publicCustomerProfile} from './customer-profile.js';
 import {receiptActor} from './receipt-actor.js';
@@ -1669,11 +1671,20 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   };
 });
 
-// One indexed, bounded month/branch read avoids a dynamic composite index per worker.
+// One complete, projected month/branch read shared by every displayed worker.
+// A read-only transaction holds a consistent revision across cursor pages.
+function monthLedgerQuery(branchId, month) {
+  return db.collection('revenueLedger').where('branchId','==',branchId)
+    .where('dateKey','>=',month+'-01').where('dateKey','<',nextMonthKey(month)+'-01')
+    .orderBy('dateKey').orderBy(FieldPath.documentId())
+    .select('branchId','dateKey','amount','staffId','workerBreakdown','revenueBreakdown');
+}
 async function monthlyAttributedLedger(allowedBranches, month) {
-  const ledger = await scopedRows(scopedQueries("revenueLedger", allowedBranches, q => q.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonthKey(month)}-01`).limit(2001)));
-  if (ledger.length > 2000) throw new HttpsError("resource-exhausted", "تجاوز الشهر حد قراءة الأداء؛ لا نعرض مبالغ ناقصة");
-  return ledger;
+  return db.runTransaction(async tx => {
+    const rows=[];
+    for (const branchId of [...new Set(allowedBranches.length ? allowedBranches : ['talkha','mashaya'])]) rows.push(...await monthLedgerPages(tx,monthLedgerQuery(branchId,month)));
+    return rows;
+  }, {readOnly:true});
 }
 function attributedWorkerRevenue(ledger, staffId, branches) {
   return ledger.filter(entry => branches.includes(entry.branchId)).reduce((total, entry) => {
@@ -1692,15 +1703,17 @@ export const getWorkerLeaderboard = onCall(adminOptions, async request => {
   const month = sanitizeText(request.data?.month || businessDateParts().month, 7);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpsError('invalid-argument', 'الشهر غير صحيح');
   const start = `${month}-01`, end = `${nextMonthKey(month)}-01`;
-  const staff = await scopedRows(scopedArrayQueries('staff', allowed, q => q.limit(201)));
-  if (staff.length > 200) throw new HttpsError('resource-exhausted', 'يلزم ترقيم صفحات الفريق لهذا الحجم؛ لا نعرض ترتيبًا ناقصًا');
+  const staff = await scopedRows(scopedArrayQueries('staff', allowed, q => q.limit(501)));
+  if (staff.length > 500) throw new HttpsError('resource-exhausted', 'يلزم ترقيم صفحات الفريق لهذا الحجم؛ لا نعرض ترتيبًا ناقصًا');
   const ledger = await monthlyAttributedLedger(allowed, month);
-  // Three branch/month queries, independent of worker count. Refuse truncated ranking.
+  // Complete projected counters, shared across the team instead of one query per worker.
+  const readCounters=queries=>db.runTransaction(async tx=>{
+    const rows=[];for(const query of queries)rows.push(...await monthLedgerPages(tx,query));return rows;
+  },{readOnly:true});
   const [completedBookings, completedTasks] = await Promise.all([
-    scopedRows(scopedQueries('bookings', allowed, q => q.where('status','==','completed').where('bookingDate','>=',start).where('bookingDate','<',end).limit(2001))),
-    scopedRows(scopedQueries('workerTasks', allowed, q => q.where('status','==','DONE').where('completedAt','>=',Timestamp.fromMillis(cairoAppointmentMillis(start, "00:00"))).where('completedAt','<',Timestamp.fromMillis(cairoAppointmentMillis(end, "00:00"))).limit(2001)))
+    readCounters(scopedQueries('bookings',allowed,q=>q.where('status','==','completed').where('bookingDate','>=',start).where('bookingDate','<',end).orderBy('bookingDate').orderBy(FieldPath.documentId()).select('staffId','bookingDate'))),
+    readCounters(scopedQueries('workerTasks',allowed,q=>q.where('status','==','DONE').where('completedAt','>=',Timestamp.fromMillis(cairoAppointmentMillis(start,"00:00"))).where('completedAt','<',Timestamp.fromMillis(cairoAppointmentMillis(end,"00:00"))).orderBy('completedAt').orderBy(FieldPath.documentId()).select('assigneeStaffId','completedAt')))
   ]);
-  if (completedBookings.length > 2000 || completedTasks.length > 2000) throw new HttpsError('resource-exhausted', 'تجاوز الشهر حد قراءة الأداء؛ لا نعرض ترتيبًا ناقصًا');
   const bookingCounts = new Map(), taskCounts = new Map();
   for (const row of completedBookings) bookingCounts.set(row.staffId, (bookingCounts.get(row.staffId) || 0) + 1);
   for (const row of completedTasks) taskCounts.set(row.assigneeStaffId, (taskCounts.get(row.assigneeStaffId) || 0) + 1);
@@ -3893,8 +3906,10 @@ export const redeemWorkerInvitation = onCall(adminOptions, workerAccess.redeemWo
 export const manageAccessAccount = onCall(adminOptions, workerAccess.manageAccessAccount);
 export const changeWorkerPassword = onCall(adminOptions, workerAccess.changeWorkerPassword);
 
+const runBackgroundEvent=backgroundRetry({db,timestamp:()=>FieldValue.serverTimestamp()});
+
 // One indexed queue document per booking. No scan of the bookings collection.
-export const syncWorkerBookingNotifications = onDocumentWritten({ region, document: "bookings/{bookingId}", retry: true }, async event => {
+export const syncWorkerBookingNotifications = onDocumentWritten({ region, document: "bookings/{bookingId}", retry: true }, async event => runBackgroundEvent('syncWorkerBookingNotifications',event,async()=>{
   const id=event.params.bookingId,ref=db.doc(`bookings/${id}`),before=event.data?.before?.data(),after=event.data?.after?.data();
   if(!after){
     await db.runTransaction(async tx=>{if(!(await tx.get(ref)).exists)tx.delete(db.doc(`workerBookingReminders/${id}`));});return;
@@ -3920,7 +3935,7 @@ export const syncWorkerBookingNotifications = onDocumentWritten({ region, docume
   for(const noteRef of notes)await deliverWorkerNotification({db,ref:noteRef,
     valid:async note=>{const live=(await ref.get()).data();return Boolean(live&&reminderVersion(live)===note.bookingVersion&&live.status===note.bookingStatus&&(note.reassignment?live.staffId!==note.staffId:live.staffId===note.staffId&&live.branchId===note.branchId));},
     send:(note,accepted)=>sendWorkerPush(note.staffId,{...note,type:'worker_booking'},accepted)});
-});
+}));
 
 export const remindWorkersBeforeBooking = onSchedule({ region, schedule:'* * * * *', timeZone:'Africa/Cairo',timeoutSeconds:60,maxInstances:1 },async()=>{
   const due=await db.collection('workerBookingReminders').where('state','==','PENDING').where('dueAt','<=',Timestamp.now()).orderBy('dueAt').limit(100).get();
@@ -3981,7 +3996,7 @@ export const getAccessAccountCenter = onCall(adminOptions, async request => {
   return {staff,customers,nextCursor:page.nextCursor,category:page.category};
 });
 
-export const notifyWorkersOnTaskUpdate = onDocumentWritten({region,document:'workerTasks/{taskId}',retry:true},async event=>{
+export const notifyWorkersOnTaskUpdate = onDocumentWritten({region,document:'workerTasks/{taskId}',retry:true},async event=>runBackgroundEvent('notifyWorkersOnTaskUpdate',event,async()=>{
   const before=event.data?.before?.data(),after=event.data?.after?.data();
   if(!after||before&&['status','assigneeStaffId','branchId'].every(key=>before[key]===after[key]))return;
   const taskId=event.params.taskId,transition=after.notificationTransitionId||workerEventKey(event,taskId,`${after.status}|${after.assigneeStaffId}|${after.branchId}`);
@@ -3999,7 +4014,7 @@ export const notifyWorkersOnTaskUpdate = onDocumentWritten({region,document:'wor
   const valid=async()=>{const current=(await db.doc(`workerTasks/${taskId}`).get()).data();return Boolean(current&&['status','assigneeStaffId','branchId'].every(key=>current[key]===after[key]));};
   await deliverWorkerNotification({db,ref:noteRef,valid,send:(note,accepted)=>sendWorkerPush(note.staffId,{...note,type:'worker_task'},accepted)});
   if(before)await deliverWorkerNotification({db,ref:noteRef,valid,channel:'operationalPush',send:(_note,accepted)=>sendOperationalPush(after.branchId,{title:'تم تحديث مهمة العامل',body:after.status==='DONE'?'تم إنجاز المهمة':'تغيرت حالة المهمة'},{type:'worker_task',entityId:taskId},accepted)});
-});
+}));
 
 // Phase 12.3C: request decisions only; no cash, payroll or active leave posting.
 const requestHandlers = workerRequestHandlers({ db, FieldValue, Timestamp, HttpsError, requireRole, requireLiveStaff, requireLiveAdmin,
@@ -4062,11 +4077,11 @@ export const prepareAdminTargetAction=onCall(advisorOptions,adminAdvisor.prepare
 export const confirmAdminTargetAction=onCall(advisorOptions,adminAdvisor.confirm);
 
 // Durable admin-only in-app achievement inbox. No financial records are written here.
-const targetAchievements=createTargetAchievementHandlers({db,fromParts:(s,n)=>new Timestamp(s,n),error:(c,m)=>new HttpsError(c,m),requireLiveStaff,timestamp:()=>FieldValue.serverTimestamp(),workerRevenue:attributedWorkerRevenue,ledgerQuery:(b,m)=>db.collection('revenueLedger').where('branchId','==',b).where('dateKey','>=',m+'-01').where('dateKey','<',nextMonthKey(m)+'-01').limit(2001)});
+const targetAchievements=createTargetAchievementHandlers({db,fromParts:(s,n)=>new Timestamp(s,n),error:(c,m)=>new HttpsError(c,m),requireLiveStaff,timestamp:()=>FieldValue.serverTimestamp(),workerRevenue:attributedWorkerRevenue,ledgerQuery:monthLedgerQuery});
 export const getTargetAchievementNotifications=onCall(adminOptions,targetAchievements.list);
 export const markTargetAchievementNotificationsRead=onCall(adminOptions,targetAchievements.markRead);
-export const checkWorkerTargetsOnRevenue=onDocumentWritten({region,document:'revenueLedger/{ledgerId}',retry:true},async event=>{for(const scope of affectedTargetScopes(event.data?.before?.data(),event.data?.after?.data()))await targetAchievements.check(scope);});
-export const checkWorkerTargetsOnAssignment=onDocumentWritten({region,document:'staff/{staffId}',retry:true},async event=>{const before=event.data?.before?.data(),after=event.data?.after?.data();if(!after)return;for(const [month,branches]of Object.entries(after.monthlyTargets||{}))for(const [branchId,target]of Object.entries(branches||{})){if(JSON.stringify(before?.monthlyTargets?.[month]?.[branchId])!==JSON.stringify(target))await targetAchievements.check({staffId:event.params.staffId,branchId,month});}});
+export const checkWorkerTargetsOnRevenue=onDocumentWritten({region,document:'revenueLedger/{ledgerId}',retry:true},async event=>runBackgroundEvent('checkWorkerTargetsOnRevenue',event,async()=>{for(const scope of affectedTargetScopes(event.data?.before?.data(),event.data?.after?.data()))await targetAchievements.check(scope);}));
+export const checkWorkerTargetsOnAssignment=onDocumentWritten({region,document:'staff/{staffId}',retry:true},async event=>runBackgroundEvent('checkWorkerTargetsOnAssignment',event,async()=>{const before=event.data?.before?.data(),after=event.data?.after?.data();if(!after)return;for(const [month,branches]of Object.entries(after.monthlyTargets||{}))for(const [branchId,target]of Object.entries(branches||{})){if(JSON.stringify(before?.monthlyTargets?.[month]?.[branchId])!==JSON.stringify(target))await targetAchievements.check({staffId:event.params.staffId,branchId,month});}}));
 
 const handovers=cashHandoverHandlers({db,FieldValue,HttpsError,requireLiveStaff,requireCashPermission,readBranch,requireBranchAccess,today:()=>businessDateParts().dateKey,authUser:async uid=>{const {getAuth}=await import('firebase-admin/auth');return getAuth().getUser(uid);}});
 export const getCashHandover=onCall(adminOptions,handovers.read);

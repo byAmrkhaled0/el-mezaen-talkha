@@ -1,0 +1,857 @@
+[
+  {
+    "name": "acceptCashHandover",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "activateWorkerLeave",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "addCashMovement",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "adjustCustomerWallet",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "adminBusinessAssistant",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "AI_AGENT_API_KEY"
+      }
+    ]
+  },
+  {
+    "name": "adminDelete",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "adminSecureDelete",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "adminUpsert",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "cancelCustomerBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "cancelWorkerAvailability",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "changeWorkerPassword",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "checkWhatsappMarketingRecipient",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "checkWorkerLeaveConflicts",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "checkWorkerTargetsOnAssignment",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "checkWorkerTargetsOnRevenue",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "closeBusinessDay",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "closeCashShift",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "confirmAdminTargetAction",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "confirmAiAction",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createAdminUser",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createPosOrder",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createWhatsappCampaign",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createWorkerInvitation",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "createWorkerTask",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "customerAiAgent",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "AI_AGENT_API_KEY"
+      }
+    ]
+  },
+  {
+    "name": "disburseWorkerAdvance",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "extendWorkerService",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "findCustomerByPhone",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "finishWorkerService",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAccessAccountCenter",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAdminBusinessInsights",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAdminCollection",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAdminDashboard",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAttendanceDashboard",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAuditEvents",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getAvailableSlots",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getBookingCalendar",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getBranchWorkRequests",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getBusinessDashboard",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getBusinessReport",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCashHandover",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCashHandoverHistory",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCashOperations",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCashierSnapshot",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCatalog",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCustomer360",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCustomerBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getCustomerPortal",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getMonthlyTargetProgress",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getOwnMarketingGrants",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getOwnerMobileHistory",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getPosOffers",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getPublishedReviews",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getReadyWorkerAdvances",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getServiceTargetsDashboard",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getTargetAchievementNotifications",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWhatsappCampaignOptions",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWhatsappCampaignRecipients",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWhatsappCampaignStats",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerAdvanceBalance",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerAdvancePolicy",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerAvailability",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerLeaderboard",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerRequests",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerServiceSessions",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "getWorkerWorkspace",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "health",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "manageAccessAccount",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "markTargetAchievementNotificationsRead",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "markWorkerNotificationRead",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "notifyAdminsOnBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "notifyWorker",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "notifyWorkersOnTaskUpdate",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "openCashShift",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "prepareAdminTargetAction",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "previewWhatsappCampaign",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "WHATSAPP_ACCESS_TOKEN"
+      },
+      {
+        "key": "WHATSAPP_PHONE_NUMBER_ID"
+      }
+    ]
+  },
+  {
+    "name": "processCampaignBatch",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "WHATSAPP_ACCESS_TOKEN"
+      },
+      {
+        "key": "WHATSAPP_PHONE_NUMBER_ID"
+      }
+    ]
+  },
+  {
+    "name": "rebuildBusinessReport",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "recordExpense",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "recordPasswordChange",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "recordPayrollPayment",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "recordWorkerAttendance",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "redeemWorkerInvitation",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "registerPushToken",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "registerWorkerAccess",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "remindWorkersBeforeBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "rescheduleBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "resolveCashHandover",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "rotateCustomerQr",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "saveFavoriteBarber",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "scanCustomerCode",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "scheduledBusinessReports",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "sendWhatsappReceipt",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "WHATSAPP_ACCESS_TOKEN"
+      },
+      {
+        "key": "WHATSAPP_PHONE_NUMBER_ID"
+      }
+    ]
+  },
+  {
+    "name": "setBranchMonthlyTarget",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "setUserRole",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "setWorkerAdvancePolicy",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "setWorkerAvailability",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "setWorkerMonthlyTarget",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "startWorkerService",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "submitBranchWorkRequest",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "submitReview",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "submitWorkerRequest",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "syncWorkerBookingNotifications",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "unregisterPushToken",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateBooking",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateBranchWorkRequest",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateExpense",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateOwnWhatsappConsent",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateWhatsappCampaignState",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateWhatsappConsent",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateWorkerProfilePhoto",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateWorkerRequest",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "updateWorkerTask",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "upsertServiceTarget",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "validateCoupon",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": []
+  },
+  {
+    "name": "whatsappWebhook",
+    "region": [
+      "europe-west1"
+    ],
+    "secrets": [
+      {
+        "key": "WHATSAPP_WEBHOOK_VERIFY_TOKEN"
+      },
+      {
+        "key": "WHATSAPP_APP_SECRET"
+      }
+    ]
+  }
+]

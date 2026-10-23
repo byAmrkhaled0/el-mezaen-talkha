@@ -44,5 +44,5 @@ test("published reviews and notification workers are bounded and deployable", as
   assert.match(api, /deleteToken\(messaging\)/);
   assert.match(indexes, /"collectionGroup": "reviews"[\s\S]*"fieldPath": "createdAt"/);
   assert.match(messagingWorker, /importScripts\("\/sw\.js"\)/);
-  assert.match(appWorker, /const VERSION = "final-closure-2"/);
+  assert.match(appWorker, /const VERSION = "production-20261023-1"/);
 });

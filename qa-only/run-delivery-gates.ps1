@@ -1,4 +1,4 @@
-﻿param([ValidateSet('All','Financial','Day','Worker','Security','Closure','Requests','Scheduling','Advances','Payroll','DayClosing','Expenses','Pagination','Profiles','WorkerAccounts','Rules')][string]$Suite='All')
+﻿param([ValidateSet('All','Financial','Day','Worker','Security','Closure','Requests','Scheduling','Advances','Payroll','DayClosing','Expenses','Pagination','Profiles','WorkerAccounts','Repair','Rules')][string]$Suite='All')
 $ErrorActionPreference='Stop'
 $deliverySuite=$Suite
 . "$PSScriptRoot\run-localhost.ps1" -Mode Check
@@ -17,10 +17,15 @@ $cases=@(
  @('Pagination','demo-el-mezaen-gate','phase11-1'),
  @('Profiles','demo-el-mezaen-gate','customer-profile'),
  @('WorkerAccounts','demo-el-mezaen-gate','branch-worker-accounts'),
+ @('Repair','demo-el-mezaen-gate','production-repair'),
  @('Rules','demo-el-mezaen-rules','firebase-rules')
 )
-$results=@()
-if(Test-Path qa/delivery-gates-results.json){$results=@(Get-Content qa/delivery-gates-results.json -Raw|ConvertFrom-Json)}
+$results=New-Object 'System.Collections.Generic.List[object]'
+if(Test-Path qa/delivery-gates-results.json){
+ foreach($record in (Get-Content qa/delivery-gates-results.json -Raw|ConvertFrom-Json)){
+  if($record.suite){$results.Add($record)}
+ }
+}
 foreach($case in $cases){
  if($deliverySuite -ne 'All' -and $deliverySuite -ne $case[0]){continue}
  $env:GCLOUD_PROJECT=$case[1];$env:GOOGLE_CLOUD_PROJECT=$case[1]
@@ -35,9 +40,9 @@ foreach($case in $cases){
  $code=$LASTEXITCODE
  $lines=Get-Content -LiteralPath $logFile
  $counts=@($lines|Where-Object {$_ -match '^# (tests|pass|fail|skipped) '}|ForEach-Object {[string]$_})
- $results=@($results|Where-Object {$_.suite -ne $case[0]})
- $results+=@{suite=$case[0];exitCode=$code;counts=$counts;log=$logFile;finished=(Get-Date).ToString('o')}
- $results|ConvertTo-Json -Depth 5|Set-Content -Encoding UTF8 qa/delivery-gates-results.json
+ for($i=$results.Count-1;$i -ge 0;$i--){if($results[$i].suite -eq $case[0]){$results.RemoveAt($i)}}
+ $results.Add(@{suite=$case[0];exitCode=$code;counts=$counts;log=$logFile;finished=(Get-Date).ToString('o')})
+ ConvertTo-Json -InputObject ($results.ToArray()) -Depth 5|Set-Content -Encoding UTF8 qa/delivery-gates-results.json
  Write-Output ($case[0]+' exit='+$code+' '+($counts -join '; '))
  if($code -ne 0){Get-Content -LiteralPath $logFile -Tail 80;throw ('Delivery suite failed: '+$case[0])}
 }

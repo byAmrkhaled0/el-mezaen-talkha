@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const required = ["about/index.html", "gallery/index.html", "news/index.html", "celebrities/index.html", "index.html", "worker/index.html", "booking/index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "packages/index.html", "reviews/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "favicon.ico", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
+const required = ["hero-bootstrap.js", "hero-mount.js", "initial-locale.js", "about/index.html", "gallery/index.html", "news/index.html", "celebrities/index.html", "index.html", "worker/index.html", "booking/index.html", "admin/index.html", "login/index.html", "account/index.html", "services/index.html", "packages/index.html", "reviews/index.html", "hair-systems/index.html", "results/index.html", "team/index.html", "branches/talkha/index.html", "branches/mashaya/index.html", "manifest.webmanifest", "admin-manifest.webmanifest", "sw.js", "robots.txt", "sitemap.xml", "llms.txt", "favicon.ico", "assets/el-mezaen-logo.jpeg", "assets/el-mezaen-mark-v2.webp", "assets/icon.svg", "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png", "assets/apple-touch-icon.png", "assets/hero-barbershop-cyan.webp"];
 for (const file of required) await access(join("dist", file));
 await assert.rejects(() => access("dist/server"));
 
@@ -23,6 +23,9 @@ const appSource = await readFile("src/app.js", "utf8");
 const functionsSource = await readFile("functions/src/index.js", "utf8");
 
 assert.match(index, /width=device-width/);
+for (const script of index.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+  if (!/application\/ld\+json/.test(script[1])) assert.match(script[1], /\bsrc=/, 'Homepage executable scripts must satisfy the published strict CSP');
+}
 assert.match(index, /application\/ld\+json/);
 assert.match(index, /rel="canonical"/);
 assert.match(index, /property="og:title"/);
@@ -80,7 +83,7 @@ assert.match(functionsSource, /export const createAdminUser/);
 assert.match(functionsSource, /concurrency:\s*80/);
 assert.match(functionsSource, /review_v2/);
 assert.match(worker, /addEventListener\("push"/);
-assert.match(worker, /const VERSION = "final-closure-2"/);
+assert.match(worker, /const VERSION = "production-20261023-1"/);
 const messagingWorker = await readFile(join("dist", "firebase-messaging-sw.js"), "utf8");
 assert.match(messagingWorker, /importScripts\("\/sw\.js"\)/, "Firebase Messaging worker must reuse the app service worker");
 assert.match(worker, /sensitiveNavigation/);

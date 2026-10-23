@@ -51,7 +51,7 @@ test('live disabled worker and forged claims cannot bypass authorization',async(
 test('Admin all branches returns canonical attribution and no financial collections were written',async()=>{const page=await call('getWorkerRequests',admin(),{branchId:'all'});assert.ok(page.items.every(x=>['talkha','mashaya'].includes(x.branchId)));for(const collection of ['cashMovements','cashShifts','revenueLedger','payrollPayments','payrollPeriods'])assert.equal((await db.collection(collection).limit(1).get()).size,0);assert.equal((await db.collection('workerLeaves').get()).size,1);});
 test('Firestore Rules deny direct request and policy access for every role',async()=>{
  const {initializeTestEnvironment,assertFails}=await import('@firebase/rules-unit-testing');const {doc,getDoc,setDoc}=await import('firebase/firestore');
- const environment=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8181}});
+ const [rulesHost,rulesPort]=process.env.FIRESTORE_EMULATOR_HOST.split(':');const environment=await initializeTestEnvironment({projectId:project,firestore:{host:rulesHost,port:Number(rulesPort)}});
  try{for(const uid of ['verify-talkha','verify-manager','verify-cashier','verify-admin']){const client=environment.authenticatedContext(uid,{role:actors[uid].token.role,branchIds:actors[uid].token.branchIds,staffId:actors[uid].token.staffId||null}).firestore();for(const p of ['workerRequests/forged','settings/workerAdvance_verify-staff-a']){await assertFails(getDoc(doc(client,p)));await assertFails(setDoc(doc(client,p),{staffId:'verify-staff-a',branchId:'talkha',status:'APPROVED'}));}}}
  finally{await environment.cleanup();}
 });

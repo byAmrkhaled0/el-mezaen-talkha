@@ -1,4 +1,4 @@
-const VERSION = "final-closure-2";
+const VERSION = "production-20261023-1";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
 const CORE = [

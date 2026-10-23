@@ -1,3 +1,4 @@
+import {monthLedgerPages} from './month-ledger-pages.js';
 import {createHash} from 'node:crypto';
 export const targetNoticeId=(staffId,branchId,month)=>'t_'+createHash('sha256').update(JSON.stringify([staffId,branchId,month])).digest('hex').slice(0,40);
 export function affectedTargetScopes(before,after){const rows=new Map();for(const x of [before,after]){if(!x||!['talkha','mashaya'].includes(x.branchId)||!/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(x.dateKey||''))continue;for(const staffId of new Set([x.staffId,...Object.keys(x.workerBreakdown||{})].filter(Boolean))){if(typeof staffId!=='string'||staffId.includes('/')||staffId.length>100)continue;const row={staffId,branchId:x.branchId,month:x.dateKey.slice(0,7)};rows.set(JSON.stringify(row),row);}}return [...rows.values()];}
@@ -8,8 +9,8 @@ export function createTargetAchievementHandlers(d){
   const staffRef=d.db.doc('staff/'+staffId),ref=d.db.doc('targetNotifications/'+targetNoticeId(staffId,branchId,month));
   return d.db.runTransaction(async tx=>{const [staff,note]=await Promise.all([tx.get(staffRef),tx.get(ref)]);if(note.exists||!staff.exists||staff.data().active===false||!staff.data().branchIds?.includes(branchId))return false;
    const target=Number(staff.data().monthlyTargets?.[month]?.[branchId]?.targetAmount);if(!Number.isFinite(target)||target<=0)return false;
-   const snapshot=await tx.get(d.ledgerQuery(branchId,month));if(snapshot.size>2000)fail('resource-exhausted','تجاوز حد قراءة الأداء؛ يلزم تقسيم التجميع');
-   const achieved=d.workerRevenue(snapshot.docs.map(x=>x.data()),staffId,[branchId]);if(achieved<target)return false;
+   const ledger=await monthLedgerPages(tx,d.ledgerQuery(branchId,month));
+   const achieved=d.workerRevenue(ledger,staffId,[branchId]);if(achieved<target)return false;
    tx.create(ref,{staffId,staffName:String(staff.data().nameAr||staffId).slice(0,100),branchId,month,target,achieved,type:'worker-target-achieved',title:'عامل حقق التارجت',body:String(staff.data().nameAr||staffId).slice(0,100)+' حقق هدف '+month+' في '+(branchId==='talkha'?'طلخا':'المشاية'),createdAt:d.timestamp()});return true;
   });
  }

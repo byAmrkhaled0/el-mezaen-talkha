@@ -1,0 +1,41 @@
+﻿feature,owner,desktop_mobile_discovery,data_dependency,STEP2B,STEP2C_source,actual_browser_QA
+Home categories,index.html,Visible sections; compact previews,Catalog/publicSubset; CMS media,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Branch selection,src/app.js,Header map / visible branch cards / booking selector,selectBranch; reconcileBranchCart; mz-branch,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Service filters and add,src/app.js,Home category controls / service cards,categories;services;data-add-id,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Services full catalog,src/catalog-page.js,/services/ search and categories,publicSubset;dedupeCatalogCards;data-add,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Packages full catalog,src/catalog-page.js,/packages/ search and book,packageEligible;server price authority,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Package contents/details,src/app.js,Package details dialog; inclusions; add,data-package-details;packageDetailsAdd,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Offers,src/app.js,/#offers and branch page,active/dates/branch eligibility;data-kind=offer,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Team selection,src/catalog-page.js,/team/ search and staff booking,mz-staff-booking;branchIds;available,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Results viewer,src/results.js,/results/ search/filter / before-after / next/previous/Escape,publicSubset;safeMediaUrl;resultOpener,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Hair videos,src/hair-systems.js,/hair-systems/ visible media state / play/retry,getCatalog;publicSubset;deferredVideo,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Gallery,src/catalog-page.js,/gallery/ search / open image / direct or external video,published content;branchIds;safeMediaUrl,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+News,src/catalog-page.js,/news/ search / read more,published content;branchIds,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Guests,src/catalog-page.js,/celebrities/ search / open image,published content;branchIds,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Published reviews,src/reviews-page.js,/reviews/ load more / retry,getPublishedReviews;cursor;global reviews as baseline,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Submit review,src/app.js,/#reviews optional write-review form,reviewForm;existing review endpoint,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Owner story/media,index.html,/#about and primary hero,heroImageUrl/aboutImageUrl;original fallback images,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Talkha,src/branch-page.js,/branches/talkha/ full eligible catalog and contact,branchId;setBranchContext;current catalog,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Mashaya,src/branch-page.js,/branches/mashaya/ full eligible catalog and contact,branchId;setBranchContext;current catalog,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Booking route,booking/index.html,/booking/ -> /?book=1 retaining query,location.replace original unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Cart,src/app.js,Persistent floating cart; service/context cart; desktop header,addToCart/changeCartQty/removeFromCart;totals,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Booking steps,src/app.js,Cart > staff > date > time > client > review > explicit confirmation,openBooking/canAdvance/nextStep/submitBooking,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Drinks/products,src/app.js,Optional drinks and product-only journey,renderDrinks;productOnly;existing guards,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Coupon,src/app.js,Booking customer step coupon/apply,applyCouponCode;server validation,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Booking receipt,src/app.js,Confirmation / code / WhatsApp / account,existing success handlers,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Manage booking,src/app.js,/#manage-booking code and phone form,existing read/cancel request handlers,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Customer sign in,src/account.js,/account/ phone / OTP / resend / change number,Firebase Auth and AppCheck;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Customer sign out,src/account.js,/account/ logout,signOut;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Customer QR,src/account.js,Account profile,getCustomerPortal;QRCode;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Wallet and history,src/account.js,Account wallet/activity/tier/history,financial rendering and data unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Favorite barber,src/account.js,Select/save/book favorite,saveFavoriteBarber;mz-favorite-booking;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Repeat booking,src/account.js,Last/history booking repeat,repeatBooking;existing current eligibility,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Cancel booking,src/account.js,Upcoming booking cancel,cancelCustomerBooking;paid guard;requestId,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Reschedule,src/account.js,Upcoming booking reschedule / date / time / confirm,getAvailableSlots;rescheduleBooking;requestId,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+WhatsApp consent,src/account.js,Account preferences opt in/out,updateOwnWhatsappConsent;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Personal assistant,src/ai-chat.js,One robot FAB / home assistant prompts,existing bounded tools/explicit confirmation;unchanged,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Language/theme,src/public-controls.js,Header controls AR/EN and light/dark,mz-lang;mz-theme;existing i18n;partial dynamic EN,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Navigation,src/public-navigation.js,Header/menu/footer/bottom nav; Escape/outside,publicRoutes;bindPublicMenu;existing destinations,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Contact/social/directions,src/public-navigation.js,Both-branch footer and original contact actions,CMS catalog event;existing static fallback provenance,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+Back/top/skip,src/public-controls.js,Back button / scroll-top / skip link,safe-back;reduced motion;main anchor,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED
+404 recovery,404.html,Shared shell and original recovery links,noindex preserved;no new catalog read,PRESENT in baseline source,PRESERVED / presentation enhanced; see detailed matrix,BLOCKED

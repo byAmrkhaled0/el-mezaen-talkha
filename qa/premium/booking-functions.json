@@ -1,0 +1,72 @@
+[
+  {
+    "function": "addToCart",
+    "sha256": "680bdb0f00a62781031f264ccdfbf309f9e907e64e047fc97e63084e1ae8c6f5",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "changeCartQty",
+    "sha256": "daf083db3830d0a36f24409dcea3fd12442e7d7c11e90965aff3c235f0cb7c41",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "removeFromCart",
+    "sha256": "5498d4fbdaf7e38de9869010225e2492ddb1cce1e6d1cd2bf7e66ed5c0f85c21",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "refreshCatalog",
+    "sha256": "48cc4248769e484719585643938e0b769b86744db8f4eaf5f5d27fa50b6b3c3f",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "loadFreshCatalog",
+    "sha256": "a5dd2e31811839c60e2cf3c0ad77352ad68da91d21531cc5d20b3106d9fe1a8b",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "openBooking",
+    "sha256": "a8628c2ae252d974fca1fbf9e6f09793ed4f32c7e25a65140209da4131576687",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "selectBranch",
+    "sha256": "11ceb30567b7e8693d9c01ec30d24c2208d81c8eb446126a58f242df95858358",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "resetBooking",
+    "sha256": "dd32770d88a1efa8d32e7d0c19e4cedec8e77a997864f0c9618f473c7d282c28",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "canAdvance",
+    "sha256": "7c69d16d4438bd18a6a1d913a6132b3d265c755aab571406a529bf8dbf92905a",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "nextStep",
+    "sha256": "27504466e74fd0b752eda7a5371fb2e0e9cb4d05e73367a206de15eb644b1dd7",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "renderTimes",
+    "sha256": "5cb1c064e151ace2c010c28a019a26e9f1cb6c6a54dd8a25ec35872c50385a6c",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "applyCouponCode",
+    "sha256": "b528d683e4a892a10452d2710be00bfc6ccb3487d7ad8e28b287f8af0720a6bc",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "submitBooking",
+    "sha256": "8573224cbad861dde7fe4cc4820ca02b32d86de28f8af3736e8d83972c011bf2",
+    "status": "IDENTICAL"
+  },
+  {
+    "function": "cancelManagedBooking",
+    "sha256": "3559eb355631da3bca498c75827ad19f29e01c462f2db5e4093e7d8268417ce7",
+    "status": "IDENTICAL"
+  }
+]

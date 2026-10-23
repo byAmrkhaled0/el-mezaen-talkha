@@ -1,0 +1,27 @@
+{
+  "archive_files": 183,
+  "archive_sha256": "dcf480fc05a4bd2f49f1df4a4aaec786e8bb4c9b54d15cb7188b8ac25216ebc5",
+  "archived_source_files": [
+    "docs/phase11_3/PHASE11_3_FINAL_REPORT_AR.md",
+    "qa/step2c/BLOCKERS_AND_WINDOWS_QA_AR.md",
+    "qa/step2c/baseline-tests.log",
+    "qa/step2c/existing-tests.log",
+    "qa/step2c/final-node-tests.log",
+    "qa/step2c/new-source-tests.log",
+    "qa/step2c/new-tests.log",
+    "qa/step2c/source-changes.patch",
+    "qa/step2c/step2a-source.log",
+    "qa/step2c/step2b-source.log",
+    "qa/step2c/syntax-checks.log"
+  ],
+  "excluded_superseded_logs": [
+    "qa/premium/focused-tests.log",
+    "qa/premium/full-safe-tests.log",
+    "qa/premium/step2a-source.log"
+  ],
+  "archive_verified_before_copy": true,
+  "retained_files_identical": 387,
+  "original_source_deleted": false,
+  "working_source_before_bytes": 12141907,
+  "clean_copy_initial_bytes": 11108274
+}

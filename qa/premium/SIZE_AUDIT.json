@@ -1,0 +1,369 @@
+{
+  "largest_directories": [
+    [
+      "public",
+      4827673
+    ],
+    [
+      "qa",
+      4186099
+    ],
+    [
+      "src",
+      1119287
+    ],
+    [
+      "functions",
+      699906
+    ],
+    [
+      "tests",
+      571528
+    ],
+    [
+      "admin",
+      131850
+    ],
+    [
+      "qa-tools",
+      112583
+    ],
+    [
+      "package-lock.json",
+      88245
+    ],
+    [
+      "firestore.indexes.json",
+      61687
+    ],
+    [
+      "index.html",
+      45275
+    ],
+    [
+      "scripts",
+      34548
+    ],
+    [
+      "branches",
+      25166
+    ],
+    [
+      "hair-systems",
+      17549
+    ],
+    [
+      "docs",
+      16381
+    ],
+    [
+      "services",
+      8881
+    ],
+    [
+      "account",
+      8761
+    ],
+    [
+      "vercel.json",
+      8495
+    ],
+    [
+      "results",
+      8252
+    ],
+    [
+      "worker",
+      8092
+    ],
+    [
+      "team",
+      7943
+    ],
+    [
+      "gallery",
+      7050
+    ],
+    [
+      "celebrities",
+      6994
+    ],
+    [
+      "news",
+      6905
+    ],
+    [
+      "packages",
+      6497
+    ],
+    [
+      "firebase.json",
+      5801
+    ],
+    [
+      "SEO_LAUNCH_CHECKLIST_AR.md",
+      5509
+    ],
+    [
+      "reviews",
+      5373
+    ],
+    [
+      "README_AR.md",
+      5161
+    ],
+    [
+      "storage.rules",
+      5054
+    ],
+    [
+      "login",
+      4326
+    ],
+    [
+      "vite.config.js",
+      3894
+    ],
+    [
+      "package.json",
+      1751
+    ],
+    [
+      "404.html",
+      1232
+    ],
+    [
+      ".gitignore",
+      730
+    ],
+    [
+      "firestore.rules",
+      605
+    ],
+    [
+      "booking",
+      551
+    ],
+    [
+      "PHASE11_1_CSS_AUDIT.json",
+      236
+    ],
+    [
+      ".firebaserc.example",
+      66
+    ]
+  ],
+  "largest_files": [
+    {
+      "path": "qa/premium/full-safe-tests.log",
+      "bytes": 549341,
+      "sha256": "0ad8512a4e5ef16f258dd19c7bee9fe41f4a05a620610354dfc7f8703114dc33",
+      "classification": "EXCLUDE FROM DELIVERY",
+      "reason": "Superseded current intermediate logs; final logs preserved; original unchanged"
+    },
+    {
+      "path": "qa/premium/full-safe-tests-final.log",
+      "bytes": 537385,
+      "sha256": "ad133d871234fa46bd12ff61c7ce2144ac9ff57aad55730d916380951f5609eb",
+      "classification": "KEEP \u2014 current feature-parity evidence",
+      "reason": "Current acceptance/evidence/reproduction"
+    },
+    {
+      "path": "qa/premium/baseline-full-safe-tests.log",
+      "bytes": 535556,
+      "sha256": "4e1e97a170bc2db3c98cb40cf984936665a028f76c7595ba7a18c40de6ba50fa",
+      "classification": "KEEP \u2014 current feature-parity evidence",
+      "reason": "Current acceptance/evidence/reproduction"
+    },
+    {
+      "path": "src/admin.js",
+      "bytes": 360974,
+      "sha256": "b059106e8b90b5591914b2a9e927e4c0b3420a21004a88e1ed6cf8b221ae731f",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "qa/step2c/baseline-inventory.json",
+      "bytes": 358712,
+      "sha256": "4310a9e8c11fd799fd1917a28fde540f638370092a46102dd2597c345503e626",
+      "classification": "KEEP \u2014 required for building or testing",
+      "reason": "Executable tooling or conservative fixture retention"
+    },
+    {
+      "path": "functions/src/index.js",
+      "bytes": 354954,
+      "sha256": "3a0b5fe3ce2be4a77d479370a44df6ca280df79018ef9331ddbf8f45663f63ef",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "qa/premium/FEATURE_PRESERVATION.csv",
+      "bytes": 335834,
+      "sha256": "b386e8d38f42ead884b8d4c8f8f7106145708247c94f36ae7ea29ed6308dc96c",
+      "classification": "KEEP \u2014 current feature-parity evidence",
+      "reason": "Current acceptance/evidence/reproduction"
+    },
+    {
+      "path": "qa/step2c/FEATURE_PARITY_MATRIX.csv",
+      "bytes": 287388,
+      "sha256": "d060da69c3d6088e93434ab437650189f589b6ec4b7c5178148f58ee578f3f2c",
+      "classification": "KEEP \u2014 required for building or testing",
+      "reason": "Executable tooling or conservative fixture retention"
+    },
+    {
+      "path": "qa/step2c/source-changes.patch",
+      "bytes": 260675,
+      "sha256": "82ad6c7d61add996081bb9ba39342387e96039457fc487e711105daa75d884e6",
+      "classification": "ARCHIVE",
+      "reason": "Historical non-runtime report/output; active tests and fixtures retained"
+    },
+    {
+      "path": "qa/step2c/FEATURE_PARITY_MATRIX_BEFORE.csv",
+      "bytes": 242143,
+      "sha256": "10193e82504ca4598d216cec135ac5785ad9f64be93353ee03d5907eb3a771e5",
+      "classification": "KEEP \u2014 required for building or testing",
+      "reason": "Executable tooling or conservative fixture retention"
+    },
+    {
+      "path": "qa/step2c/PUBLIC_BUTTON_INVENTORY.csv",
+      "bytes": 232601,
+      "sha256": "de48eddbeb38cb9a0fdf9e6d4180515cec04ef74add21a22a7876fdc30ce4cf5",
+      "classification": "KEEP \u2014 required for building or testing",
+      "reason": "Executable tooling or conservative fixture retention"
+    },
+    {
+      "path": "public/assets/premium/branch-mashaya-1280.webp",
+      "bytes": 173958,
+      "sha256": "47c12c856c50e173cff0d4d8d565955aa5cde353f2497157f33c5709558327ff",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/interior-1280.webp",
+      "bytes": 171604,
+      "sha256": "181baa9598da0e8f351e7a9e190ec489222a7fb8ef6be4d2519d1f6255ef49ae",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "src/admin.css",
+      "bytes": 164763,
+      "sha256": "8675375d5ddc4305b4b4d085d75554de4dfc5964e89b2143e13feaf72442d808",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/package-premium-3-1280.webp",
+      "bytes": 158852,
+      "sha256": "3933fb69cab9f12128bcdc63e3ef5c90bdab2cb3b949149de9d7d2b3d7481b29",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/icon-512.png",
+      "bytes": 153108,
+      "sha256": "9d7a9324abbe58aec9e48f012fa46fe3899fcc24a00ffc844bf3d15f516db67c",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/branch-talkha-1280.webp",
+      "bytes": 152448,
+      "sha256": "f9573f8351363a94f7cee94c42c95aa2ef1c3086a8abbbdb33a60ce1282d9159",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/package-premium.webp",
+      "bytes": 140178,
+      "sha256": "a8ac246b72f2217d05e85d274c77a10a8d5ed4599a0bbe57a5124daad87dc643",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/tools-1280.webp",
+      "bytes": 132662,
+      "sha256": "f606608347c7bae4087214012590647dffde82fab2d2e28ed85afd4697b12c62",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "admin/index.html",
+      "bytes": 131850,
+      "sha256": "389bf8fce0e05c7d243bd2f47875b38550aa5d65f13a891f9d271002f2333949",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/package-1280.webp",
+      "bytes": 123564,
+      "sha256": "48ba48c373bafaf6c44922dfe3e3bf1befd82afca873255607848b7fc5695312",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/package-premium-1-1280.webp",
+      "bytes": 123564,
+      "sha256": "48ba48c373bafaf6c44922dfe3e3bf1befd82afca873255607848b7fc5695312",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "functions/package-lock.json",
+      "bytes": 121309,
+      "sha256": "95e3e8f7f5520ca034f72ee4342a7e9535a937f4f322909cdc9cbd0d86d9de49",
+      "classification": "KEEP \u2014 required for building or testing",
+      "reason": "Executable tooling or conservative fixture retention"
+    },
+    {
+      "path": "public/assets/owner/owner-about-car.jpeg",
+      "bytes": 119912,
+      "sha256": "670d31de9d05b9f7bd38670aadd9bc4e7107c1429f24e8de5a4a4e0f45359777",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/beard-2-1280.webp",
+      "bytes": 111486,
+      "sha256": "a0cac7fa19e076cf524fefe1544c0f03196177eb5cd796382f3ea113ebc757c4",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/icon-maskable-512.png",
+      "bytes": 109917,
+      "sha256": "42d218aba2d66df0161dc82ecb4c8b73179e14475d6692f038b9d52110dbb92f",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/package-premium-2-1280.webp",
+      "bytes": 109828,
+      "sha256": "a062a122306473fbf4ca2e4e74a46625f5bff195ce42f80c74eb43d590739856",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/skin-1-1280.webp",
+      "bytes": 95680,
+      "sha256": "ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "public/assets/premium/skin-1280.webp",
+      "bytes": 95680,
+      "sha256": "ce92489c35febce821b10590d2bca3bdee8f2b97fcbe1a4b5492822803ebbce0",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    },
+    {
+      "path": "src/app.js",
+      "bytes": 94805,
+      "sha256": "1bc2025d0ce4360ba46dd0999d15805851585949b4fcad7c9742c6d0ba55faa8",
+      "classification": "KEEP \u2014 required for application runtime",
+      "reason": "Application/configuration/assets"
+    }
+  ],
+  "note": "Uncompressed source sizes, not runtime bundle measurements"
+}

@@ -1,0 +1,12 @@
+{
+  "node_actual": "v24.19.0",
+  "node22": "NOT AVAILABLE",
+  "node_modules": false,
+  "build": "NOT RUN: externally verified isolation and locked dependencies unavailable",
+  "browser": "NOT RUN: externally verified whole-process isolation unavailable",
+  "sdk_emulators": "NOT RUN",
+  "network_install": "NOT RUN",
+  "production": "NO ACCESS",
+  "screenshots": "NONE CAPTURED",
+  "reference_sha256": "7b5f1fc3286f7f93af2b112c079a1c5bbeeb7c1ddca38cd26a8181bf2b679d65"
+}

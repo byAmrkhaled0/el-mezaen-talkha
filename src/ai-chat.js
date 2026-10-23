@@ -1,3 +1,4 @@
+import {customerAssistantProvider} from './assistant-provider.js';
 import { askCustomerAgent, confirmCustomerAgent } from './firebase-client.js';
 import { resolveAssistantFallback } from './assistant-fallback.js';
 import { safeMediaUrl } from './media.js';
@@ -54,7 +55,7 @@ async function send(value) {
   busy = true; panel.querySelector('form button').disabled = true;
   panel.querySelector('.ai-welcome')?.remove();message(value,'user');const typing=message('مزين بيراجع طلبك…','loading');
   try {
-    let result = await (devProvider || askCustomerAgent)({message:value,history:history.slice(-6),branchId:options.branch?.id});
+    let result = await customerAssistantProvider({devProvider,ask:askCustomerAgent,settings:options?.catalog?.settings})({message:value,history:history.slice(-6),branchId:options.branch?.id});
     const providerUnavailable=Boolean(result.fallback);if (result.fallback && !result.message) result = resolveAssistantFallback(value, options);
     typing.remove();history.push({role:'user',content:value}); if(result.message){message(result.message);history.push({role:'assistant',content:result.message.slice(0,1200)});}
     renderAssistantCards(result.cards,result.cardType);if(providerUnavailable)fallbackActions(value);
