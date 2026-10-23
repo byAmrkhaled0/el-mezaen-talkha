@@ -1,4 +1,5 @@
 import {monthLedgerPages} from './month-ledger-pages.js';
+import {staffSelfAttendanceHandlers} from './staff-self-attendance.js';
 import {backgroundRetry} from './background-retry.js';
 import {branchWorkerAccountHandlers} from './branch-worker-accounts.js';
 import {parseCustomerProfile,publicCustomerProfile} from './customer-profile.js';
@@ -1794,7 +1795,7 @@ export const getAttendanceDashboard = onCall(adminOptions, async request => {
   if (request.auth.token.role !== "admin" && !allowedBranches.length) throw new HttpsError("permission-denied", "الحساب غير مرتبط بفرع");
   const branchIds = requestedBranch !== "all" ? [requestedBranch] : allowedBranches.length ? allowedBranches : ["talkha", "mashaya"];
   const [attendanceSnapshots, taskSnapshots, staffRows] = await Promise.all([
-    Promise.all(branchIds.map(branchId => db.collection("attendanceDays").where("branchId", "==", branchId).where("dateKey", "==", dateKey).limit(300).get())),
+    Promise.all(branchIds.map(branchId => db.collection("attendanceDays").where("branchId", "==", branchId).where("dateKey", "==", dateKey).limit(1000).get())),
     Promise.all(branchIds.map(branchId => db.collection("workerTasks").where("branchId", "==", branchId).limit(250).get())),
     scopedRows(scopedArrayQueries("staff", branchIds, query => query.where("active", "==", true).limit(500)))
   ]);
@@ -1804,9 +1805,20 @@ export const getAttendanceDashboard = onCall(adminOptions, async request => {
     const record = attendance.get(`${dateKey}_${member.id}`);
     return { staffId: member.id, nameAr: member.nameAr || member.id, imageUrl: member.imageUrl || "", branchIds: member.branchIds, status: record?.status || "ABSENT", attendance: record || null };
   }).sort((a, b) => Number(Boolean(b.attendance)) - Number(Boolean(a.attendance)) || String(a.nameAr).localeCompare(String(b.nameAr), "ar"));
+  // Managers/cashiers have personal account records, not bookable service-worker profiles.
+  for (const record of attendance.values()) {
+    if (['cashier','manager'].includes(record.accountRole) && record.userId && !rows.some(row=>row.staffId===record.staffId)) {
+      const visibleAttendance={branchId:record.branchId,dateKey:record.dateKey,status:record.status,checkInTime:record.checkInTime||'',checkOutTime:record.checkOutTime||'',locationEvidence:{distanceMeters:record.locationEvidence?.distanceMeters}};
+      rows.push({staffId:record.staffId,nameAr:record.staffNameAr||'فريق المزين',imageUrl:'',branchIds:[record.branchId],accountRole:record.accountRole,status:record.status,attendance:visibleAttendance});
+    }
+  }
   const tasks = taskSnapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc)).filter(item => !["DONE", "CANCELLED"].includes(item.status)).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 200);
   return { dateKey, branchId: requestedBranch, rows, tasks, presentCount: rows.filter(item => item.status === "PRESENT").length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 });
+
+const selfAttendance = staffSelfAttendanceHandlers({db,requireLiveStaff,requireRole,requireBranchAccess,branchesFor,rateLimit:enforceRateLimit,businessDateParts,FieldValue,HttpsError,hash});
+export const getOwnStaffAttendance = onCall(adminOptions, selfAttendance.read);
+export const recordOwnStaffAttendance = onCall(adminOptions, selfAttendance.record);
 
 export const recordWorkerAttendance = onCall(adminOptions, async request => {
   requireRole(request, ["worker"]);

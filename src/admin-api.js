@@ -194,6 +194,8 @@ export const changeUserRole = (uid, email, role, permissions = [], branchIds = [
 export const createUserAccount = payload => call("createAdminUser", payload);
 export const getAttendanceDashboard = (dateKey, branchId = "all") => readCall("getAttendanceDashboard", { dateKey, branchId });
 export const recordWorkerAttendance = payload => call("recordWorkerAttendance", payload);
+export const getOwnStaffAttendance = () => readCall("getOwnStaffAttendance", {});
+export const recordOwnStaffAttendance = payload => call("recordOwnStaffAttendance", payload);
 export const getWorkerWorkspace = (activeBranchId = "") => readCall("getWorkerWorkspace", { activeBranchId });
 export const createWorkerTask = payload => call("createWorkerTask", payload);
 export const updateWorkerTask = (taskId, status) => call("updateWorkerTask", { taskId, status });

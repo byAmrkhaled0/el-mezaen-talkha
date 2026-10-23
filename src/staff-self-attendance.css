@@ -1,0 +1,13 @@
+.self-attendance{margin:16px clamp(12px,2vw,32px);border:1px solid var(--border,#c4d8df);border-radius:16px;background:var(--surface,#fff);color:var(--text,#163544);max-width:760px}
+.self-attendance>summary{cursor:pointer;padding:16px;font-weight:700;min-height:48px}
+.self-attendance>summary small{font-weight:400;margin-inline-start:12px}
+.self-attendance-body{padding:0 16px 16px;display:grid;gap:12px}
+.self-attendance-body p{margin:0;line-height:1.7;font-size:.9rem}
+.self-attendance-body label{display:grid;gap:8px}
+.self-attendance-body select,.self-attendance-actions button{font:inherit;min-height:44px;border:1px solid var(--border,#b7cbd4);border-radius:12px;padding:10px 14px;background:var(--surface,#fff);color:inherit}
+.self-attendance-actions{display:flex;flex-wrap:wrap;gap:10px}
+.self-attendance-actions button:first-child{background:#087d89;color:#fff;border-color:#087d89}
+.self-attendance-actions button:disabled{opacity:.55;cursor:not-allowed}
+[data-theme=dark] .self-attendance{background:#0c2936;color:#edf9ff;border-color:#28505e}
+[data-theme=dark] .self-attendance :is(select,button){background:#123644;color:#edf9ff;border-color:#28505e}
+@media(max-width:600px){.self-attendance-actions button{flex:1 1 130px}.self-attendance>summary small{display:block;margin:4px 0 0}.self-attendance{margin:12px}}

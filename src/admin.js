@@ -1,4 +1,5 @@
 import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
+import {mountSelfAttendance} from './staff-self-attendance.js';
 import {createBranchWorkspace} from './branch-workspace.js';
 import './internal-polish.js';
 import {mountWorkerAvailability,syncCashHandover} from './operations-controls.js';
@@ -539,7 +540,7 @@ function renderAttendance() {
     const record = item.attendance;
     const present = isToday && item.status === "PRESENT";
     const statusText = item.status === "PRESENT" ? (isToday ? "موجود الآن" : "حضر ولم يسجل الانصراف") : item.status === "CHECKED_OUT" ? "حضر وانصرف" : "غير حاضر";
-    return `<article class="attendance-card ${present ? "present" : ""}"><header><img src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt=""><div><b>${escapeHtml(item.nameAr)}</b><small>${(item.branchIds || []).map(id => escapeHtml(branchLabel(id))).join(" • ")}</small></div></header><span class="attendance-state">${statusText}</span>${record ? `<small>الحضور ${escapeHtml(record.checkInTime || dateTime(record.checkInAt))}${record.checkOutTime ? ` • الانصراف ${escapeHtml(record.checkOutTime)}` : ""}</small><small>المسافة المسجلة: ${Number(record.locationEvidence?.distanceMeters || 0)} متر</small>` : ""}<footer>${present && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button class="small-button" type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(record?.branchId || item.branchIds?.[0] || "")}">تنبيه ${escapeHtml(item.nameAr)}</button>` : ""}</footer></article>`;
+    return `<article class="attendance-card ${present ? "present" : ""}"><header><img src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt=""><div><b>${escapeHtml(item.nameAr)}</b><small>${(item.branchIds || []).map(id => escapeHtml(branchLabel(id))).join(" • ")}</small></div></header><span class="attendance-state">${statusText}</span>${record ? `<small>الحضور ${escapeHtml(record.checkInTime || dateTime(record.checkInAt))}${record.checkOutTime ? ` • الانصراف ${escapeHtml(record.checkOutTime)}` : ""}</small><small>المسافة المسجلة: ${Number(record.locationEvidence?.distanceMeters || 0)} متر</small>` : ""}<footer>${present && !item.accountRole && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button class="small-button" type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(record?.branchId || item.branchIds?.[0] || "")}">تنبيه ${escapeHtml(item.nameAr)}</button>` : ""}</footer></article>`;
   }).join("") || '<div class="empty-state">لا يوجد عمال مطابقون للفرع والتاريخ.</div>';
   renderStaffSummary();
 }
@@ -613,7 +614,7 @@ function renderCashierTeam() {
   const today = cairoDateKey();
   const now = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
   const active = new Set((state.calendar.bookings || []).filter(booking => booking.branchId === branchId && booking.bookingDate === today && ["arrived", "in_progress", "started"].includes(String(booking.status || "").toLowerCase()) && String(booking.bookingTime || "") <= now).flatMap(booking => [booking.staffId, ...(booking.workerIds || [])]));
-  const rows = (state.attendance.rows || []).filter(row => row.branchIds?.includes(branchId));
+  const rows = (state.attendance.rows || []).filter(row => !row.accountRole && row.branchIds?.includes(branchId));
   $("#cashierTeamGrid").innerHTML = rows.map(row => {
     const label = row.status === "CHECKED_OUT" ? "خرج" : row.status !== "PRESENT" ? "غائب" : active.has(row.staffId) ? "مشغول" : "متاح";
     return `<article class="team-now-card"><img src="${escapeAttr(safeMediaUrl(row.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt=""><div><b>${escapeHtml(row.nameAr)}</b><small>${escapeHtml(label)} • ${escapeHtml(row.attendance?.checkInTime || "—")}</small></div><button type="button" class="small-button" data-notify-worker="${escapeAttr(row.staffId)}" data-notify-branch="${escapeAttr(branchId)}">تنبيه</button></article>`;
@@ -2281,11 +2282,13 @@ async function paySalary(staffId) {
 }
 
 let collectionRequestEpoch=0;
+let packageLoadFailed=false;
 const collectionLoads = new Map(), collectionLoadVersions = new Map(), collectionCacheScopes = new Map();
 function collectionReadScope(collection) {
   return JSON.stringify([collectionRequestEpoch, state.user?.uid || '', state.role, [...state.permissions].sort(), [...state.branchIds].sort(), $("#headerBranchFilter").value, collection, 100, '']);
 }
 async function loadCollection(collection, refresh = false) {
+  if(collection==='packages')packageLoadFailed=false;
   const scope = collectionReadScope(collection), branchId = $("#headerBranchFilter").value;
   if (!refresh && collectionCacheScopes.get(collection) === scope && state.collections.has(collection)) return renderCollection(collection);
   let entry = collectionLoads.get(scope);
@@ -2303,7 +2306,10 @@ async function loadCollection(collection, refresh = false) {
     state.collectionCursors.set(collection, result.nextCursor || null);
     renderCollection(collection);
     $$(`[data-load-more="${CSS.escape(collection)}"]`).forEach(button => { button.hidden = !result.nextCursor; });
-  } catch (error) { if (current()) toast(`تعذر تحميل ${collection}: ${error.message}`, true); }
+  } catch (error) { if (current()) {
+    if(collection==='packages'){packageLoadFailed=true;renderCollection(collection);}
+    toast(`تعذر تحميل ${collection}: ${error.message}`, true);
+  } }
   finally { if (collectionLoads.get(scope) === entry) collectionLoads.delete(scope); }
 }
 
@@ -2332,15 +2338,22 @@ function renderRequiredPackageStatus() {
   const missing = newMashayaPackages.filter(item => !existingIds.has(item.id));
   panel.hidden = state.role !== "admin";
   if (panel.hidden) return;
+  const button = panel.querySelector("[data-install-required-packages]");
+  if (!state.collections.has("packages")) {
+    panel.querySelector("b").textContent = packageLoadFailed ? "تعذر تحميل الباقات" : "جاري تحميل الباقات…";
+    $("#requiredPackagesMessage").textContent = packageLoadFailed ? "أعد فتح القسم للمحاولة؛ تعذر التحقق من الباقات الموجودة." : "انتظر اكتمال التحميل قبل مراجعة الباقات المتاحة.";
+    button.hidden = true;
+    return;
+  }
   const states = newMashayaPackages.map(item => `${item.nameAr}: ${existingIds.has(item.id) ? "موجودة" : "ناقصة"}`);
   $("#requiredPackagesMessage").textContent = `إجمالي الباقات: ${packages.length}. ${states.join(" • ")}. لن تُحذف أو تُستبدل أي باقة قديمة.`;
-  const button = panel.querySelector("[data-install-required-packages]");
   button.hidden = missing.length === 0;
   panel.querySelector("b").textContent = missing.length ? `الباقات المطلوبة: ${3 - missing.length}/3 موجودة` : "الباقات المطلوبة الثلاث موجودة";
 }
 
 async function installRequiredPackages(button) {
   if (state.role !== "admin") return toast("إضافة الباقات متاحة للأدمن فقط", true);
+  if(!state.collections.has('packages'))return toast('انتظر تحميل الباقات الحالية أولًا',true);
   const existingIds = new Set((state.collections.get("packages") || []).map(item => item.id));
   const missing = newMashayaPackages.filter(item => !existingIds.has(item.id));
   if (!missing.length) return toast("الباقات الثلاث موجودة بالفعل");
@@ -2410,6 +2423,10 @@ function renderCollection(collection) {
   }
   if (collection === "settings") { fillSettings(items[0] || {}); return; }
   const targets = $$(`[data-list="${collection}"]`);
+  if(collection==='packages'&&!state.collections.has(collection)){
+    targets.forEach(target=>{target.innerHTML=`<p class="empty-state" role="status">${packageLoadFailed?'تعذر تحميل الباقات؛ أعد فتح القسم للمحاولة.':'جاري تحميل الباقات…'}</p>`;});
+    renderRequiredPackageStatus();return;
+  }
   targets.forEach(target => { target.innerHTML = items.map(item => entityCard(collection, item, ["customers", "activityLogs", "users"].includes(collection))).join("") || `<div class="entity-card filter-empty"><p>${collection === "services" && !query && !$("#serviceCategoryFilter")?.value ? "اختر تصنيفًا من القائمة أو ابحث باسم الخدمة." : "لا توجد بيانات."}</p></div>`; });
   if (collection === "packages") renderRequiredPackageStatus();
   if (collection === "staff") renderStaffSummary();
@@ -3355,7 +3372,7 @@ document.addEventListener("change", async event => {
     $("#dashboardBranchFilter").value = event.target.value;
     $("#calendarBranchFilter").value = event.target.value;
     dashboardPage = 1;
-    collectionRequestEpoch++;businessRequestVersion++;rankingRequest++;
+    collectionRequestEpoch++;packageLoadFailed=false;businessRequestVersion++;rankingRequest++;
     attendanceRequestVersion++;calendarRequestVersion++;teamRequestVersion++;cashRequestVersion++;auditRequestVersion++;
     state.workerRankingKey=null;
     state.dashboard={bookings:[],ledger:[],expenses:[],stats:{}};
@@ -3671,6 +3688,7 @@ async function bootstrapAdmin(user) {
     $("#managerBranchLabel").textContent = state.branchIds.length === 1 ? branchLabel(state.branchIds[0]) : "الفروع المصرح بها";
     $("#cashierBranchLabel").hidden = access.role !== "cashier";
     $("#logoutButton").dataset.avatar = String(userName).trim().charAt(0) || "م";
+    mountSelfAttendance({role:state.role,uid:user.uid,currentUid:()=>state.user?.uid});
     renderRoleShell();
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
     if (state.role === 'worker') {
