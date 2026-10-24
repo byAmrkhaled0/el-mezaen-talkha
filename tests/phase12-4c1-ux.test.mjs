@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const aiSource=read('src/ai-chat.js'),mediaSource=read('src/site-media-editor.js'),admin=read('src/admin.js');
 const extract=(source,name,next)=>source.slice(source.indexOf(name),source.indexOf(next,source.indexOf(name)));
 

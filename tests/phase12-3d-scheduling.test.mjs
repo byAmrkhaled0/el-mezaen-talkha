@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync as readSourceFileSync} from 'node:fs';
+// Git may check text out with CRLF on Windows; keep content baselines platform-independent.
+const readFileSync=(path,encoding)=>{
+ const value=readSourceFileSync(path,encoding);
+ return typeof value==='string'?value.replace(/\r\n/g,'\n'):Buffer.from(value.toString('utf8').replace(/\r\n/g,'\n'),'utf8');
+};
 import {createHash} from 'node:crypto';
 import {scheduling,schedulingGuardId,MAX_ACTIVATION_DAYS} from '../functions/src/scheduling.js';
 class HttpsError extends Error { constructor(code,message,details){super(message);this.code=code;this.details=details;} }
@@ -31,5 +36,9 @@ test('dependency baseline preserved except authorized Vite 7.3.7 security patch'
  assert.equal(createHash('sha256').update(JSON.stringify(lock,null,2)+'\n').digest('hex'),'7f52b37a4e0379c91acce2c68a20b9e3efcd55d31aa5454ef399f151ea346701');
 });
 test('locked baseline preservation: functions/package-lock.json',()=>assert.equal(createHash('sha256').update(readFileSync(new URL('../functions/package-lock.json',import.meta.url))).digest('hex'),'95e3e8f7f5520ca034f72ee4342a7e9535a937f4f322909cdc9cbd0d86d9de49'));
-test('pricing baseline preserved; authorized actor and active-drawer tracking changes only: createPosOrder',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');let block=source.match(/export const createPosOrder =.*?(?=\nexport const |$)/s)[0];assert.match(block,/Object\.assign\(bookingRecord, receiptActor\(request\), \{createdAt:now\}\)/);block=block.replace('    Object.assign(bookingRecord, receiptActor(request), {createdAt:now});\n','');block=block.replace('method === "cash" && activeShift ? activeShift.ref : null','method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null');assert.equal(createHash('sha256').update(block.replace('ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true, request)', 'ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true)')).digest('hex'),'a0dff8568d373c8164d7dcdfb3cd55d4ab7f5445313d3e1f7026013ea793d7ef');});
+test('pricing baseline preserved; authorized actor and active-drawer tracking changes only: createPosOrder',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');let block=source.match(/export const createPosOrder =.*?(?=\nexport const |$)/s)[0];assert.match(block,/Object\.assign\(bookingRecord, receiptActor\(request\), \{createdAt:now\}\)/);block=block.replace(/  \/\/ OFFLINE_POS_BEGIN:[\s\S]*?  \/\/ OFFLINE_POS_END\n/,'').replace('\n\n  const customer =','\n  const customer =');
+block=block.replace('      if (offlineOrder) offlineProtocol.match(offlineOrder, existingGuard.data());\n','');
+block=block.replace('    if (offlineOrder) offlineProtocol.check(offlineOrder, {items, total:beforeWalletTotal, activeShift, dateKey});\n','');
+block=block.replace('    if (offlineOrder) Object.assign(bookingRecord,{offlineOperationId:idempotencyKey,offlineShiftId:offlineOrder.shiftId,offlineSyncedAt:now});\n','');
+block=block.replace('...(offlineOrder ? {offlineFingerprint:offlineOrder.fingerprint} : {expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000)})','expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000)');block=block.replace('    Object.assign(bookingRecord, receiptActor(request), {createdAt:now});\n','');block=block.replace('method === "cash" && activeShift ? activeShift.ref : null','method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null');assert.equal(createHash('sha256').update(block.replace('ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true, request)', 'ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true)')).digest('hex'),'a0dff8568d373c8164d7dcdfb3cd55d4ab7f5445313d3e1f7026013ea793d7ef');});
 test('Phase12.3E.1 authorized payroll posting delegates to the isolated financial module',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');assert.match(source,/recordPayrollPayment = onCall\(adminOptions, payrollPosting\(/);const payroll=readFileSync(new URL('../functions/src/payroll-posting.js',import.meta.url),'utf8');assert.match(payroll,/calculatePayroll\(\{\.\.\.staff,revenue,adjustment\}\)/);assert.doesNotMatch(payroll,/workerLeaves|appointmentLocks|workerRequests/);});

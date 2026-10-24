@@ -1,4 +1,4 @@
-param([ValidateSet('Build','Backend','Verify')][string]$Mode='Build')
+﻿param([ValidateSet('Build','Backend','Verify')][string]$Mode='Build')
 $ErrorActionPreference='Stop'
 Set-Location -LiteralPath $PSScriptRoot
 function Check-Exit([string]$Step){if($LASTEXITCODE -ne 0){throw "$Step failed (exit $LASTEXITCODE). Stop and inspect the error above."}}
@@ -6,7 +6,7 @@ $project='el-mezaen-talkha'
 $deferred=@('customerAiAgent','adminBusinessAssistant')
 $source=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'functions/src/index.js'))
 $expected=@([regex]::Matches($source,'(?m)^export const (\w+)\s*=') | ForEach-Object {$_.Groups[1].Value} | Where-Object {$_ -notin $deferred} | Sort-Object -Unique)
-if($expected.Count -ne 124){throw 'Unexpected function inventory. Review this release before deployment.'}
+if($expected.Count -ne 125){throw 'Unexpected function inventory. Review this release before deployment.'}
 function Get-Inventory {
   $raw=(& firebase functions:list --project $project --json | Out-String)
   Check-Exit 'Read cloud function inventory'
@@ -29,13 +29,13 @@ if($Mode -eq 'Verify'){
   $inactive=@($remote|Where-Object {$_.id -in $expected -and $_.state -ne 'ACTIVE'})
   if($missing.Count){throw ('Missing functions: '+($missing -join ', '))}
   if($inactive.Count){throw ('Inactive functions: '+($inactive.id -join ', '))}
-  Write-Output 'PASS: all 124 non-model functions are deployed and ACTIVE. This checks deployment state, not live business transactions.'
+  Write-Output 'PASS: all 125 non-model functions are deployed and ACTIVE. This checks deployment state, not live business transactions.'
   Write-Output 'Deferred model endpoints: customerAiAgent, adminBusinessAssistant.'
   exit 0
 }
 # Update changed handlers plus any other missing non-model functions. No deletion,
 # force flag, production data import, or global AI secret parameter is used.
-$changed=@('getAttendanceMonth','getAttendancePolicies','setAttendancePolicy','finishAttendanceShifts','getOwnStaffAttendance','recordOwnStaffAttendance','recordWorkerAttendance','getAttendanceDashboard','checkWorkerTargetsOnAssignment','checkWorkerTargetsOnRevenue','notifyWorkersOnTaskUpdate','syncWorkerBookingNotifications','getWorkerWorkspace','getMonthlyTargetProgress','getWorkerLeaderboard','getAdminBusinessInsights','confirmAiAction','prepareAdminTargetAction','confirmAdminTargetAction')
+$changed=@('createPosOrder','syncOfflinePosOrder','getAttendanceMonth','getAttendancePolicies','setAttendancePolicy','finishAttendanceShifts','getOwnStaffAttendance','recordOwnStaffAttendance','recordWorkerAttendance','getAttendanceDashboard','checkWorkerTargetsOnAssignment','checkWorkerTargetsOnRevenue','notifyWorkersOnTaskUpdate','syncWorkerBookingNotifications','getWorkerWorkspace','getMonthlyTargetProgress','getWorkerLeaderboard','getAdminBusinessInsights','confirmAiAction','prepareAdminTargetAction','confirmAdminTargetAction')
 $names=@(@($changed)+@($expected|Where-Object {$_ -notin $remote.id}) | Sort-Object -Unique)
 if(@($names|Where-Object {$_ -notin $expected}).Count){throw 'Deployment selection contains an unexpected function.'}
 $selector=($names|ForEach-Object {'functions:'+$_}) -join ','

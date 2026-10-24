@@ -31,10 +31,18 @@ test('homepage previews cap gallery at four, news and guests at three',()=>{cons
 test('English back label targets safe back span instead of first nav link',()=>{assert.ok(source.includes("document.querySelector('[data-safe-back] span')"));assert.ok(!source.includes("document.querySelector('.nav-actions a').textContent"));});
 test('cache notice is outside grid and is retained/hidden on renders',()=>{const nodes=new Map();let before=0;const grid={before:n=>{nodes.set('#catalogCacheNotice',n);before++;}};const context=vm.createContext({catalog:{cached:true},lang:'en',document:{querySelector:k=>nodes.get(k),createElement:()=>({setAttribute(){}})},$:()=>grid});vm.runInContext(source.slice(source.indexOf('function renderCacheNotice()'),source.indexOf('function render()')),context);context.renderCacheNotice();context.renderCacheNotice();assert.equal(before,1);assert.equal(nodes.get('#catalogCacheNotice').hidden,false);context.catalog.cached=false;context.renderCacheNotice();assert.equal(nodes.get('#catalogCacheNotice').hidden,true);});
 
-for (const route of ['/admin/','/worker/','/account/','/login/']) test(`offline protected page retry returns to ${route}`,async()=>{
+for (const route of ['/worker/','/account/','/login/']) test(`offline protected page retry returns to ${route}`,async()=>{
  const handlers={};let response;let cacheReads=0;
  const context=vm.createContext({URL,Response,fetch:async()=>{throw Error('offline');},caches:{match(){cacheReads++;}},self:{location:{origin:'https://qa.example.test'},addEventListener:(name,handler)=>handlers[name]=handler}});
  vm.runInContext(read('public/sw.js'),context);
  handlers.fetch({request:{url:'https://qa.example.test'+route,method:'GET',mode:'navigate'},respondWith:value=>response=value});
  const result=await response;assert.equal(result.status,503);assert.ok((await result.text()).includes(`href="${route}"`));assert.equal(cacheReads,0);
+});
+
+test('authorized offline admin serves only a previously cached static shell',async()=>{
+ const handlers={};let response;const cached=new Response('<html>cached static shell</html>');
+ const context=vm.createContext({URL,Response,fetch:async()=>{throw Error('offline');},caches:{match:async path=>{assert.equal(path,'/admin/');return cached;}},self:{location:{origin:'https://qa.example.test'},addEventListener:(name,handler)=>handlers[name]=handler}});
+ vm.runInContext(read('public/sw.js'),context);
+ handlers.fetch({request:{url:'https://qa.example.test/admin/',method:'GET',mode:'navigate'},respondWith:value=>response=value});
+ assert.equal(await (await response).text(),'<html>cached static shell</html>');
 });

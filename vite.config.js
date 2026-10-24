@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const siteUrl = (process.env.SITE_URL || "https://el-mezaen-talkha.vercel.app").replace(/\/$/, "");
 const siteOrigin = new URL(siteUrl).origin;
@@ -24,6 +25,15 @@ function normalizeRoute(req, res, next) {
 
 export default defineConfig({
   plugins: [{
+    name:'offline-admin-precache',
+    writeBundle(options,bundle) {
+      const assets=Object.keys(bundle).filter(name=>/\.(?:js|css|woff2?)$/.test(name)).map(name=>'/'+name);
+      const core=['/admin/','/firebase-config.js',...assets];
+      const version=createHash('sha256').update(JSON.stringify(core)).digest('hex').slice(0,16);
+      const path=resolve(options.dir||'dist','sw.js');
+      writeFileSync(path,readFileSync(path,'utf8').replace('production-20261023-1','offline-'+version).replace('/*__OFFLINE_ASSETS__*/ []',JSON.stringify(core)));
+    }
+  }, {
     name: "mpa-route-normalization",
     configureServer(server) { server.middlewares.use(localConfig); server.middlewares.use(normalizeRoute); },
     configurePreviewServer(server) { server.middlewares.use(normalizeRoute); }

@@ -1,3 +1,7 @@
+import {isOfflineMode} from './offline-connectivity.js';
+import {offlineDesk} from './admin-api.js';
+import {mountOfflineDesk} from './offline-admin-ui.js';
+let offlineDeskView;
 import {createSidebarController} from './admin-sidebar-controller.js';
 import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
 import {mountSelfAttendance,mountAttendanceManagement} from './staff-self-attendance.js';
@@ -305,6 +309,7 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
   if (id === "cash") tasks.push(loadCollection("staff"));
   if (["expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
   try { await Promise.all(tasks); } finally { activeSection?.classList.remove("section-loading"); }
+  if(id==='pos'&&!isOfflineMode()) await prepareOfflinePos();
   if (id === "mobileContent") renderMobileContent();
   if (id === "websiteContent") { $("#websiteSiteMedia").hidden=state.role!=="admin"; $("#websiteBrandMedia").hidden=state.role!=="admin"; $$('[data-cms-admin]').forEach(el=>el.hidden=state.role!=="admin"); refreshSiteMediaEditor((state.collections.get("settings")||[])[0]||{}); }
   if (id === "revenue" && state.role === "admin" && adminMobileViewport.matches) {
@@ -1063,7 +1068,9 @@ async function submitCloseShift(event) {
   if (!confirm("تأكيد إغلاق وردية الكاش؟")) return;
   await withButtonBusy(form.querySelector('[type="submit"]'), async () => {
     try {
+      if((await offlineDesk.list()).some(sale=>sale.status!=='confirmed'&&sale.payload.branchId===cashBranch()))throw new Error('لازم تتأكد مزامنة شيكات الجهاز قبل إغلاق وردية الخزنة');
       const result = await closeCashShift({ ...data, branchId: cashBranch(), actualCash: Number(data.actualCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
+      await offlineDesk.context({branchId:cashBranch(),shift:null,dateKey:cairoDateKey()}).catch(()=>toast('الوردية اتقفلت؛ تعذر تحديث نسخة الأوفلاين على الجهاز. جهّزه بالإنترنت قبل البيع',true));
       $("#closeShiftDialog").close(); form.reset(); form.dataset.key = "";
       await loadCashOperations();
       $("#shiftReportId").value = result.shiftId;
@@ -2029,6 +2036,16 @@ async function submitServiceTarget(event) {
   finally { button.disabled = false; button.removeAttribute("aria-busy"); }
 }
 
+async function prepareOfflinePos() {
+  try {
+    const branchId=$('#posBranch').value;
+    const result=await getCashOperations(branchId);
+    if(isOfflineMode())return; // Cached fallback must never renew online preparation.
+    const ownsShift=state.role!=='cashier'||result.shift?.cashierUid===state.user?.uid;
+    const usable=result.state?.status==='OPEN'&&!result.state?.pendingHandoverId&&result.shift?.status==='OPEN'&&result.shift.branchId===branchId&&ownsShift;
+    await offlineDesk.context({branchId,shift:usable?{id:result.shift.id,status:'OPEN'}:null,dateKey:cairoDateKey()});
+  }catch(error){toast('تجهيز الأوفلاين: '+error.message,true);}
+}
 function posCatalogItems() {
   const branchId = $("#posBranch")?.value || "talkha";
   const categories = new Map((state.collections.get("categories") || []).map(item => [item.id, item.nameAr || item.id]));
@@ -2143,6 +2160,7 @@ async function submitPosOrder(event) {
   state.posIdempotencyKey ||= crypto.randomUUID();
   try {
     if (state.posBookingId) {
+      if(isOfflineMode())throw new Error("تحصيل حجز سابق يحتاج اتصال؛ الأوفلاين يدعم الشيكات الجديدة فقط");
       const booking = state.dashboard.bookings.find(item => item.id === state.posBookingId);
       const result = await changeBooking(state.posBookingId, booking?.paymentStatus === "paid" ? "completed" : "checkout", $("#posPaymentMethod").value);
       if (booking) Object.assign(booking, { status: "completed", paymentStatus: "paid", paymentMethod: $("#posPaymentMethod").value, orderState: "PAID" });
@@ -2153,6 +2171,14 @@ async function submitPosOrder(event) {
       await refreshCashierOperations();
       await printReceipt(receiptId);
       return;
+    }
+    if(isOfflineMode()) {
+      const catalog=new Map(posCatalogItems().map(item=>[`${item.kind}:${item.id}`,item]));
+      const prices=state.posCart.map(line=>({id:line.id,kind:line.kind,qty:line.qty,unitPrice:catalog.get(`${line.kind}:${line.id}`)?.price,nameAr:catalog.get(`${line.kind}:${line.id}`)?.nameAr||line.id}));
+      await offlineDesk.enqueue({idempotencyKey:state.posIdempotencyKey,branchId:$('#posBranch').value,customer:{firstName:$('#posFirstName').value,lastName:$('#posLastName').value,phone:$('#posPhone').value},staffId:$('#posStaff').value,items:state.posCart.map(line=>({...line,workerId:line.workerId||$('#posStaff').value})),discountAmount:Number($('#posDiscount').value||0),couponCode:$('#posCouponCode')?.value.trim(),redeemPoints:Number($('#posRedeemPoints')?.value||0),redeemCashback:Number($('#posRedeemCashback')?.value||0),paymentMethod:$('#posPaymentMethod').value,paid:$('#posPaid').checked},prices);
+      resetPosDraft();toast('اتحفظ الشيك على الجهاز؛ في انتظار المزامنة. اطبعه من قسم الشيكات المنتظرة');
+      document.querySelector('#offlineSalesDesk').open=true;document.querySelector('#offlineSalesDesk').scrollIntoView({behavior:'smooth',block:'start'});
+      await offlineDeskView?.update();return;
     }
     const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), couponCode: $("#posCouponCode")?.value.trim(), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
     const receipt = result.receipt || { id: result.bookingCode, code: result.bookingCode, source: "pos", total: result.total, paymentStatus: result.paymentStatus, bookingDate: cairoDateKey(), createdAt: new Date().toISOString(), items: [] };
@@ -3429,7 +3455,10 @@ document.addEventListener("keydown", event => {
 });
 $("#adminTheme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
 $("#mobileThemeToggle")?.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
-$("#logoutButton").addEventListener("click", async () => { await logout(); location.replace("/login/"); });
+$("#logoutButton").addEventListener("click", async () => {
+  try{const pending=(await offlineDesk.list()).filter(sale=>sale.status!=='confirmed');if(pending.length&&!confirm(`فيه ${pending.length} شيك محفوظ على الجهاز ولسه مش متأكد على السيرفر. الشيكات هتفضل مرتبطة بالحساب ده وتحتاج تدخل بنفسه علشان تتزامن. تسجيل خروج؟`))return;}catch(error){if(!confirm('تعذر فحص الشيكات المحفوظة على الجهاز. الخروج قد يؤجل مزامنتها لحد دخول نفس الحساب بالإنترنت. تسجيل خروج؟'))return;}
+  await logout();location.replace('/login/');
+});
 $("#pushButton").addEventListener("click", event => handlePushButton(event.currentTarget));
 $("#mobilePushButton")?.addEventListener("click", event => requestAdminPush(event.currentTarget));
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
@@ -3567,7 +3596,7 @@ $("#dailyClosingForm [name=branchId]")?.addEventListener("change", syncDailyClos
 $("#openShiftForm [name=branchId]")?.addEventListener("change", () => loadCashOperations());
 $("#posMobileSummary").addEventListener("click", () => $("#pos").classList.add("mobile-ticket-open"));
 $("#posTicketClose").addEventListener("click", () => $("#pos").classList.remove("mobile-ticket-open"));
-$("#posBranch").addEventListener("change", () => { state.posCart = []; renderPos(); void loadPosOffers(); });
+$("#posBranch").addEventListener("change", () => { state.posCart = []; renderPos(); void loadPosOffers(); if(!isOfflineMode())void prepareOfflinePos(); });
 $("#posSectionFilter").addEventListener("change", () => { $("#posItemSearch").value = ""; renderPos(); });
 $("#posCategoryFilter").addEventListener("change", renderPos);
 $("#serviceCategoryFilter").addEventListener("change", () => renderCollection("services"));
@@ -3637,9 +3666,10 @@ $("#calendarDate").value = cairoDateKey();
 $("#attendanceDate").value = cairoDateKey();
 $("#dailyClosingForm [name=businessDate]").value = cairoDateKey();
 toggleExpenseInventory();
-const updateConnectionState = () => { const target = $("#connectionState"); if (!target) return; target.textContent = navigator.onLine ? "● متصل" : "● غير متصل"; target.classList.toggle("offline", !navigator.onLine); };
+const updateConnectionState = () => { const target = $("#connectionState"); if (!target) return; target.textContent = isOfflineMode() ? "● وضع الأوفلاين" : "● متصل"; target.classList.toggle("offline", isOfflineMode()); };
 window.addEventListener("online", updateConnectionState);
 window.addEventListener("offline", updateConnectionState);
+window.addEventListener("offline-mode-changed", updateConnectionState);
 window.addEventListener("popstate", event => {
   if (!state.user) return;
   const section = event.state?.adminSection || new URLSearchParams(location.hash.slice(1)).get("admin") || "workspaceHome";
@@ -3649,8 +3679,8 @@ window.addEventListener("popstate", event => {
 });
 updateConnectionState();
 if ("serviceWorker" in navigator) {
-  if (["localhost", "127.0.0.1"].includes(location.hostname)) navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(registrations.filter(item => new URL(item.scope).origin === location.origin).map(item => item.unregister()))).catch(() => {});
-  else if (location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => {});
+  if (["localhost", "127.0.0.1"].includes(location.hostname) && !new URLSearchParams(location.search).has("offlineQA")) navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(registrations.filter(item => new URL(item.scope).origin === location.origin).map(item => item.unregister()))).catch(() => {});
+  else if (location.protocol === "https:" || new URLSearchParams(location.search).has("offlineQA")) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 let dashboardRefreshTimer;
 async function bootstrapAdmin(user) {
@@ -3665,6 +3695,7 @@ async function bootstrapAdmin(user) {
       location.replace("/login/?reason=access");
       return;
     }
+    offlineDeskView ||= mountOfflineDesk({desk:offlineDesk,onError:error=>toast(error.message,true),prepare:async()=>{if(isOfflineMode())throw new Error('وصل الإنترنت قبل تجهيز الجهاز');await showSection('pos');}});
     state.user = user; state.role = access.role; state.staffId = access.staffId || ""; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = effectivePermissions(access.role, access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
     for(const id of ['headerBranchFilter','dashboardBranchFilter','calendarBranchFilter','attendanceBranch','taskBranch','reportBranch','auditBranch','expenseBranchFilter','serviceTargetBranchFilter','posBranch','campaignBranchFilter']) if($('#'+id)) $('#'+id).value=state.branchIds[0];
     $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"]').forEach(input => { input.value = user.email || ""; });
@@ -3743,7 +3774,7 @@ async function bootstrapAdmin(user) {
     }).then(unsub=>window.addEventListener('beforeunload',unsub,{once:true})).catch(()=>{});
     clearInterval(dashboardRefreshTimer);
     dashboardRefreshTimer = state.role === "worker" ? null : setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || navigator.onLine===false) return;
       if(state.role==="admin"&&!["dashboard","bookings","revenue","expenses"].includes(state.section))void loadTargetAchievementAlerts();
       if (state.section === "pos" || (state.section === "bookings" && state.role === "cashier")) loadCashierDashboard(true);
       else if (state.section === "calendar") loadCalendar(true);
@@ -3865,3 +3896,6 @@ document.addEventListener("change",event=>{
 },true);
 
 document.querySelector('#adminAlertsDialog')?.addEventListener('click',async()=>{if(state.role!=='admin')return;const branch=$('#headerBranchFilter').value,items=targetAchievementNotices.filter(x=>!x.read&&(branch==='all'||x.branchId===branch));if(!items.length)return;try{await markTargetAchievementNotificationsRead(items.map(x=>x.id));items.forEach(x=>x.read=true);renderAdminAlerts();}catch(error){toast(error.message||'تعذر حفظ قراءة الإشعار',true);}});
+
+let offlineRefreshTimer;
+window.addEventListener('offline-pos-confirmed',()=>{clearTimeout(offlineRefreshTimer);offlineRefreshTimer=setTimeout(()=>{if(navigator.onLine!==false)void refreshCashierOperations().catch(error=>toast(error.message,true));},1000);});

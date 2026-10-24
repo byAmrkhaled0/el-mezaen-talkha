@@ -1,6 +1,7 @@
 const VERSION = "production-20261023-1";
 const STATIC_CACHE = `el-mezaen-static-${VERSION}`;
 const RUNTIME_CACHE = `el-mezaen-runtime-${VERSION}`;
+const OFFLINE_CORE = /*__OFFLINE_ASSETS__*/ [];
 const CORE = [
   "/", "/manifest.webmanifest", "/admin-manifest.webmanifest",
   "/assets/el-mezaen-mark-v2.webp", "/assets/icon-192.png", "/assets/icon-512.png",
@@ -24,22 +25,29 @@ async function put(cacheName, request, response) {
 }
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(STATIC_CACHE).then(cache => Promise.allSettled(CORE.map(url => cache.add(url)))));
+  event.waitUntil(caches.open(STATIC_CACHE).then(async cache => {await cache.addAll(OFFLINE_CORE); await Promise.allSettled(CORE.map(url => cache.add(url)));}));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => ![STATIC_CACHE, RUNTIME_CACHE].includes(key)).map(key => caches.delete(key)))));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("el-mezaen-") && ![STATIC_CACHE, RUNTIME_CACHE].includes(key)).map(key => caches.delete(key)))));
   self.clients.claim();
 });
 
 self.addEventListener("fetch", event => {
   const request = event.request;
   if (request.method !== "GET") return;
-  if (["localhost", "127.0.0.1"].includes(new URL(request.url).hostname)) return;
+  if (["localhost", "127.0.0.1"].includes(new URL(request.url).hostname) && OFFLINE_CORE.length === 0) return;
+  // Only built previews have a complete offline precache manifest.
+
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.hostname.includes("googleapis.com") || url.hostname.includes("cloudfunctions.net")) return;
 
+  if(request.mode === 'navigate' && /^\/admin(?:\/|$)/.test(url.pathname)) {
+    // Static shell only. No authenticated API responses enter CacheStorage.
+    event.respondWith(fetch(request).then(async response=>{await put(STATIC_CACHE,'/admin/',response);return response;}).catch(async()=>await caches.match('/admin/')||new Response('افتح لوحة الإدارة أثناء الاتصال أولًا',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}})));
+    return;
+  }
   const sensitiveNavigation = request.mode === "navigate" && (url.pathname.startsWith("/admin") || url.pathname.startsWith("/worker") || url.pathname.startsWith("/login") || url.pathname.startsWith("/account"));
   if (sensitiveNavigation) {
     const retryPath = url.pathname.startsWith("/worker") ? "/worker/" : url.pathname.startsWith("/account") ? "/account/" : url.pathname.startsWith("/login") ? "/login/" : "/admin/";
@@ -48,7 +56,7 @@ self.addEventListener("fetch", event => {
   }
 
   if (url.pathname === "/firebase-config.js") {
-    event.respondWith(fetch(request, { cache: "no-store" }));
+    event.respondWith(fetch(request, {cache:"no-store"}).then(async response=>{await put(STATIC_CACHE,request,response);return response;}).catch(async()=>await caches.match(request)||Response.error()));
     return;
   }
 
@@ -96,4 +104,9 @@ self.addEventListener("notificationclick", event => {
     const existing = list.find(client => client.url.startsWith(self.location.origin));
     return existing ? existing.focus().then(() => existing.navigate(targetUrl)) : self.clients.openWindow(targetUrl);
   }));
+});
+
+self.addEventListener('message',event=>{
+  if(event.data?.type!=='OFFLINE_READY')return;
+  event.waitUntil((async()=>{const cache=await caches.open(STATIC_CACHE);const present=await Promise.all(OFFLINE_CORE.map(url=>cache.match(url)));event.ports[0]?.postMessage({ready:OFFLINE_CORE.length>0&&present.every(Boolean),version:VERSION});})());
 });

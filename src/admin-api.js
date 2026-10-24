@@ -1,3 +1,6 @@
+import {isOfflineMode,setDeviceOffline} from './offline-connectivity.js';
+import {createOfflineStore} from './offline-pos-store.js';
+import {createOfflinePos,OFFLINE_TTL,transientFailure} from './offline-pos.js';
 import {createReadCoordinator} from './admin-read-coordinator.js';
 import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
@@ -82,8 +85,20 @@ export async function currentRole(user) {
 }
 
 export async function currentAccess(user) {
-  const token = await user.getIdTokenResult(true);
-  await ensureAdminAppCheckReady();
+  if(isOfflineMode()) {
+    const cached=await offlineStore.get(`${config.projectId}:${user.uid}`,'access','current');
+    if(!cached||Date.now()-cached.savedAt>OFFLINE_TTL)throw new Error('افتح الحساب بالإنترنت أولًا لتجهيز جلسة أوفلاين حديثة');
+    return {...cached.access,offline:true};
+  }
+
+  let token;
+  try {token=await user.getIdTokenResult(true);await ensureAdminAppCheckReady();}
+  catch(error){
+    if(!transientFailure(error))throw error;
+    const cached=await offlineStore.get(`${config.projectId}:${user.uid}`,'access','current');
+    if(!cached||Date.now()-cached.savedAt>OFFLINE_TTL)throw error;
+    setDeviceOffline(true);return {...cached.access,offline:true};
+  }
   const role = token.claims.role || null;
   let permissions = Array.isArray(token.claims.permissions) ? token.claims.permissions : [];
   const branchIds = Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [];
@@ -94,7 +109,11 @@ export async function currentAccess(user) {
     } catch { /* Optional marketing access fails closed; normal operations retain their claims. */ }
     permissions = permissions.filter(value => (role === "cashier" && ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].includes(value)) || (role === "manager" && value === "campaigns") ? grants.includes(value) : true);
   }
-  return { role, staffId: token.claims.staffId || null, permissions, branchIds, mustChangePassword: token.claims.mustChangePassword === true };
+  const access = { role, staffId: token.claims.staffId || null, permissions, branchIds, mustChangePassword: token.claims.mustChangePassword === true };
+  const previousAccess=await offlineStore.get(`${config.projectId}:${user.uid}`,'access','current').catch(()=>null);
+  if(previousAccess&&JSON.stringify(previousAccess.access)!==JSON.stringify(access))await offlineStore.clearCached(`${config.projectId}:${user.uid}`);
+  await offlineStore.put(`${config.projectId}:${user.uid}`,'access','current',{access,savedAt:Date.now()}).catch(()=>{});
+  return access;
 }
 
 export async function logout() {
@@ -113,14 +132,15 @@ export async function logout() {
   await signOut(auth);
 }
 
-async function call(name, data = {}) {
+async function call(name, data = {}, {probe=false} = {}) {
   if (!configured) throw new Error("FIREBASE_NOT_CONFIGURED");
-  if (navigator.onLine === false) throw new Error("أنت غير متصل بالإنترنت");
+  if (navigator.onLine === false || (!probe && isOfflineMode())) throw new Error("أنت غير متصل بالإنترنت؛ العملية تحتاج اتصالًا بالسيرفر");
   try {
     await ensureAdminAppCheckReady();
     const invoke = httpsCallable(functions, name, { timeout: 30000 });
     const result = await retryAuthenticatedCall(invoke, data, auth, signOut, () => ensureAdminAppCheckReady(true));
     assertBackendCompatibility(result.data);
+    if(probe)setDeviceOffline(false);
     return result.data;
   } catch (error) {
     if (isAppCheckFailure(error)) throw appCheckError(error);
@@ -132,7 +152,7 @@ async function call(name, data = {}) {
       "unauthenticated-with-valid-auth": "تعذر التحقق من طلب الإدارة رغم صلاحية جلسة الدخول؛ أعد المحاولة أو تحقق من App Check.",
       "permission-denied": original.toLowerCase().includes("app check") ? "تعذر التحقق من حماية التطبيق؛ حدّث الصفحة ثم حاول مرة أخرى" : "لا تملك صلاحية تنفيذ هذه العملية",
       "invalid-argument": "راجع البيانات المدخلة ثم حاول مرة أخرى",
-      "failed-precondition": "لا يمكن تنفيذ العملية بحالتها الحالية",
+      "failed-precondition": original || "لا يمكن تنفيذ العملية بحالتها الحالية",
       "not-found": "السجل المطلوب غير موجود أو تم حذفه",
       "already-exists": "تم تسجيل هذه العملية من قبل",
       "resource-exhausted": "محاولات كثيرة؛ انتظر قليلًا ثم حاول مرة أخرى",
@@ -146,7 +166,34 @@ async function call(name, data = {}) {
 
 // Share only concurrent reads; never cache successful business data or writes.
 const coordinatedRead = createReadCoordinator(call, {identity: () => auth?.currentUser?.uid || 'anonymous'});
-async function readCall(name, data = {}) { return coordinatedRead(name, data); }
+const offlineStore=createOfflineStore();
+async function offlineShellReady() {
+  const controller=navigator.serviceWorker?.controller;if(!controller)return false;
+  return new Promise(resolve=>{const channel=new MessageChannel();const timer=setTimeout(()=>{channel.port1.close();resolve(false);},4000);channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();resolve(event.data?.ready===true);};controller.postMessage({type:'OFFLINE_READY'},[channel.port2]);});
+}
+export const offlineDesk=createOfflinePos({store:offlineStore,ready:offlineShellReady,identity:()=>auth?.currentUser?`${config.projectId}:${auth.currentUser.uid}`:null,invoke:payload=>call('syncOfflinePosOrder',payload,{probe:true}),changed:()=>window.dispatchEvent(new Event('offline-pos-changed'))});
+const offlineReads=new Set(['getAdminDashboard','getCashierSnapshot','getBusinessDashboard','getCashOperations','getBookingCalendar','getPosOffers','getAdminCollection']);
+const offlineCollections=new Set(['categories','services','packages','staff','inventoryItems','drinks','branches']);
+async function readCall(name, data = {}) {
+  const owner=auth?.currentUser?`${config.projectId}:${auth.currentUser.uid}`:null;
+  const eligible=owner&&offlineReads.has(name)&&(name!=='getAdminCollection'||offlineCollections.has(data.collection));
+  const key=JSON.stringify([name,Object.fromEntries(Object.entries(data).sort(([a],[b])=>a.localeCompare(b)))]);
+  if(isOfflineMode()&&eligible){
+    const cached=await offlineStore.get(owner,'read',key);
+    if(!cached||Date.now()-cached.savedAt>OFFLINE_TTL)throw new Error('لا توجد نسخة حديثة من بيانات القسم على الجهاز؛ افتحه أثناء الاتصال أولًا');
+    return cached.value;
+  }
+  let value;
+  try {value=await coordinatedRead(name,data);}
+  catch(error){
+    if(!eligible||!transientFailure(error))throw error;
+    const cached=await offlineStore.get(owner,'read',key);
+    if(!cached||Date.now()-cached.savedAt>OFFLINE_TTL)throw error;
+    setDeviceOffline(true);return cached.value;
+  }
+  if(eligible&&JSON.stringify(value).length<1500000)await offlineStore.put(owner,'read',key,{value,savedAt:Date.now()}).catch(()=>{});
+  return value;
+}
 
 export const getDashboard = (branchId = "all") => readCall("getAdminDashboard", { branchId });
 export const getOwnerMobileHistory = options => readCall("getOwnerMobileHistory", options);

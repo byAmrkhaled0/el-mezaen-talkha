@@ -1,3 +1,4 @@
+import {offlinePosProtocol} from './offline-pos-protocol.js';
 import {monthLedgerPages} from './month-ledger-pages.js';
 import {staffSelfAttendanceHandlers} from './staff-self-attendance.js';
 import {attendanceShiftEngine} from './attendance-shift-engine.js';
@@ -2664,6 +2665,19 @@ export const createPosOrder = onCall(adminOptions, async request => {
   if (!/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "تعذر تأمين الطلب؛ حدّث الصفحة وحاول مرة أخرى");
   const branch = await readBranch(request.data?.branchId);
   requireBranchAccess(request, branch.id);
+  // OFFLINE_POS_BEGIN: validate immutable retry before catalog checks.
+  const offlineProtocol = offlinePosProtocol({HttpsError});
+  const offlineOrder = offlineProtocol.parse(request.data);
+  if (offlineOrder) {
+    const prior = await db.doc(`posOrderGuards/${hash(`${request.auth.uid}|${idempotencyKey}`)}`).get();
+    if (prior.exists) {
+      offlineProtocol.match(offlineOrder, prior.data());
+      const receipt = await db.doc(`bookings/${sanitizeText(prior.data().bookingCode,100)}`).get();
+      return {ok:true,bookingCode:prior.data().bookingCode,total:prior.data().total,paymentStatus:prior.data().paymentStatus,idempotent:true,receipt:receipt.exists?cleanDoc(receipt):null};
+    }
+  }
+  // OFFLINE_POS_END
+
   const customer = {
     firstName: sanitizeText(request.data?.customer?.firstName, 50),
     lastName: sanitizeText(request.data?.customer?.lastName, 50),
@@ -2712,6 +2726,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
   return db.runTransaction(async transaction => {
     const existingGuard = await transaction.get(idempotencyRef);
     if (existingGuard.exists) {
+      if (offlineOrder) offlineProtocol.match(offlineOrder, existingGuard.data());
       const existingCode = sanitizeText(existingGuard.data().bookingCode, 100);
       const existingReceipt = existingCode ? await transaction.get(db.doc(`bookings/${existingCode}`)) : null;
       return { ok: true, bookingCode: existingCode, total: existingGuard.data().total, paymentStatus: existingGuard.data().paymentStatus, idempotent: true, receipt: existingReceipt?.exists ? cleanDoc(existingReceipt) : null };
@@ -2761,6 +2776,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
     const closingSnapshot = await transaction.get(db.doc(`dailyClosings/${branch.id}_${dateKey}`));
     if (closingSnapshot.exists) throw new HttpsError("failed-precondition", "تم إغلاق يوم الفرع؛ لا يمكن إضافة شيك مالي لهذا التاريخ");
     const activeShift = paid ? await ledgerShiftInTransaction(transaction, branch.id, method === "cash" && settings.cashDrawerEnabled === true, request) : null;
+    if (offlineOrder) offlineProtocol.check(offlineOrder, {items, total:beforeWalletTotal, activeShift, dateKey});
     const cashShiftRef = method === "cash" && activeShift ? activeShift.ref : null;
     const cashShift = cashShiftRef ? activeShift.snapshot : null;
     const requestedPoints=Math.max(0,Math.floor(Number(request.data?.redeemPoints||0)));const requestedCashback=Math.max(0,Math.round(Number(request.data?.redeemCashback||0)*100)/100);const pointValue=Math.max(0,Number(settings.pointValue||0.1));const redemptionValue=requestedPoints*pointValue+requestedCashback;const maxRedemption=beforeWalletTotal*Math.max(0,Math.min(100,Number(settings.maximumRedemptionPercent||0)))/100;
@@ -2771,6 +2787,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
     const targetEntries = serviceTargetEntries(publicItems);
     const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, manualDiscountAmount, couponDiscountAmount, couponCode: couponCode || null, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, updatedAt: now, paidAt: paid ? now : null };
     Object.assign(bookingRecord, receiptActor(request), {createdAt:now});
+    if (offlineOrder) Object.assign(bookingRecord,{offlineOperationId:idempotencyKey,offlineShiftId:offlineOrder.shiftId,offlineSyncedAt:now});
     if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
     transaction.create(bookingRef, bookingRecord);
     transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
@@ -2793,7 +2810,7 @@ export const createPosOrder = onCall(adminOptions, async request => {
       transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
       transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId: branch.id, bookingId: code, quantity: -item.qty, type: "sale", dateKey, createdAt: now, createdBy: request.auth.uid });
     });
-    transaction.create(idempotencyRef, { bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", branchId: branch.id, createdBy: request.auth.uid, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+    transaction.create(idempotencyRef, { bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", branchId: branch.id, createdBy: request.auth.uid, createdAt: now, ...(offlineOrder ? {offlineFingerprint:offlineOrder.fingerprint} : {expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000)}) });
     transaction.set(activityRef, { action: "create-pos-order", collection: "bookings", entityId: code, entityType: "booking", branchId: branch.id, actorUid: request.auth.uid, actorRole: request.auth.token.role, userId: request.auth.uid, userEmail: request.auth.token.email || "", createdAt: now });
     const clientTimestamp = new Date().toISOString();
     return { ok: true, bookingCode: code, total, paymentStatus: paid ? "paid" : "unpaid", receipt: { id: code, ...bookingRecord, createdAt: clientTimestamp, updatedAt: clientTimestamp, paidAt: paid ? clientTimestamp : null } };
@@ -2804,6 +2821,13 @@ export const createPosOrder = onCall(adminOptions, async request => {
     console.error(JSON.stringify({ severity: "ERROR", event: "pos_finalize", ok: false, durationMs: Date.now() - operationStarted, branchId: branch.id, code: error.code || "internal" }));
     throw error;
   });
+});
+
+export const syncOfflinePosOrder = onCall(adminOptions, async request => {
+  // Dedicated endpoint keeps older deployments from ignoring the offline contract.
+  if (!request.data?.offline) throw new HttpsError('invalid-argument','بيانات الشيك الأوفلاين مطلوبة');
+  const result=await createPosOrder.run(request);
+  return {...result,offlineVersion:1,offlineOperationId:request.data.idempotencyKey};
 });
 
 export const recordPayrollPayment = onCall(adminOptions, payrollPosting({ db, FieldValue, HttpsError, calculatePayroll, calculateExpectedCash, nextMonthKey, businessDateParts, sanitizeText, requireLiveStaff, requirePermission, requireBranchAccess, branchesFor, allResourceBranchesAllowed }));

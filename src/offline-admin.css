@@ -1,0 +1,34 @@
+.offline-desk{scroll-margin-top:80px;margin:12px 20px;padding:14px 18px;border:1px solid var(--border,#678293);border-radius:16px;background:var(--panel,#fff);color:var(--text,#173342)}
+[data-theme="dark"] .offline-desk{background:#142838;color:#edf5fa;border-color:#648399}
+.offline-desk summary{cursor:pointer;font-weight:700;min-height:36px;align-content:center}
+.offline-desk[data-pending="true"]{border-inline-start:5px solid #e3a323}
+.offline-desk p{font-size:14px;line-height:1.7;color:inherit}
+.offline-sales-list{max-height:420px;overflow:auto;display:grid;gap:10px}
+.offline-sales-list article{padding:12px;border:1px solid #708c9d;border-radius:12px;overflow-wrap:anywhere}
+.offline-sales-list button{margin:4px;min-height:44px}
+@media(max-width:600px){.offline-desk{margin:8px;padding:12px}.offline-sales-list strong{font-size:13px}}
+.offline-readiness{padding:10px 12px;border-inline-start:4px solid #af7618;background:#fff1d2;color:#563d07!important;border-radius:8px}
+.offline-readiness[data-ready="true"]{border-color:#23845d;background:#dff5e9;color:#155a3e!important}
+[data-theme="dark"] .offline-readiness{background:#3c301b;color:#ffe4a5!important}
+[data-theme="dark"] .offline-readiness[data-ready="true"]{background:#153c30;color:#bdf0d4!important}
+.offline-receipt-dialog{box-sizing:border-box;width:min(92vw,520px);max-height:90dvh;padding:24px;border:1px solid #678293;border-radius:18px;background:#fff!important;color:#132c3c!important;overflow:auto;font:15px/1.7 system-ui;text-align:right;overflow-wrap:anywhere}
+.offline-receipt-dialog::backdrop{background:rgb(0 12 20 / .7)}
+.offline-receipt-brand{text-align:center;font-size:24px;font-weight:800;margin:0}
+.offline-receipt-dialog h2{font-size:19px;color:#132c3c!important}
+.offline-receipt-notice{padding:10px;background:#fff1d2;color:#563d07!important;border-radius:8px;font-weight:700}
+.offline-receipt-dialog table{border-collapse:collapse;width:100%!important;min-width:0!important;table-layout:fixed;font-size:13px}
+.offline-receipt-dialog th,.offline-receipt-dialog td{padding:8px 4px;border-bottom:1px solid #c6d1d8;background:#fff!important;color:#132c3c!important;vertical-align:top;white-space:normal!important;overflow-wrap:anywhere;width:auto!important}
+.offline-receipt-total{font-size:18px;font-weight:800}
+.offline-receipt-footer{font-size:12px}
+.offline-receipt-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.offline-receipt-actions button{min-height:44px;background:#173f54!important;color:#fff!important;border:1px solid #173f54!important}
+@media print{
+ @page offlinePosReceipt{size:auto;margin:3mm}
+ body.printing-offline-receipt{page:offlinePosReceipt;background:#fff!important;color:#000!important;overflow:visible!important}
+ body.printing-offline-receipt>:not(.offline-receipt-dialog){display:none!important}
+ body.printing-offline-receipt .offline-receipt-dialog{position:static!important;display:block!important;box-sizing:border-box;width:76mm;max-width:100%;max-height:none!important;margin:0 auto;padding:2mm;border:0;border-radius:0;overflow:visible!important;box-shadow:none;background:#fff!important;color:#000!important;font-size:11px}
+ body.printing-offline-receipt .offline-receipt-dialog,body.printing-offline-receipt .offline-receipt-dialog *{visibility:visible!important}
+ body.printing-offline-receipt .offline-receipt-dialog::backdrop{display:none!important}
+ body.printing-offline-receipt .offline-receipt-actions,body.printing-offline-receipt .offline-receipt-print-status{display:none!important}
+ body.printing-offline-receipt .offline-receipt-dialog tr{break-inside:avoid}
+}
