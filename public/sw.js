@@ -41,6 +41,8 @@ self.addEventListener("fetch", event => {
   // Only built previews have a complete offline precache manifest.
 
   const url = new URL(request.url);
+  // A cached heartbeat would hide a router/WAN outage from the cashier.
+  if(url.origin===self.location.origin&&url.pathname==='/connection-check.txt'){event.respondWith(fetch(request,{cache:'no-store'}));return;}
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.hostname.includes("googleapis.com") || url.hostname.includes("cloudfunctions.net")) return;
 
   if(request.mode === 'navigate' && /^\/admin(?:\/|$)/.test(url.pathname)) {

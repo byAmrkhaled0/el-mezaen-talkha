@@ -28,3 +28,76 @@
 .attendance-admin-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.attendance-person{display:grid;grid-template-columns:minmax(150px,1fr) 180px auto auto;gap:14px;align-items:end;margin-bottom:12px}.attendance-person small{display:block;color:var(--muted,#597180);margin-top:8px}.attendance-person input{width:100%}
 .attendance-workspace .self-attendance-actions{display:flex;gap:10px;flex-wrap:wrap}.attendance-workspace .self-attendance-actions button{flex:1}
 @media(max-width:700px){.attendance-current{grid-template-columns:1fr;padding:16px}.attendance-metrics{grid-template-columns:1fr}.attendance-person{grid-template-columns:1fr 1fr}.attendance-person>div{grid-column:1/-1}.attendance-person label{grid-column:1/-1}.attendance-history{padding:14px}.attendance-workspace{padding:12px}}
+
+/* Attendance uses its own explicit palette across admin and worker shells. */
+.attendance-workspace{--att-surface:#fff;--att-soft:#f3f7fa;--att-line:#dbe6ed;--att-ink:#183447;--att-muted:#536a7b;--att-accent:#087f88;--att-positive:#18674d;color:var(--att-ink);padding:clamp(12px,2vw,24px)}
+[data-theme=dark] .attendance-workspace{--att-surface:#132a39;--att-soft:#0d2230;--att-line:#355262;--att-ink:#edf5fa;--att-muted:#aec3d1;--att-accent:#55d3d2;--att-positive:#a2e8c5}
+.attendance-workspace :is(.attendance-current,.attendance-history,.attendance-person,.attendance-metrics article){background:var(--att-surface);border-color:var(--att-line);color:var(--att-ink);box-shadow:0 2px 6px #071c3410}
+.attendance-workspace :is(.attendance-heading p,.attendance-heading small,.attendance-help,.attendance-history small,.attendance-controls small,.attendance-tap-hint,.attendance-person small){color:var(--att-muted)}
+.attendance-workspace :is(input,select,button){background:var(--att-surface);border-color:var(--att-line);color:var(--att-ink);font-size:14px;line-height:1.5}
+.attendance-workspace :is(input,select,button):focus-visible{outline:3px solid var(--att-accent);outline-offset:3px}
+.attendance-workspace button:not(:disabled):hover{border-color:var(--att-accent)}
+.attendance-current{grid-template-columns:minmax(220px,.8fr) minmax(260px,1.2fr);gap:clamp(24px,4vw,64px);padding:clamp(24px,3vw,40px)}
+.attendance-tap-area{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;padding:8px 16px}
+.attendance-state-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--att-line);border-radius:24px;background:var(--att-soft);padding:6px 12px;font-size:12px;font-weight:700;color:var(--att-positive)}
+.attendance-state-pill::before{content:'';width:6px;height:6px;background:currentColor;border-radius:50%}
+#staffSelfAttendance.attendance-workspace .attendance-tap-area button.attendance-fingerprint{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;width:188px;height:188px;min-height:188px;flex:none;padding:22px;border-radius:50%;border:1px solid #7fc7cb;background:linear-gradient(145deg,#effbfa,#daeeef);color:#076d76;box-shadow:0 10px 30px #087f881a;font-weight:800;opacity:1;transition:box-shadow .2s,border-color .2s}
+.attendance-fingerprint::before{content:'';position:absolute;inset:-9px;border:1px solid var(--att-line);border-radius:50%;pointer-events:none}
+.attendance-fingerprint svg{width:76px;height:76px;flex:none}
+.attendance-fingerprint span{font-size:14px;line-height:1.6;max-width:150px}
+#staffSelfAttendance.attendance-workspace .attendance-tap-area button.attendance-fingerprint{border-radius:50%!important;background:linear-gradient(145deg,#effbfa,#daeeef)!important;color:#076d76!important;border-color:#7fc7cb!important;opacity:1!important}
+[data-theme=dark] #staffSelfAttendance.attendance-workspace .attendance-tap-area button.attendance-fingerprint{background:linear-gradient(145deg,#163e49,#12333e)!important;color:#86e4e1!important;border-color:#42868c!important;box-shadow:0 10px 30px #0002}
+#staffSelfAttendance.attendance-workspace[data-attendance-state=present] .attendance-tap-area button.attendance-fingerprint,#staffSelfAttendance.attendance-workspace[data-attendance-state=completed] .attendance-tap-area button.attendance-fingerprint{border-color:#6bad91!important;background:#e4f5ec!important;color:#196447!important;box-shadow:none}
+[data-theme=dark] #staffSelfAttendance.attendance-workspace:is([data-attendance-state=present],[data-attendance-state=completed]) .attendance-tap-area button.attendance-fingerprint{background:#173e34!important;color:#b5edcd!important;border-color:#447e65!important}
+.attendance-workspace:is([data-attendance-state=locating],[data-attendance-state=confirming]) .attendance-fingerprint::before{border:2px solid transparent;border-top-color:var(--att-accent);border-inline-end-color:var(--att-accent);animation:attendance-ring 1.2s linear infinite}
+.attendance-tap-hint{max-width:250px;margin:0;font-size:13px;line-height:1.8}
+.attendance-current-title strong{font-size:clamp(20px,2vw,26px);margin:4px 0 12px;line-height:1.6}
+.attendance-today-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.attendance-today-times>div{background:var(--att-soft);border:1px solid var(--att-line);border-radius:12px;padding:12px 14px}
+.attendance-today-times b{display:block;font-size:20px;margin-top:4px;font-variant-numeric:tabular-nums;unicode-bidi:plaintext}
+.attendance-controls>p{margin:0;color:var(--att-muted);font-size:13px}
+.attendance-controls .attendance-countdown{color:var(--att-positive);font-weight:700}
+.attendance-workspace .self-attendance-actions{display:grid;grid-template-columns:1fr;gap:8px}
+.attendance-workspace [data-self-out]{background:var(--att-soft);color:var(--att-ink);font-weight:700}
+.attendance-workspace [data-self-push]{font-size:12px;border-color:transparent;color:var(--att-muted);background:transparent;padding-block:8px}
+.attendance-workspace [data-self-error]:empty{display:none}
+.attendance-workspace [data-self-error]:not(:empty){border:1px solid var(--att-line);background:var(--att-soft);border-radius:12px;padding:12px 16px}
+.attendance-history{margin-top:20px}
+.attendance-history h3{margin:4px 0;font-size:18px}
+.attendance-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.attendance-metrics article{padding:14px;background:var(--att-soft)!important;box-shadow:none!important}
+.attendance-metrics small{font-size:12px;line-height:1.7}
+.attendance-metrics b{font-size:clamp(17px,2vw,24px);line-height:1.6;overflow-wrap:anywhere}
+.attendance-workspace .attendance-table-wrap :is(th,td){border-color:var(--att-line);font-size:13px;line-height:1.7;color:var(--att-ink)}
+.attendance-workspace .attendance-table-wrap th{background:var(--att-soft)}
+.attendance-workspace .attendance-help{font-size:12px;line-height:1.8}
+.attendance-history-note{margin-block:14px;color:var(--att-muted);font-size:12px}
+.attendance-history-note>summary{cursor:pointer;min-height:44px;align-content:center}
+@keyframes attendance-ring{to{transform:rotate(360deg)}}
+@media(max-width:700px){
+ .attendance-current{grid-template-columns:1fr;padding:24px 16px;gap:28px}
+ .attendance-tap-area{gap:22px;padding:0}
+ #staffSelfAttendance.attendance-workspace .attendance-tap-area button.attendance-fingerprint{width:160px;height:160px;min-height:160px;padding:18px;gap:8px}
+ .attendance-fingerprint svg{width:64px;height:64px}
+ .attendance-heading{align-items:start;gap:12px;margin-bottom:16px}
+ .attendance-heading h2{font-size:21px}
+ .attendance-heading p{font-size:13px}
+ .attendance-heading button{font-size:12px;padding-inline:12px}
+ .attendance-history>header{align-items:center;gap:12px}
+ .attendance-history>header label{width:100%;grid-template-columns:auto minmax(0,1fr);align-items:center}
+ .attendance-metrics{gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .attendance-metrics article{padding:10px 8px;border-radius:12px}
+ .attendance-metrics small{font-size:11px}
+ .attendance-metrics b{font-size:17px}
+ .attendance-person{gap:10px;padding:16px}
+ .attendance-workspace .attendance-table-wrap{overflow:visible}
+ .attendance-workspace .attendance-table-wrap table{display:block;min-width:0!important;width:100%;table-layout:auto}
+ .attendance-workspace .attendance-table-wrap thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .attendance-workspace .attendance-table-wrap tbody{display:grid;gap:12px}
+ .attendance-workspace .attendance-table-wrap tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px;background:var(--att-soft);border:1px solid var(--att-line);border-radius:12px}
+ .attendance-workspace .attendance-table-wrap td{display:block;min-width:0;width:auto!important;border:0;padding:0;white-space:normal;overflow-wrap:anywhere}
+ #staffSelfAttendance.attendance-workspace .attendance-table-wrap tbody tr td{background:transparent!important}
+ .attendance-workspace .attendance-table-wrap td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--att-muted);margin-bottom:4px}
+ .attendance-workspace .attendance-table-wrap td:last-child,.attendance-workspace .attendance-table-wrap td[colspan]{grid-column:1/-1}
+}
+@media(prefers-reduced-motion:reduce){.attendance-fingerprint,.attendance-fingerprint::before{animation:none!important;transition:none!important}}

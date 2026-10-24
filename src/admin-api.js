@@ -143,6 +143,7 @@ async function call(name, data = {}, {probe=false} = {}) {
     if(probe)setDeviceOffline(false);
     return result.data;
   } catch (error) {
+    if(transientFailure(error))setDeviceOffline(true);
     if (isAppCheckFailure(error)) throw appCheckError(error);
     const code = String(error?.code || "").replace(/^functions\//, "");
     const original = String(error?.message || "");
@@ -172,6 +173,10 @@ async function offlineShellReady() {
   return new Promise(resolve=>{const channel=new MessageChannel();const timer=setTimeout(()=>{channel.port1.close();resolve(false);},4000);channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();resolve(event.data?.ready===true);};controller.postMessage({type:'OFFLINE_READY'},[channel.port2]);});
 }
 export const offlineDesk=createOfflinePos({store:offlineStore,ready:offlineShellReady,identity:()=>auth?.currentUser?`${config.projectId}:${auth.currentUser.uid}`:null,invoke:payload=>call('syncOfflinePosOrder',payload,{probe:true}),changed:()=>window.dispatchEvent(new Event('offline-pos-changed'))});
+export async function probeOfflineBackend(branchId){
+  try{await call('getCashOperations',{branchId,includeReports:false},{probe:true});return true;}
+  catch(error){return !transientFailure(error);}
+}
 const offlineReads=new Set(['getAdminDashboard','getCashierSnapshot','getBusinessDashboard','getCashOperations','getBookingCalendar','getPosOffers','getAdminCollection']);
 const offlineCollections=new Set(['categories','services','packages','staff','inventoryItems','drinks','branches']);
 async function readCall(name, data = {}) {

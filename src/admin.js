@@ -1,7 +1,12 @@
-import {isOfflineMode} from './offline-connectivity.js';
-import {offlineDesk} from './admin-api.js';
+import {isOfflineMode,createConnectionMonitor,networkReachable} from './offline-connectivity.js';
+import {offlineDesk,probeOfflineBackend} from './admin-api.js';
 import {mountOfflineDesk} from './offline-admin-ui.js';
 let offlineDeskView;
+let offlineConnectionMonitor,offlinePreparationBusy=false;
+window.addEventListener('online',()=>void offlineConnectionMonitor?.check());
+window.addEventListener('offline',()=>void offlineConnectionMonitor?.check());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void offlineConnectionMonitor?.check();});
+navigator.serviceWorker?.addEventListener('controllerchange',()=>void automaticallyPrepareOffline());
 import {createSidebarController} from './admin-sidebar-controller.js';
 import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
 import {mountSelfAttendance,mountAttendanceManagement} from './staff-self-attendance.js';
@@ -1028,7 +1033,7 @@ async function submitOpenShift(event) {
   const data = Object.fromEntries(new FormData(form));
   if (state.role === "cashier") data.branchId = state.branchIds[0];
   await withButtonBusy(form.querySelector('[type="submit"]'), async () => {
-    try { await openCashShift({ ...data, openingCash: Number(data.openingCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() }); $("#openShiftDialog").close(); form.reset(); form.elements.branchId.value = cashBranch(); form.dataset.key = ""; await loadCashOperations(); toast("تم فتح الوردية"); }
+    try { await openCashShift({ ...data, openingCash: Number(data.openingCash), idempotencyKey: form.dataset.key ||= crypto.randomUUID() }); $("#openShiftDialog").close(); form.reset(); form.elements.branchId.value = cashBranch(); form.dataset.key = ""; await loadCashOperations(); void automaticallyPrepareOffline(); toast("تم فتح الوردية"); }
     catch (error) { toast(error.message || "تعذر فتح الوردية", true); }
   });
 }
@@ -2036,7 +2041,7 @@ async function submitServiceTarget(event) {
   finally { button.disabled = false; button.removeAttribute("aria-busy"); }
 }
 
-async function prepareOfflinePos() {
+async function prepareOfflinePos({silent=false}={}) {
   try {
     const branchId=$('#posBranch').value;
     const result=await getCashOperations(branchId);
@@ -2044,7 +2049,16 @@ async function prepareOfflinePos() {
     const ownsShift=state.role!=='cashier'||result.shift?.cashierUid===state.user?.uid;
     const usable=result.state?.status==='OPEN'&&!result.state?.pendingHandoverId&&result.shift?.status==='OPEN'&&result.shift.branchId===branchId&&ownsShift;
     await offlineDesk.context({branchId,shift:usable?{id:result.shift.id,status:'OPEN'}:null,dateKey:cairoDateKey()});
-  }catch(error){toast('تجهيز الأوفلاين: '+error.message,true);}
+  }catch(error){if(!silent)toast('تجهيز الأوفلاين: '+error.message,true);}
+}
+async function automaticallyPrepareOffline(){
+  if(offlinePreparationBusy||isOfflineMode()||!state.user||!canOpenSection('pos'))return;
+  offlinePreparationBusy=true;
+  try{
+    await Promise.all(['categories','services','packages','staff','inventoryItems','drinks'].map(name=>loadCollection(name)));
+    await prepareOfflinePos({silent:true});
+    await offlineDeskView?.update();
+  }finally{offlinePreparationBusy=false;}
 }
 function posCatalogItems() {
   const branchId = $("#posBranch")?.value || "talkha";
@@ -3695,7 +3709,7 @@ async function bootstrapAdmin(user) {
       location.replace("/login/?reason=access");
       return;
     }
-    offlineDeskView ||= mountOfflineDesk({desk:offlineDesk,onError:error=>toast(error.message,true),prepare:async()=>{if(isOfflineMode())throw new Error('وصل الإنترنت قبل تجهيز الجهاز');await showSection('pos');}});
+    offlineDeskView ||= mountOfflineDesk({desk:offlineDesk,onError:error=>toast(error.message,true)});
     state.user = user; state.role = access.role; state.staffId = access.staffId || ""; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = effectivePermissions(access.role, access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
     for(const id of ['headerBranchFilter','dashboardBranchFilter','calendarBranchFilter','attendanceBranch','taskBranch','reportBranch','auditBranch','expenseBranchFilter','serviceTargetBranchFilter','posBranch','campaignBranchFilter']) if($('#'+id)) $('#'+id).value=state.branchIds[0];
     $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"]').forEach(input => { input.value = user.email || ""; });
@@ -3764,6 +3778,14 @@ async function bootstrapAdmin(user) {
     else {
       showWorkspaceHome({ historyMode: "replace" });
       if (access.role !== "worker" && (state.role === "admin" || state.permissions.has("dashboard") || state.permissions.has("revenue") || state.permissions.has("pos"))) void loadDashboard(true);
+    }
+    offlineConnectionMonitor?.stop();
+    if(canOpenSection('pos')){
+      offlineConnectionMonitor=createConnectionMonitor({
+        probe:async()=>await networkReachable()&&(!isOfflineMode()||await probeOfflineBackend($('#posBranch').value)),
+        onAvailable:async()=>{await offlineDesk.sync({force:true});await automaticallyPrepareOffline();}
+      });
+      offlineConnectionMonitor.start();
     }
     if(state.role !== 'worker') void watchWorkerPush(payload=>{
       const branch=payload.data?.branchId, selected=$("#headerBranchFilter").value;

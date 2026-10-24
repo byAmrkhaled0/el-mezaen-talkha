@@ -1,29 +1,30 @@
 import {showOfflineReceipt} from './offline-receipt.js';
-import {isOfflineMode,setDeviceOffline} from './offline-connectivity.js';
+import {isOfflineMode} from './offline-connectivity.js';
 import './offline-admin.css';
-export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector("#posBranch")?.value,prepare}) {
+export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector("#posBranch")?.value}) {
   const panel=document.createElement('details');panel.className='offline-desk';panel.id='offlineSalesDesk';
-  const summary=document.createElement('summary');summary.textContent='العمل بدون نت ومزامنة الشيكات';
+  const summary=document.createElement('summary');summary.textContent='حالة الاتصال';
+  const body=document.createElement('div');body.className='offline-desk-body';
+  const heading=document.createElement('h2');heading.textContent='الاتصال ومزامنة الشيكات';
+  const close=document.createElement('button');close.type='button';close.className='small-button';close.textContent='إغلاق';close.onclick=()=>{panel.open=false;summary.focus();};
   const status=document.createElement('p');status.setAttribute('role','status');
   const readiness=document.createElement('p');readiness.className='offline-readiness';readiness.setAttribute('role','status');
-  const setup=document.createElement('button');setup.type='button';setup.className='small-button';setup.textContent='تجهيز الجهاز للأوفلاين';setup.hidden=!prepare;
-  const help=document.createElement('p');help.textContent='جهّز شاشة البيع ووردية مفتوحة بالإنترنت، وحدّث الصفحة مرة بعد أول تجهيز. جلسة الأوفلاين وبياناتها صالحة 24 ساعة. حافظ على نفس تبويب الحساب ولا تمسح بيانات المتصفح. بدون نت: مبيعات نقدية جديدة فقط، بدون خصومات أو محفظة. تسجيل الحضور والتحصيل من حجز والاسترجاع وإغلاق الخزنة تحتاج اتصال. احتفظ بالجهاز والبيانات لحد تأكيد كل الشيكات.';
+  const help=document.createElement('p');help.textContent='التجهيز والتحويل للبيع بدون نت والمزامنة بيتموا تلقائيًا على الجهاز بعد الدخول بالإنترنت وفتح وردية. بدون نت: شيكات نقدية جديدة فقط. احتفظ بنفس حسابك وبيانات المتصفح لحد تأكيد الشيكات. الخصومات والاسترجاع وإغلاق الخزنة تحتاج اتصال.';
   const sync=document.createElement('button');sync.type='button';sync.className='small-button';sync.textContent='مزامنة الآن';
-  const offline=document.createElement('button');offline.type='button';offline.className='small-button';offline.textContent='التبديل لوضع البيع بدون نت';offline.onclick=()=>{setDeviceOffline(!isOfflineMode());void update();};
   const rows=document.createElement('div');rows.className='offline-sales-list';
-  panel.append(summary,status,readiness,setup,help,offline,sync,rows);document.querySelector('#adminApp .admin-main')?.prepend(panel);
+  body.append(close,heading,status,readiness,help,sync,rows);panel.append(summary,body);document.querySelector('#adminApp .admin-main')?.prepend(panel);
   let revision=0,renderTimer,limit=100;
-  const more=document.createElement('button');more.type='button';more.className='small-button';more.textContent='عرض شيكات أقدم';more.hidden=true;more.onclick=()=>{limit+=100;void update();};panel.append(more);
+  const more=document.createElement('button');more.type='button';more.className='small-button';more.textContent='عرض شيكات أقدم';more.hidden=true;more.onclick=()=>{limit+=100;void update();};body.append(more);
   const schedule=()=>{clearTimeout(renderTimer);renderTimer=setTimeout(()=>void update(),200);};
   const update=async()=>{
     const current=++revision;
     try{
       const [sales,prepared]=await Promise.all([desk.list(),desk.readiness(branch())]);if(current!==revision)return;
-      readiness.textContent=prepared.ready?'الجهاز جاهز للبيع بدون نت في '+(({talkha:'فرع طلخا',mashaya:'فرع المشاية'})[branch()]||branch()):prepared.message;
+      readiness.textContent=prepared.ready?'الحفظ التلقائي جاهز في '+(({talkha:'فرع طلخا',mashaya:'فرع المشاية'})[branch()]||branch()):'البيع بدون نت غير جاهز: '+prepared.message;
       readiness.dataset.ready=String(prepared.ready);
       const pending=sales.filter(s=>s.status!=='confirmed'),conflicts=pending.filter(s=>s.status==='conflict');
-      summary.textContent=pending.length?`مزامنة الشيكات · ${pending.length} منتظر · ${conflicts.length} يحتاج مراجعة`:'العمل بدون نت ومزامنة الشيكات';
-      offline.textContent=isOfflineMode()?'الرجوع لوضع الاتصال':'التبديل لوضع البيع بدون نت';offline.setAttribute('aria-pressed',String(isOfflineMode()));
+      summary.textContent=`${isOfflineMode()?'بدون نت': 'متصل'}${isOfflineMode()&&!prepared.ready?' · البيع غير جاهز':''}${pending.length?' · '+pending.length+' شيك منتظر':''}${conflicts.length?' · يحتاج مراجعة':''}`;
+      panel.dataset.connection=isOfflineMode()?'offline':'online';summary.setAttribute('aria-label',summary.textContent+'، عرض تفاصيل المزامنة');
       more.hidden=sales.length<=limit;
       panel.dataset.pending=String(pending.length>0);status.textContent=`${isOfflineMode()?'وضع الأوفلاين':'متصل'} · ${pending.length} شيك بإجمالي ${pending.reduce((sum,sale)=>sum+sale.total,0)} ج.م في انتظار التأكيد · ${conflicts.length} يحتاج مراجعة. أرقام الخزنة المعروضة لا تشمل الشيكات المنتظرة.`;
       rows.replaceChildren();
@@ -37,7 +38,6 @@ export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector
       }
     }catch(error){status.textContent='حفظ الأوفلاين غير جاهز على الجهاز: '+error.message;}
   };
-  setup.onclick=async()=>{setup.disabled=true;try{await prepare();await update();}catch(error){onError(error);}finally{setup.disabled=false;}};
   sync.onclick=()=>desk.sync({force:true}).then(update).catch(onError);
   const onOnline=()=>{void update();void desk.sync({force:true}).catch(onError);};
   window.addEventListener('online',onOnline);window.addEventListener('offline',update);window.addEventListener('offline-pos-changed',schedule);window.addEventListener('offline-mode-changed',schedule);

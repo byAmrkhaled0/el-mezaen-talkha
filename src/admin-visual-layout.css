@@ -1,5 +1,12 @@
 /* Shared internal surfaces. Overrides old role-specific white surfaces without affecting public pages. */
 #adminApp{--visual-radius:14px;--visual-gap:12px}
+#adminApp .admin-main{min-width:0}
+#adminApp :is(button,input,select,textarea):focus-visible{outline:3px solid var(--control-focus,#087f88);outline-offset:3px}
+#adminApp :is(.admin-panel,.entity-card,.team-now-card){padding:clamp(14px,1.5vw,22px)}
+#adminApp :is(.admin-panel,.entity-card,.team-now-card,.metric-card){min-width:0;overflow-wrap:anywhere}
+#adminApp :is(.toolbar,.panel-head,.transaction-actions){row-gap:10px}
+#adminApp .admin-section>.panel-head{margin-bottom:16px}
+#adminApp :is(.small-button,.toolbar button){min-height:44px;font-size:14px;font-weight:700;line-height:1.5}
 #adminApp :is(.admin-panel,.entity-card,.metric-card,.transaction-table,.cashier-table-pagination,.team-now-card){background:var(--panel);color:var(--text);border-color:var(--line);box-shadow:none;border-radius:var(--visual-radius)}
 #adminApp #calendar .panel-head{background:var(--panel);color:var(--text);border:1px solid var(--line);padding:16px;border-radius:var(--visual-radius)}
 #adminApp #calendar .toolbar :is(input,select){background:var(--control-bg);color:var(--control-ink);border-color:var(--control-line);min-height:44px}
