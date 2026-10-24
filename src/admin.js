@@ -1,3 +1,4 @@
+import {createSidebarController} from './admin-sidebar-controller.js';
 import {mountBranchWorkerAccounts} from './branch-worker-accounts.js';
 import {mountSelfAttendance,mountAttendanceManagement} from './staff-self-attendance.js';
 let personalAttendanceView,attendanceManagementView;
@@ -26,6 +27,7 @@ import './admin-workspace.css';
 import './admin-interface.css';
 import './closure-ui.css';
 import './admin-theme-consistency.css';
+import './admin-visual-layout.css';
 import {syncAdminWorkspace} from './admin-workspace.js';
 import {siteMediaSlots} from './site-media.js';
 import {mountSiteMediaEditor,refreshSiteMediaEditor,pendingSiteMediaFile,setSiteMediaSaveState,stageSiteMediaUpload,completeSiteMediaSave} from './site-media-editor.js';
@@ -2080,7 +2082,7 @@ function renderPos() {
 }
 
 function renderPosCart() {
-  if ($("#posCouponStatus")) $("#posCouponStatus").textContent = "يتحقق الخادم نهائيًا من الكود والفرع والحدود عند حفظ الفاتورة.";
+  if ($("#posCouponStatus")) $("#posCouponStatus").textContent = "الخصم بيتطبق حسب شروط الكود والأصناف الموجودة في الفاتورة.";
   if (!$("#posCart")) return;
   const index = new Map(posCatalogItems().map(item => [`${item.kind}:${item.id}`, item]));
   state.posCart = state.posCart.filter(line => index.has(`${line.kind}:${line.id}`));
@@ -3409,24 +3411,10 @@ document.addEventListener("change", async event => {
   if (["dashboardOperationFilter", "dashboardPaymentMethodFilter", "dashboardDateFilter", "dashboardStaffFilter", "dashboardPageSize"].includes(event.target.id)) { dashboardPage = 1; renderRecentOperations(); }
 });
 
-function closeAdminMenu() {
-  $("#sidebar").classList.remove("open");
-  $("#sidebarBackdrop").classList.remove("show");
-  document.body.style.overflow = "";
-}
-function toggleAdminMenu() {
-  const open = $("#sidebar").classList.toggle("open");
-  $("#sidebarBackdrop").classList.toggle("show", open);
-  document.body.style.overflow = open ? "hidden" : "";
-}
-function setSidebarCollapsed(collapsed, { persist = true } = {}) {
-  $("#adminApp").classList.toggle("sidebar-collapsed", collapsed);
-  const button = $("#sidebarCollapse");
-  button.textContent = collapsed ? "‹" : "›";
-  button.title = collapsed ? "إظهار القائمة" : "إخفاء القائمة";
-  button.setAttribute("aria-expanded", String(!collapsed));
-  if (persist) saveStaffTabPreference("mz-admin-sidebar-collapsed", collapsed ? "true" : "false");
-}
+const sidebarController=createSidebarController({app:$("#adminApp"),sidebar:$("#sidebar"),menu:$("#adminMenu"),backdrop:$("#sidebarBackdrop"),collapse:$("#sidebarCollapse"),save:collapsed=>saveStaffTabPreference("mz-admin-sidebar-collapsed",collapsed?"true":"false")});
+function closeAdminMenu() { sidebarController.close(); }
+function toggleAdminMenu() { sidebarController.toggle(); }
+function setSidebarCollapsed(collapsed, options = {}) { sidebarController.setCollapsed(collapsed, options); }
 $("#adminMenu").addEventListener("click", toggleAdminMenu);
 $("#sidebarCollapse").addEventListener("click", () => setSidebarCollapsed(!$("#adminApp").classList.contains("sidebar-collapsed")));
 $("#sidebarBackdrop").addEventListener("click", closeAdminMenu);

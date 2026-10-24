@@ -1,0 +1,137 @@
+/* Shared internal surfaces. Overrides old role-specific white surfaces without affecting public pages. */
+#adminApp{--visual-radius:14px;--visual-gap:12px}
+#adminApp :is(.admin-panel,.entity-card,.metric-card,.transaction-table,.cashier-table-pagination,.team-now-card){background:var(--panel);color:var(--text);border-color:var(--line);box-shadow:none;border-radius:var(--visual-radius)}
+#adminApp #calendar .panel-head{background:var(--panel);color:var(--text);border:1px solid var(--line);padding:16px;border-radius:var(--visual-radius)}
+#adminApp #calendar .toolbar :is(input,select){background:var(--control-bg);color:var(--control-ink);border-color:var(--control-line);min-height:44px}
+#adminApp :is(.panel-head h2,.pos-flow-heading strong,.pos-workspace-column h3,.v7-print-heading h2){color:var(--text)}
+#adminApp .panel-head p{color:var(--muted);font-size:13px;line-height:1.7}
+#adminApp :is(.transaction-toolbar input,.transaction-toolbar select){background:var(--control-bg);color:var(--control-ink);border-color:var(--control-line);min-height:44px;font-size:14px}
+#adminApp :is(.transaction-table th,.transaction-table td){color:var(--text);border-color:var(--line);font-size:13px;line-height:1.6;padding:12px}
+#adminApp .transaction-table th{background:var(--bg2);font-weight:700}
+#adminApp .transaction-table td small{color:var(--muted);font-size:12px}
+#adminApp .transaction-table td:nth-child(2) b{color:var(--control-focus)}
+#adminApp :is(.transaction-table .status-pill,.transaction-kpi-icon){background:var(--bg2);color:var(--text);border:1px solid var(--line)}
+#adminApp .metric-card{height:auto;min-height:94px;padding:14px 16px;border:1px solid var(--line);border-top:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:8px;min-width:0}
+#adminApp .metric-card::before{display:none}
+#adminApp .metric-card>span:not(.transaction-kpi-icon){color:var(--muted);font-size:13px;line-height:1.5;white-space:normal;max-width:100%}
+#adminApp .metric-card strong{font-family:Tajawal,system-ui,sans-serif;font-size:clamp(20px,1.6vw,26px);font-weight:800;line-height:1.4;color:var(--text);margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;unicode-bidi:plaintext}
+#adminApp .metric-card.primary-metric{background:var(--control-primary);color:#fff;border-color:var(--control-primary)}
+#adminApp .metric-card.primary-metric :is(strong,span){color:#fff}
+#adminApp .transaction-kpi-grid .metric-card{min-height:96px;padding-inline-end:42px;background:var(--panel)}
+#adminApp .transaction-kpi-grid .metric-card.primary-metric{background:var(--control-primary)}
+#adminApp .transaction-kpi-icon{inset-inline-end:12px;inset-inline-start:auto;top:14px;width:24px;height:24px}
+#adminApp :is(.metric-grid,.metric-grid.compact,.cashier-shift-breakdown,.transaction-kpi-grid,.booking-list-summary){gap:var(--visual-gap)}
+#adminApp #cash :is(.metric-grid.compact,.cashier-shift-breakdown){grid-template-columns:repeat(4,minmax(0,1fr))}
+#adminApp .cashier-table-pagination{background:var(--panel);color:var(--text);border-top:1px solid var(--line);font-size:13px}
+#adminApp #sidebar{background:var(--panel)!important;color:var(--text);border-color:var(--line);padding-top:8px;position:sticky;top:0}
+#adminApp #sidebar .admin-brand{padding-inline-end:48px;min-height:68px;justify-content:start}
+#adminApp #sidebar nav button{background:transparent;color:var(--text);border:1px solid transparent;box-shadow:none;min-height:44px;border-radius:10px;font-size:14px;padding:10px 12px;line-height:1.5;gap:10px}
+#adminApp #sidebar nav button:hover{background:var(--control-hover);border-color:var(--line)}
+#adminApp #sidebar nav button.active{background:var(--control-primary);color:#fff;border-color:var(--control-primary)}
+#adminApp #sidebar .nav-icon{background:var(--bg2)!important;color:var(--muted);border-radius:8px}
+#adminApp #sidebar button.active .nav-icon{background:#ffffff20!important;color:#fff}
+#adminApp #sidebarDismiss{position:absolute;inset-inline-end:10px;top:16px;width:44px;height:44px;min-width:44px;padding:0;display:grid;place-items:center;font:26px/1 system-ui;background:var(--bg2);color:var(--text);border:1px solid var(--line);z-index:2}
+#adminApp #sidebarBackdrop{padding:0;border:0;border-radius:0;background:rgba(2,12,20,.65);box-shadow:none}
+#adminApp #adminMenu{display:inline-flex!important;min-width:44px;width:44px;height:44px;align-items:center;justify-content:center;padding:10px;flex-shrink:0}
+#adminApp #cashierHeader{background:var(--panel);border-color:var(--line);min-height:68px}
+#adminApp #cashierPageTitle{color:var(--text);font-size:18px;line-height:1.5}
+#adminApp .cashier-header-title small{color:var(--muted);font-size:12px}
+#adminApp .cashier-header-tools{gap:8px}
+#adminApp .team-now-grid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+#adminApp .team-now-card{padding:12px;min-height:80px}
+#adminApp .team-now-card b{font-size:15px;line-height:1.6}
+#adminApp .team-now-card small{color:var(--muted);font-size:12px}
+#adminApp .pos-flow-heading strong{font-size:19px}
+#adminApp .pos-workspace{grid-template-columns:140px minmax(0,1fr);gap:14px}
+#adminApp .pos-workspace-column{min-width:0}
+#adminApp .pos-workspace-column h3{font-size:14px;line-height:1.6}
+#adminApp .pos-category-rail button{min-height:44px;font-size:13px;padding:10px 12px}
+#adminApp .pos-ticket-panel{padding:16px}
+#adminApp .pos-catalog-panel{min-height:0;padding:16px}
+#adminApp .pos-item{min-height:112px;height:auto;padding:12px}
+#adminApp .transaction-view-button{font-size:0}
+#adminApp .transaction-view-button::after{content:'عرض';font-size:12px;font-weight:700}
+#adminApp .transaction-view-button svg{display:none}
+#adminApp .transaction-view-button{width:auto;min-width:52px;padding:8px 10px}
+@media(min-width:1101px){
+ #adminApp{grid-template-columns:248px minmax(0,1fr)}
+ #adminApp.sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
+ #adminApp.sidebar-collapsed #sidebar{opacity:0;transform:translateX(110%);pointer-events:none}
+ #adminApp .pos-layout{grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:16px}
+ #adminApp .transaction-kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+ #adminApp .pos-items{max-height:calc(100dvh - 310px)}
+}
+@media(min-width:1500px){#adminApp .transaction-kpi-grid{grid-template-columns:repeat(7,minmax(0,1fr))}}
+@media(min-width:721px) and (max-width:1100px){
+ #adminApp #cash :is(.metric-grid.compact,.cashier-shift-breakdown),#adminApp .transaction-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #adminApp .team-now-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #adminApp .pos-layout{grid-template-columns:1fr}
+}
+@media(max-width:1100px){
+ #adminApp,#adminApp.sidebar-collapsed{grid-template-columns:1fr}
+ #adminApp #sidebar{position:fixed;top:0;width:min(300px,88vw);z-index:100;opacity:1;pointer-events:auto}
+ [dir=rtl] #adminApp #sidebar{right:0;left:auto;transform:translateX(110%)}
+ [dir=rtl] #adminApp #sidebar.open{transform:none!important}
+ #adminApp #sidebarBackdrop.show{display:block;z-index:99}
+ #adminApp .pos-items{max-height:none}
+}
+@media(max-width:720px){
+ #adminApp :is(.metric-grid,.metric-grid.compact,.booking-list-summary,.transaction-kpi-grid),#adminApp #cash :is(.metric-grid.compact,.cashier-shift-breakdown){grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ #adminApp .metric-card{min-height:90px;padding:12px}
+ #adminApp .metric-card strong{font-size:21px;line-height:1.4}
+ #adminApp .metric-card>span:not(.transaction-kpi-icon){font-size:12px}
+ #adminApp .transaction-kpi-grid .metric-card{padding:12px;min-height:104px}
+ #adminApp .transaction-kpi-grid .metric-card>span:not(.transaction-kpi-icon){padding-inline-end:24px}
+ #adminApp .transaction-kpi-icon{width:20px;height:20px;top:12px;inset-inline-end:10px}
+ #adminApp #calendar .panel-head{padding:12px;gap:12px}
+ #adminApp .panel-head h2{font-size:18px}
+ #adminApp .team-now-grid{grid-template-columns:1fr}
+ #adminApp .team-now-card{min-height:76px}
+ #adminApp .pos-workspace{grid-template-columns:1fr}
+ #adminApp .pos-category-rail{display:flex;flex-direction:row;gap:8px;max-height:none;overflow-x:auto;padding-bottom:8px;overscroll-behavior-inline:contain}
+ #adminApp .pos-category-rail button{flex:0 0 auto;width:auto;white-space:nowrap}
+ #adminApp .pos-items{grid-template-columns:repeat(2,minmax(0,1fr));max-height:none}
+ #adminApp .pos-catalog-panel{padding:12px}
+ #adminApp .pos-flow-heading{gap:10px;flex-wrap:wrap}
+ #adminApp .cashier-header-title h1{font-size:16px;max-width:none}
+ #adminApp .cashier-header-tools{flex-wrap:wrap;justify-content:end}
+ #adminApp .transaction-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #adminApp .transaction-actions button{width:100%;font-size:13px;padding:10px}
+}
+@media(prefers-reduced-motion:reduce){#adminApp #sidebar{transition:none}}
+#adminApp .booking-board-column{min-width:0}
+#adminApp .booking-calendar{grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px}
+#adminApp .booking-board-column h3{font-size:14px;line-height:1.6}
+#adminApp #cash>.metric-grid{margin-bottom:12px}
+@media(min-width:1101px){#adminApp #cash .cashier-shift-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}}
+#adminApp .pos-catalog-panel .panel-head{display:block}
+#adminApp .pos-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px;margin-top:12px}
+#adminApp .pos-filters .pos-search-box{grid-column:1/-1;width:100%;min-width:0}
+#adminApp .pos-filters :is(input,select){width:100%;min-width:0;max-width:100%}
+#adminApp :is(#posApplyCoupon,#posCouponStatus){grid-column:1/-1}
+#adminApp #posCouponStatus{color:var(--muted);font-size:13px;line-height:1.7;margin:0}
+@media(min-width:721px){#adminApp .pos-ticket-close{display:none}}
+html[data-theme=light] #adminApp{--muted:#526879;--admin-muted:#526879;--admin-text-secondary:#526879;--ui-control-muted:#526879}
+#adminApp .metric-card.primary-metric .transaction-kpi-icon{background:#ffffff1f;color:#fff;border-color:#ffffff55}
+#adminApp .transaction-actions .small-button.success{background:#146b4b;color:#fff;border-color:#146b4b}
+#adminApp .transaction-actions .small-button.danger{background:#b82e47;color:#fff;border-color:#b82e47}
+#adminApp .transaction-actions .small-button.warning{background:#f7d079;color:#382600;border-color:#a57b24}
+@media(max-width:720px){
+ #adminApp #calendar .toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
+ #adminApp #calendar .toolbar>*{width:100%;min-width:0;max-width:100%}
+ #adminApp #calendar #calendarSearch{grid-column:1/-1}
+ #adminApp #calendar .filter-drawer{width:100%;margin-top:8px}
+}
+@media(max-width:720px){
+ #adminApp #calendar #calendarDate{order:0}
+ #adminApp #calendar #calendarBranchFilter{order:1}
+ #adminApp #calendar #calendarSearch{order:2}
+}
+@media(max-width:600px){
+ #adminApp #cashierHeader{flex-wrap:wrap;gap:8px;padding-block:10px}
+ #adminApp .cashier-header-title{flex:1 1 100%;width:100%;min-width:0}
+ #adminApp .cashier-header-title>div{min-width:0}
+ #adminApp .cashier-header-title h1{max-width:100%;font-size:16px;white-space:normal;overflow-wrap:anywhere}
+ #adminApp .cashier-header-tools{flex:1 1 100%;width:100%;margin:0;gap:8px;justify-content:end;flex-wrap:nowrap}
+ #adminApp #cashierHeaderBranchSlot{margin-inline-end:auto;max-width:none;white-space:nowrap;font-size:12px}
+}
