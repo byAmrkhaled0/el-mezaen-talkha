@@ -1,0 +1,13 @@
+export const EXTRA_WORKSPACES=Object.freeze([
+ {id:'operations',label:'التشغيل والفريق',sections:[['branchOperations','حالة العمال'],['tasks','المهام'],['teamAvailability','مواعيد وانشغال العمال'],['customerRequests','طلبات العملاء'],['targets','التارجت']]},
+ {id:'attendance',label:'الحضور',sections:[['myAttendance','حضوري وساعات عملي'],['attendance','حضور الفريق'],['attendanceManagement','مدد وسجل الحضور']]}
+]);
+export function extraWorkspace(section){return EXTRA_WORKSPACES.find(group=>group.sections.some(([id])=>id===section));}
+export function extraWorkspaceEntries(canOpen){return EXTRA_WORKSPACES.map(group=>({...group,sections:group.sections.filter(([id])=>canOpen(id))})).filter(group=>group.sections.length);}
+export function mountOwnerExtraNavigation(nav,canOpen){nav.querySelector('[data-extra-owner-links]')?.remove();const box=document.createElement('div');box.dataset.extraOwnerLinks='';box.className='extra-owner-links';for(const group of extraWorkspaceEntries(canOpen)){const source=nav.querySelector(`[data-section="${group.sections[0][0]}"]`);if(!source)continue;const button=source.cloneNode(true);button.hidden=false;button.removeAttribute('data-extra-original');button.dataset.extraWorkspace=group.id;const text=[...button.childNodes].find(node=>node.nodeType===3&&node.textContent.trim());if(text)text.textContent=group.label;box.append(button);}for(const id of EXTRA_WORKSPACES.flatMap(group=>group.sections.map(([id])=>id)))for(const button of nav.querySelectorAll(`[data-section="${id}"]`))if(!box.contains(button))button.dataset.extraOriginal='';nav.append(box);}
+export function syncExtraWorkspaceTabs(section,canOpen,navigate){
+ let nav=document.querySelector('#extraWorkspaceTabs');if(!nav){nav=document.createElement('nav');nav.id='extraWorkspaceTabs';nav.className='extra-workspace-tabs';nav.setAttribute('aria-label','أقسام مساحة العمل');document.querySelector('.admin-section').before(nav);}
+ const group=extraWorkspaceEntries(canOpen).find(value=>value.sections.some(([id])=>id===section));nav.hidden=!group;for(const button of document.querySelectorAll('[data-extra-workspace]'))button.classList.toggle('active',button.dataset.extraWorkspace===group?.id);if(!group)return;nav.replaceChildren();
+ for(const [id,label]of group.sections){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('aria-current',id===section?'page':'false');button.onclick=()=>navigate(id);nav.append(button);}
+ for(const button of document.querySelectorAll('[data-extra-workspace]'))button.classList.toggle('active',button.dataset.extraWorkspace===group.id);
+}

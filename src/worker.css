@@ -25,3 +25,15 @@
  .worker-app :is(#workingBranch,#choosePhoto):focus-visible{outline:2px solid currentColor;outline-offset:3px}
  html:not([data-theme="dark"]) .worker-app .worker-context{background:#fff;border-color:#e6edf3;color:#245873}
 }
+
+/* SERVICE_TIMING_DISPLAY_BEGIN */
+.task-service-timing{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-block:10px}
+.service-countdown{display:inline-block;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-variant-numeric:tabular-nums;font-weight:700}
+.service-countdown[data-overdue=true]{color:var(--danger,#e8a06c)}
+/* SERVICE_TIMING_DISPLAY_END */
+
+/* BEGIN booking decision controls */
+.worker-booking-decisions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.worker-booking-decisions button{min-height:44px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
+.worker-booking-decisions button:first-child{background:#245b78;color:#fff;border-color:#245b78}
+/* END booking decision controls */

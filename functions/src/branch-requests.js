@@ -12,7 +12,7 @@ export function branchRequestHandlers(d) {
   const text = (value,max) => typeof value === 'string' ? value.trim().slice(0,max) : '';
   async function access(r) {
     await d.requireLiveStaff(r);
-    if (!['admin','cashier'].includes(r.auth?.token?.role)) fail('permission-denied','هذا القسم للأدمن وكاشير الفرع');
+    if (!['admin','manager','cashier'].includes(r.auth?.token?.role)) fail('permission-denied','هذا القسم للأدمن وكاشير الفرع');
     d.requirePermission(r,'pos');
     const branchId=r.data?.branchId;
     if (!['talkha','mashaya'].includes(branchId)) fail('invalid-argument','اختر فرعًا محددًا');

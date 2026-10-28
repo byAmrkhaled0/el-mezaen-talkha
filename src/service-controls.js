@@ -1,37 +1,42 @@
-import {getWorkerServiceSessions,startWorkerService,extendWorkerService,finishWorkerService,getCashHandoverHistory} from './admin-api.js';
+import {serviceTimer,syncServiceClock} from './service-clock.js';
+import {getWorkerServiceSessions,startWorkerService,extendWorkerService,finishWorkerService,getCashHandoverHistory,createWorkerTask,updateWorkerTask} from './admin-api.js';
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n};
 const action=text=>{const n=el('button',text);n.type='button';n.className='small-button';return n};
 const label=(parent,text,input)=>{const n=el('label',text);n.append(input);parent.append(n);return input};
 const money=n=>n==null?'—':new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP'}).format(n);
 
-export function mountWorkerServiceControls({box,branch,staff,onChanged}) {
-  const area=el('section');area.className='worker-service-controls';
-  area.append(el('h3','تشغيل العامل دلوقتي'),el('p','بدء الخدمة يقفل وقت العامل في الحجز. انتهاء المدة المتوقعة لا ينهي الخدمة تلقائيًا؛ إنهاؤها هنا لا يعني تحصيل الفاتورة.'));
+export function mountWorkerServiceControls({box,branch,staff,onChanged,getCatalog=()=>[]}) {
+  const area=el('section');area.className='worker-service-controls';area.append(el('h3','شغل العامل وطابور المهام'));
   const form=el('form');form.className='operations-controls';
-  const duration=label(form,'المدة المتوقعة بالدقائق',el('input'));duration.type='number';duration.name='durationMinutes';duration.min='5';duration.max='240';duration.step='5';duration.value='30';duration.required=true;
-  const booking=label(form,'رقم الحجز المرتبط — اختياري',el('input'));booking.name='bookingId';booking.maxLength=100;booking.autocomplete='off';
-  const start=action('بدء الخدمة للعامل المختار');start.type='submit';start.classList.add('primary');form.append(start);
+  const source=label(form,'الخدمة أو الباقة',el('select'));source.setAttribute('aria-label','خدمة العامل');
+  const duration=label(form,'المدة بالدقائق',el('input'));duration.type='number';duration.min='5';duration.max='480';duration.step='5';duration.value='30';duration.required=true;
+  const booking=label(form,'كود الحجز المرتبط — اختياري',el('input'));booking.maxLength=100;booking.autocomplete='off';
+  const start=action('بدء الخدمة الآن');start.type='submit';start.classList.add('primary');const enqueue=action('إضافة بعد المهمة الحالية');form.append(start,enqueue);
   const status=el('p');status.setAttribute('role','status');const list=el('div');list.className='service-session-list';
-  const refresh=action('تحديث الخدمات الجارية');area.append(form,refresh,status,list);box.insertBefore(area,box.querySelector('.manual-availability'));
-  let version=0,key='',draftStaff='',ready=false;
-  async function load(){const v=++version,branchId=branch.value;if(!branchId)return;start.disabled=true;ready=false;status.textContent='جاري مراجعة الخدمات الجارية…';try{const data=await getWorkerServiceSessions({branchId});if(v!==version||branch.value!==branchId)return;list.replaceChildren();for(const row of data.sessions){
-    const card=el('article');card.className='service-session';if(row.overdue)card.dataset.overdue='true';
-    card.append(el('strong',row.staffName),el('p',`${row.dateKey} • ${row.startTime} — ${row.endTime}`));
-    if(row.bookingId)card.append(el('small','الحجز: '+row.bookingId));
-    if(row.overdue)card.append(el('b','المدة انتهت والعامل لسه مش متاح؛ راجع الخدمة والحجوزات القادمة.'));
-    const controls=el('div');controls.className='operations-controls';const extra=label(controls,'زيادة المدة',el('select'));for(const n of [5,15,30,60]){const o=el('option',n+' دقيقة');o.value=n;extra.append(o)}extra.value='15';
-    const extend=action('تمديد الخدمة'),finish=action('إنهاء الخدمة');controls.append(extend,finish);card.append(controls);
-    for(const [button,isFinish] of [[extend,false],[finish,true]]){let requestKey='';button.addEventListener('click',async()=>{if(branch.value!==row.branchId)return;if(!confirm(isFinish?'تأكيد انتهاء الخدمة وتحرير وقت العامل؟ التحصيل منفصل.':'تمديد الخدمة بعد مراجعة الحجوزات المتداخلة؟'))return;extend.disabled=finish.disabled=true;try{const payload={branchId:row.branchId,sessionId:row.id,expectedVersion:row.version,idempotencyKey:requestKey||=crypto.randomUUID(),...(!isFinish?{additionalMinutes:Number(extra.value)}:{})};await(isFinish?finishWorkerService(payload):extendWorkerService(payload));await load();await onChanged();}catch(e){status.textContent=e.message||'تعذر تنفيذ الإجراء؛ حدّث الجدول';extend.disabled=finish.disabled=false;}})}
+  const refresh=action('تحديث حالة العاملين');area.append(form,refresh,status,list,el('small','انتهاء العدّاد لا ينهي الخدمة تلقائيًا. العامل يظل مشغولًا لحد تأكيد انتهاء المهمة.'));box.insertBefore(area,box.querySelector('.manual-availability'));
+  let version=0,startKey='',queueKey='',draftStaff='',ready=false,data=null,requestScope='';
+  const chosen=()=>getCatalog(branch.value).find(item=>item.kind+':'+item.id===source.value);
+  function sourcePayload(){const item=chosen();return item?{serviceId:item.id,serviceKind:item.kind}:{};}
+  function syncSource(resetKeys=true){const item=chosen();duration.readOnly=Boolean(item);duration.max=item?'480':'240';if(item)duration.value=String(item.duration||30);if(resetKeys)startKey=queueKey='';}
+  function sources(){const previous=source.value;source.replaceChildren(new Option('مدة يحددها مسؤول الفرع',''));for(const item of getCatalog(branch.value).filter(item=>['service','package'].includes(item.kind)))source.add(new Option(item.nameAr+' • '+item.duration+' دقيقة',item.kind+':'+item.id));if([...source.options].some(option=>option.value===previous))source.value=previous;syncSource(false);}
+  function buttons(){const busy=data?.sessions?.some(row=>row.staffId===staff.value),queued=data?.queued?.some(row=>row.staffId===staff.value);start.disabled=!ready||!staff.value||busy||queued;enqueue.disabled=!ready||!staff.value;}
+  function render(){list.replaceChildren();for(const row of (data?.sessions||[]).filter(row=>row.staffId===staff.value)){
+    const card=el('article');card.className='service-session';card.dataset.overdue=String(row.overdue);card.append(el('strong',row.staffName),el('p',`${row.title||'خدمة جارية'} • ${row.startTime} — ${row.endTime}`),serviceTimer(row));
+    const controls=el('div');controls.className='operations-controls';const extra=label(controls,'زيادة المدة',el('select'));for(const n of [5,15,30,60])extra.add(new Option(n+' دقيقة',String(n)));extra.value='15';const extend=action('تمديد'),finish=action('إنهاء الخدمة');controls.append(extend,finish);card.append(controls);
+    for(const[button,isFinish]of[[extend,false],[finish,true]]){let key='';button.onclick=async()=>{if(branch.value!==row.branchId)return;extend.disabled=finish.disabled=true;try{await(isFinish?finishWorkerService:extendWorkerService)({branchId:row.branchId,sessionId:row.id,expectedVersion:row.version,idempotencyKey:key||=crypto.randomUUID(),...(!isFinish?{additionalMinutes:Number(extra.value)}:{})});await load();await onChanged();}catch(error){status.textContent=error.message;extend.disabled=finish.disabled=false;}};}
     list.append(card);
-  }if(!data.sessions.length)list.append(el('p','لا توجد خدمات جارية في الفرع.'));status.textContent=`وقت الخادم: ${data.serverClock.dateKey} ${data.serverClock.time} • اختار العامل من القائمة ثم ابدأ الخدمة.`;ready=true;start.disabled=!staff.options.length;}catch(e){if(v===version)status.textContent=e.message||'تعذر تحميل الخدمات'}}
-  form.addEventListener('input',()=>key='');staff.addEventListener('change',()=>{key='';draftStaff='';booking.value=''});
-  form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity()||!staff.value)return;if(!confirm('بدء الخدمة الآن وحجز وقت العامل المختار؟'))return;start.disabled=true;try{await startWorkerService({branchId:branch.value,staffId:staff.value,durationMinutes:Number(duration.value),bookingId:booking.value.trim()||undefined,idempotencyKey:key||=crypto.randomUUID()});key='';booking.value='';await load();await onChanged();}catch(error){status.textContent=error.message||'تعذر بدء الخدمة';start.disabled=false}});
-  refresh.addEventListener('click',load);branch.addEventListener('change',()=>{key='';booking.value='';void load()});
-  document.addEventListener('mz:service-board-refresh',()=>{if(box.closest('.admin-section')?.classList.contains('active')&&!document.hidden)void load()});
-  document.addEventListener('mz:service-start-draft',async event=>{const draft=event.detail||{};if([...branch.options].some(o=>o.value===draft.branchId)){branch.value=draft.branchId;branch.dispatchEvent(new Event('change'))}draftStaff=draft.staffId||'';duration.value=String(Math.min(240,Math.max(5,Math.ceil((draft.durationMinutes||30)/5)*5)));booking.value=draft.bookingId||'';await onChanged();if([...staff.options].some(o=>o.value===draftStaff))staff.value=draftStaff;await load();area.scrollIntoView({block:'start',behavior:'smooth'});});
-  // Staff options are populated asynchronously by the existing scoped availability panel.
-  const observer=new MutationObserver(()=>{start.disabled=!ready||!staff.options.length;if(draftStaff&&[...staff.options].some(o=>o.value===draftStaff))staff.value=draftStaff});observer.observe(staff,{childList:true});
-  void load();return {load};
+  }
+  const queued=(data?.queued||[]).filter(row=>row.staffId===staff.value);if(queued.length)list.append(el('h4','بعد المهمة الحالية'));
+  for(const row of queued){const card=el('article');card.className='service-session service-session-queued';card.append(el('strong',row.title||'مهمة في الطابور'),el('p',`${row.dateKey} • ${row.startTime} — ${row.endTime}`),serviceTimer(row,{queued:true}));const begin=action('بدء المهمة'),cancel=action('إلغاء من الطابور');const canBegin=!data?.sessions?.some(item=>item.staffId===staff.value)&&queued[0].id===row.id;begin.disabled=!canBegin;if(!canBegin)begin.title='ابدأ أول مهمة بعد إنهاء الشغل الحالي';const controls=el('div');controls.className='operations-controls';controls.append(begin,cancel);card.append(controls);for(const[button,next]of[[begin,'IN_PROGRESS'],[cancel,'CANCELLED']])button.onclick=async()=>{begin.disabled=cancel.disabled=true;try{await updateWorkerTask(row.taskId,next);await load();await onChanged();}catch(error){status.textContent=error.message;begin.disabled=!canBegin;cancel.disabled=false;}};list.append(card);}
+  if(!list.children.length)list.append(el('p','لا توجد خدمة جارية أو مهمة محجوزة للعامل المختار.'));if(data)syncServiceClock(area,data.serverNowMs);buttons();}
+  async function load(){const current=++version,branchId=branch.value,staffId=staff.value;ready=false;buttons();if(!branchId||!staffId)return;requestScope=branchId+':'+staffId;status.textContent='جاري تحديث الشغل…';try{const result=await getWorkerServiceSessions({branchId,staffId});if(current!==version||branch.value!==branchId)return;data=result;ready=true;status.textContent='آخر تحديث '+result.serverClock.time;render();}catch(error){if(current===version)status.textContent=error.message;}}
+  form.addEventListener('input',()=>{startKey=queueKey='';});source.onchange=()=>syncSource(true);staff.addEventListener('change',()=>{startKey=queueKey='';draftStaff='';booking.value='';void load();});
+  form.onsubmit=async event=>{event.preventDefault();if(!form.reportValidity()||!staff.value)return;start.disabled=enqueue.disabled=true;try{await startWorkerService({branchId:branch.value,staffId:staff.value,durationMinutes:Number(duration.value),...sourcePayload(),bookingId:booking.value.trim()||undefined,idempotencyKey:startKey||=crypto.randomUUID()});startKey='';booking.value='';await load();await onChanged();}catch(error){status.textContent=error.message;buttons();}};
+  enqueue.onclick=async()=>{if(!form.reportValidity()||!staff.value)return;start.disabled=enqueue.disabled=true;try{await createWorkerTask({branchId:branch.value,staffId:staff.value,...sourcePayload(),...(!chosen()?{durationMinutes:Number(duration.value)}:{}),...(booking.value.trim()?{bookingId:booking.value.trim(),queueBooking:true}:{}),title:chosen()?.nameAr||'مهمة للعامل',idempotencyKey:queueKey||=crypto.randomUUID()});queueKey='';booking.value='';await load();await onChanged();}catch(error){status.textContent=error.message;buttons();}};
+  refresh.onclick=load;branch.addEventListener('change',()=>{startKey=queueKey='';data=null;list.replaceChildren();booking.value='';sources();void load();});
+  document.addEventListener('mz:service-board-refresh',()=>{if(box.closest('.admin-section')?.classList.contains('active')&&!document.hidden)void load();});document.addEventListener('mz:service-catalog-refresh',sources);
+  document.addEventListener('mz:service-start-draft',async event=>{const draft=event.detail||{};if([...branch.options].some(option=>option.value===draft.branchId)){branch.value=draft.branchId;branch.dispatchEvent(new Event('change'));}draftStaff=draft.staffId||'';source.value=['service','package'].includes(draft.serviceKind)?draft.serviceKind+':'+draft.serviceId:'';syncSource();if(!chosen())duration.value=String(draft.durationMinutes||30);booking.value=draft.bookingId||'';await onChanged();if([...staff.options].some(option=>option.value===draftStaff))staff.value=draftStaff;await load();area.scrollIntoView({block:'start',behavior:'smooth'});});
+  const observer=new MutationObserver(()=>{if(draftStaff&&[...staff.options].some(option=>option.value===draftStaff))staff.value=draftStaff;if(staff.value&&requestScope!==branch.value+':'+staff.value)void load();else render();});observer.observe(staff,{childList:true});sources();return {load};
 }
 
 const historyMounts=new WeakMap();

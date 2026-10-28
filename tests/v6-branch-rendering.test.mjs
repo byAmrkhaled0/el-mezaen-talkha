@@ -66,7 +66,7 @@ test("admin direct hash survives refresh only for a real authorized section", as
 test("unrecognized roles and branchless non-admin accounts leave the protected shell", async () => {
   const [admin, login] = await Promise.all([read("src/admin.js"), read("src/login.js")]);
   const bootstrap = admin.slice(admin.indexOf("async function bootstrapAdmin(user)"));
-  assert.match(bootstrap, /!\["admin", "manager", "cashier", "worker"\]\.includes\(access\.role\) \|\| \(access\.role !== "admin" && !access\.branchIds\?\.length\)/);
+  assert.match(bootstrap, /!\["admin", "manager", "cashier", "worker", "media"\]\.includes\(access\.role\) \|\| \(access\.role !== "admin" && !access\.branchIds\?\.length\)/);
   assert.match(bootstrap, /await logout\(\);\s*location\.replace\("\/login\/\?reason=access"\);\s*return;/);
   assert.match(login, /reason"\) === "access"[\s\S]*غير مرتبط بفرع/);
 });

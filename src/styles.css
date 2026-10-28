@@ -573,3 +573,14 @@ html[data-theme="light"] {
 .selected-branch-compact{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}.selected-branch-compact[hidden],#fullBranchChoice[hidden]{display:none}.branch-first-section.has-selected-branch{padding-block:12px}.published-review time{display:block;font-size:11px;color:var(--muted);margin-top:8px}.review-compose{max-width:560px;width:100%}.booking-dialog[aria-busy="true"] .dialog-head::after{content:"جارٍ تحديث البيانات…";font-size:11px;color:var(--cyan)}
 
 .selected-contact-strip{grid-template-columns:1fr}.selected-contact-strip .footer-branch-card header figure{display:none}.selected-contact-strip .footer-branch-card{padding:16px}.selected-contact-strip .footer-branch-card>p{margin-block:8px}.selected-contact-strip .branch-card-bottom{margin-top:10px}#reviews .published-review>p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Booking readiness uses server slots; this card never overrides schedule validation. */
+.booking-availability-notice{display:grid;gap:10px;margin-top:14px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--bg2);color:var(--text);text-align:start}
+.booking-availability-notice[hidden]{display:none}
+.booking-availability-notice p{margin:0;line-height:1.8}.booking-availability-notice small{color:var(--muted);line-height:1.8}
+.booking-availability-notice button{min-height:44px;width:100%;white-space:normal}
+
+.catalog-pagination{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;min-height:48px}
+.catalog-pagination span{color:var(--muted);font-size:14px}.catalog-pagination button{min-width:100px;min-height:44px}
+
+.booking-catalog-search{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:.65rem;margin-block:1rem}.booking-catalog-search input,.booking-catalog-search select{min-width:0;width:100%;min-height:44px}.booking-catalog .catalog-pagination{flex-wrap:wrap}.booking-catalog-search+div[aria-busy=true]{min-height:5rem}@media(max-width:480px){.booking-catalog-search{grid-template-columns:1fr}}

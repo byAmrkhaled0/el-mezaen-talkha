@@ -1,0 +1,143 @@
+/* Reference workflow: original financial controls, one DOM node per field. */
+#adminApp[data-cashier-reference] .pos-layout[hidden]{display:none!important}
+#adminApp[data-cashier-reference] #pos>.pos-flow-heading,#adminApp[data-cashier-reference] #pos>.pos-view-tabs,#adminApp[data-cashier-reference] #pos>.pos-mobile-summary{display:none!important}
+#adminApp #cashierPosDrawer,#adminApp .cashier-side-dialog{--sheet-bg:var(--panel,#fff);--sheet-soft:var(--bg2,#f5f7fa);--sheet-line:var(--line,#dce4ed);--sheet-text:var(--text,#243b4d);box-sizing:border-box;position:fixed;inset:0 0 0 auto;margin:0;width:min(448px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;padding:0;border:0;border-inline-start:1px solid var(--sheet-line);border-radius:0!important;background:var(--sheet-bg)!important;color:var(--sheet-text);box-shadow:-12px 0 40px #08203318;overflow:auto;font-family:Tajawal,system-ui,sans-serif}
+#adminApp #cashierPosDrawer::backdrop,#adminApp .cashier-side-dialog::backdrop{background:rgb(15 27 38 / .42)}
+#adminApp #cashierPosDrawer[open]{display:flex;flex-direction:column;overflow:hidden}
+#adminApp #cashierPosDrawer .cashier-reference-header{flex:none;position:relative;z-index:5;background:var(--sheet-bg);border-bottom:1px solid var(--sheet-line);padding:18px 18px 14px}
+#adminApp #cashierPosDrawer .cashier-reference-header h2{font-size:18px;line-height:1.5;margin:0 0 16px;color:var(--sheet-text)}
+#adminApp #cashierPosDrawer .cashier-reference-close{position:absolute;inset-inline-end:10px;top:10px;display:grid;place-items:center;padding:0;width:40px;min-height:40px;border:0;background:transparent;color:var(--muted);font:24px system-ui}
+#adminApp #cashierPosDrawer .cashier-reference-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#adminApp #cashierPosDrawer .cashier-reference-steps button{border:0;background:transparent!important;display:flex;flex-direction:column;gap:6px;align-items:center;padding:4px;color:var(--muted)!important;min-height:44px;box-shadow:none}
+#adminApp #cashierPosDrawer .cashier-reference-steps span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--sheet-soft);border:1px solid var(--sheet-line);font-size:12px}
+#adminApp #cashierPosDrawer .cashier-reference-steps [data-state=active] span,#adminApp #cashierPosDrawer .cashier-reference-steps [data-state=done] span{background:var(--control-primary,#245b78);color:#fff;border-color:var(--control-primary,#245b78)}
+#adminApp #cashierPosDrawer .cashier-reference-steps [data-state=active] span{outline:2px solid var(--sheet-line);outline-offset:3px}
+#adminApp #cashierPosDrawer .cashier-reference-steps small{font-size:12px}
+#adminApp #cashierPosDrawer #posForm{display:flex;flex:1;flex-direction:column;align-items:stretch;gap:0;margin:0;padding:0;width:100%;min-height:0;overflow:hidden;background:var(--sheet-soft)}
+#adminApp #cashierPosDrawer .cashier-reference-step{padding:16px 14px;display:grid;flex:1;gap:12px;align-content:start;min-width:0;min-height:0;width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+#adminApp #cashierPosDrawer .cashier-reference-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+#adminApp #cashierPosDrawer [hidden]{display:none!important}
+#adminApp #cashierPosDrawer h3{font-size:14px;margin:0;color:var(--sheet-text)}
+#adminApp #cashierPosDrawer :is(input,select,textarea){width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid var(--sheet-line);border-radius:10px;background:var(--sheet-bg);color:var(--sheet-text);font:14px/1.5 Tajawal,system-ui,sans-serif;box-shadow:none}
+#adminApp #cashierPosDrawer label{display:grid;gap:6px;font-size:13px;min-width:0}
+#adminApp #cashierPosDrawer button{min-height:44px;box-sizing:border-box;font-family:inherit}
+#adminApp #cashierPosDrawer .cashier-reference-customers{display:grid;gap:8px}
+#adminApp #cashierPosDrawer .cashier-reference-customer{display:flex;align-items:center;gap:10px;text-align:start;width:100%;min-height:52px;padding:8px;background:var(--sheet-bg);color:var(--sheet-text);border:1px solid var(--sheet-line);border-radius:12px;box-shadow:none}
+#adminApp #cashierPosDrawer .cashier-reference-customer[aria-pressed=true]{border-color:var(--control-primary,#245b78);box-shadow:0 0 0 1px var(--control-primary,#245b78)}
+#adminApp #cashierPosDrawer .cashier-reference-avatar{display:grid;place-items:center;background:#087f8d;color:#fff;border-radius:10px;width:32px;height:32px;flex:none;font-weight:700}
+#adminApp #cashierPosDrawer .cashier-reference-customer b,#adminApp #cashierPosDrawer .cashier-reference-customer small{display:block}
+#adminApp #cashierPosDrawer .cashier-reference-customer small{color:var(--muted);font-size:12px;margin-top:4px;direction:ltr;text-align:start}
+#adminApp #cashierPosDrawer .cashier-reference-new-customer,#adminApp #cashierPosDrawer .cashier-reference-profile{display:grid;gap:12px;padding:16px;background:var(--sheet-bg);border:1px solid var(--sheet-line);border-radius:14px}
+#adminApp #cashierPosDrawer .pos-customer-fields{display:grid;grid-template-columns:1fr;gap:12px}
+#adminApp #cashierPosDrawer .cashier-reference-profile :is(p,h3){margin:0}
+#adminApp #cashierPosDrawer .cashier-reference-profile-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding-block:14px;border-block:1px solid var(--sheet-line)}
+#adminApp #cashierPosDrawer .cashier-reference-profile-metrics b,#adminApp #cashierPosDrawer .cashier-reference-profile-metrics small{display:block;line-height:1.8}
+#adminApp #cashierPosDrawer .cashier-reference-profile small,#adminApp #cashierPosDrawer .cashier-reference-hint{font-size:12px;line-height:1.8;color:var(--muted)}
+#adminApp #cashierPosDrawer .cashier-reference-profile article{padding:12px;margin-top:8px;background:var(--sheet-soft);border-radius:10px;font-size:13px}
+#adminApp #cashierPosDrawer .pos-catalog-panel{padding:0;background:transparent;border:0;box-shadow:none}
+#adminApp #cashierPosDrawer .pos-catalog-panel .panel-head{display:grid;gap:10px;padding:0;margin:0 0 12px}
+#adminApp #cashierPosDrawer .pos-catalog-panel .panel-head>div:first-child,#adminApp #cashierPosDrawer .pos-workspace-column>h3,#adminApp #cashierPosDrawer .pos-category-rail{display:none!important}
+#adminApp #cashierPosDrawer .pos-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;width:100%}
+#adminApp #cashierPosDrawer .pos-search-box{grid-column:1/-1;width:100%}
+#adminApp #cashierPosDrawer .pos-workspace{display:block}
+#adminApp #cashierPosDrawer .pos-workspace-column:first-child{display:none}
+#adminApp #cashierPosDrawer #posItems{display:grid;grid-template-columns:1fr;max-height:none;overflow:visible;gap:8px;padding:0}
+#adminApp #cashierPosDrawer .cashier-reference-category,#adminApp #cashierPosDrawer .cashier-reference-selected,#adminApp #cashierPosDrawer .cashier-reference-options{border:1px solid var(--sheet-line);border-radius:12px;background:var(--sheet-bg);padding:0;min-width:0}
+#adminApp #cashierPosDrawer summary{cursor:pointer;min-height:44px;padding:12px 14px;font-size:13px;font-weight:700}
+#adminApp #cashierPosDrawer .cashier-reference-service{height:auto;min-height:52px;display:grid;grid-template-columns:minmax(0,1fr) auto 20px;align-items:center;gap:8px;width:calc(100% - 16px);padding:12px;margin:0 8px 8px;border-radius:10px;border:1px solid var(--sheet-line);background:var(--sheet-soft);color:var(--sheet-text);text-align:start;box-shadow:none}
+#adminApp #cashierPosDrawer .cashier-reference-service b{font-size:14px}
+#adminApp #cashierPosDrawer .cashier-reference-service strong{font-size:13px;color:var(--control-primary,#245b78);white-space:nowrap}
+#adminApp #cashierPosDrawer .cashier-reference-service[aria-pressed=true]{border-color:var(--control-primary,#245b78)}
+#adminApp #cashierPosDrawer .cashier-reference-service-mark{color:var(--control-primary,#245b78);font-size:18px}
+#adminApp #cashierPosDrawer .cashier-reference-selected>label,#adminApp #cashierPosDrawer .cashier-reference-options>:not(summary){margin:10px 12px;max-width:calc(100% - 24px)}
+#adminApp #cashierPosDrawer .pos-cart{margin:12px;max-height:none;overflow:visible}
+#adminApp #cashierPosDrawer .pos-cart-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px 0;border-bottom:1px solid var(--sheet-line)}
+#adminApp #cashierPosDrawer .pos-line-controls{grid-column:1/-1;display:grid;gap:8px}
+#adminApp #cashierPosDrawer .pos-payment{display:grid;grid-template-columns:1fr;gap:12px}
+#adminApp #cashierPosDrawer .check-label{display:flex;align-items:center;gap:8px}
+#adminApp #cashierPosDrawer .check-label input{width:20px;min-height:20px}
+#adminApp #cashierPosDrawer .cashier-reference-payment-summary{background:var(--sheet-bg);border:1px solid var(--sheet-line);padding:14px;border-radius:12px;font-size:14px;line-height:1.8}
+#adminApp #cashierPosDrawer .cashier-reference-feedback{margin:0;padding:0 14px 12px;color:var(--text);font-size:13px;line-height:1.8}
+#adminApp #cashierPosDrawer .cashier-reference-feedback:empty{display:none}
+#adminApp #cashierPosDrawer .cashier-reference-footer{flex:none;position:relative;margin-top:auto;z-index:4;padding:12px;display:flex;gap:10px;align-items:center;width:100%;background:var(--sheet-bg);border-top:1px solid var(--sheet-line);padding-bottom:max(12px,env(safe-area-inset-bottom))}
+#adminApp #cashierPosDrawer .cashier-reference-footer>button{flex:1}
+#adminApp #cashierPosDrawer .cashier-reference-footer>.cashier-reference-add-customer{flex:0 0 auto}
+#adminApp #cashierPosDrawer .pos-checkout-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%;position:static;padding:0;background:transparent;border:0}
+#adminApp #cashierPosDrawer .pos-total{display:block;background:transparent;padding:0}
+#adminApp #cashierPosDrawer #posTotal{font-size:20px;line-height:1.5}
+#adminApp #cashierPosDrawer .pos-total span{font-size:12px;color:var(--muted)}
+#adminApp #cashierPosDrawer #posSubmit{font-size:13px;min-height:48px}
+#adminApp .cashier-side-dialog{width:min(380px,100vw);padding:16px}
+#adminApp .cashier-side-dialog .editor-shell{height:calc(100dvh - 32px);display:flex;flex-direction:column;padding:0;max-width:100%}
+#adminApp .cashier-side-dialog .editor-fields{display:grid;grid-template-columns:1fr;gap:16px;overflow:auto;align-content:start;padding-block:20px;flex:1}
+#adminApp .cashier-side-dialog :is(input,select,textarea){width:100%;min-height:44px;border-radius:10px;font-size:14px}
+#adminApp .cashier-side-dialog footer{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:auto;background:var(--panel)}
+#adminApp .cashier-side-dialog footer button{flex:1;min-height:44px}
+#adminApp .cashier-side-dialog h2{font-size:18px}
+#adminApp #cashierExpenseDrawer>article{border:0;padding:12px 0;margin:0;background:transparent}
+#adminApp #cashierExpenseDrawer>button{margin-inline-start:auto;display:block}
+#adminApp #cashierExpenseDrawer .panel-head p{font-size:12px}
+html[data-admin-layout=cashier] #adminApp[data-cashier-reference] .transaction-kpi-grid .metric-card{min-height:82px;border-top:1px solid var(--line);box-shadow:0 2px 12px #12334c06}
+html[data-admin-layout=cashier] #adminApp[data-cashier-reference] #sidebar nav button{font-size:14px;min-height:46px}
+html[data-admin-layout=cashier] #adminApp[data-cashier-reference] .transaction-actions{gap:8px;margin-block:14px}
+html[data-admin-layout=cashier] #adminApp[data-cashier-reference] .transaction-table :is(th,td){font-size:13px;padding:12px 10px}
+@media(min-width:1280px){html[data-admin-layout=cashier] #adminApp[data-cashier-reference] .transaction-kpi-grid{grid-template-columns:repeat(7,minmax(0,1fr))}}
+@media(max-width:600px){#adminApp #cashierPosDrawer,#adminApp .cashier-side-dialog{width:100vw;max-width:100vw}#adminApp #cashierPosDrawer .cashier-reference-header{padding:14px}#adminApp #cashierPosDrawer .cashier-reference-step{padding:14px 12px}#adminApp #cashierPosDrawer .pos-checkout-bar{grid-template-columns:1fr}#adminApp #cashierPosDrawer .cashier-reference-profile-metrics{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){#adminApp #cashierPosDrawer *{scroll-behavior:auto!important;transition:none!important}}
+
+#adminApp #cashierPosDrawer{overflow-x:hidden}
+#adminApp #cashierPosDrawer .pos-total{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#adminApp #cashierPosDrawer :is(.cashier-reference-step,.cashier-reference-header,.cashier-reference-footer){box-sizing:border-box}
+
+#adminApp #cashierPosDrawer .cashier-reference-service::after{content:none}
+
+/* Compact reference controls and one consistent line-icon family. */
+#adminApp .cashier-reference-icon{width:16px;height:16px;flex:none;vertical-align:middle;pointer-events:none}
+#adminApp #cashierPosDrawer .cashier-reference-eyebrow{display:block;color:var(--muted);font-size:10px;line-height:1.4;margin-bottom:2px}
+#adminApp #cashierPosDrawer .cashier-reference-header h2{font-size:15px;margin-bottom:12px}
+#adminApp #cashierPosDrawer .cashier-reference-close{width:32px;min-height:32px}
+#adminApp #cashierPosDrawer .cashier-reference-steps button{position:relative;isolation:isolate}
+#adminApp #cashierPosDrawer .cashier-reference-steps button:not(:last-child)::after{content:"";position:absolute;inset-inline-start:calc(50% + 24px);top:18px;width:calc(100% - 48px);height:1px;background:var(--sheet-line);z-index:-1}
+#adminApp #cashierPosDrawer .cashier-reference-steps [data-state=done]::after{background:var(--control-primary,#245b78)}
+#adminApp #cashierPosDrawer .cashier-reference-steps small{font-size:10px}
+#adminApp #cashierPosDrawer .cashier-reference-steps span{width:24px;height:24px;font-size:10px}
+#adminApp #cashierPosDrawer .cashier-reference-search-row{position:relative;display:block}
+#adminApp #cashierPosDrawer .cashier-reference-search-row input{padding-inline-end:44px}
+#adminApp #cashierPosDrawer .cashier-reference-search-row button{position:absolute;inset-inline-end:0;top:0;width:44px;padding:0;border:0;background:transparent;color:var(--muted);display:grid;place-items:center}
+#adminApp #cashierPosDrawer .cashier-reference-customer b{font-size:12px}
+#adminApp #cashierPosDrawer .cashier-reference-customer small{display:flex;align-items:center;gap:4px;font-size:10px;margin-top:2px}
+#adminApp #cashierPosDrawer .cashier-reference-customer small svg{width:11px;height:11px}
+#adminApp #cashierPosDrawer .cashier-reference-category>summary{display:flex;align-items:center;gap:8px;list-style:none}
+#adminApp #cashierPosDrawer .cashier-reference-category>summary::-webkit-details-marker{display:none}
+#adminApp #cashierPosDrawer .cashier-reference-category>summary svg:last-child{margin-inline-start:auto;width:12px;transition:transform .15s}
+#adminApp #cashierPosDrawer .cashier-reference-category[open]>summary svg:last-child{transform:rotate(180deg)}
+#adminApp #cashierPosDrawer .cashier-reference-service{grid-template-columns:18px minmax(0,1fr) auto;padding:10px;gap:8px}
+#adminApp #cashierPosDrawer .cashier-reference-service b{grid-column:2;grid-row:1;font-size:12px}
+#adminApp #cashierPosDrawer .cashier-reference-service strong{grid-column:3;grid-row:1;font-size:11px}
+#adminApp #cashierPosDrawer .cashier-reference-service-mark{grid-column:1;grid-row:1;display:grid;place-items:center;border:1px solid var(--sheet-line);width:15px;height:15px;border-radius:50%}
+#adminApp #cashierPosDrawer .cashier-reference-service-mark svg{width:11px;height:11px}
+#adminApp #cashierPosDrawer .cashier-reference-footer>button{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font-size:12px}
+#adminApp #cashierPosDrawer .cashier-reference-profile summary{display:flex;align-items:center;gap:8px}
+#adminApp #cashMovementDialog.cashier-side-dialog{width:min(300px,100vw)}
+html[data-admin-layout=cashier] #adminApp #cashierSidebarItems>button>.cashier-reference-icon{box-sizing:content-box;width:15px;height:15px;padding:7px;border-radius:50%;background:var(--bg2,#f3f6f9);color:var(--muted)}
+html[data-admin-layout=cashier] #adminApp #cashierSidebarItems>button.active>.cashier-reference-icon{background:#ffffff24;color:#fff}
+html[data-admin-layout=cashier] #adminApp .sidebar-footer button{display:flex;align-items:center;justify-content:center;gap:7px}
+html[data-admin-layout=cashier] #adminApp .transaction-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px}
+@media(max-width:600px){#adminApp #cashMovementDialog.cashier-side-dialog{width:100vw}}
+#adminApp #cashierPosDrawer #posItems{grid-auto-rows:auto;align-items:start}
+#adminApp #cashierPosDrawer .pos-search-box{display:flex;min-width:0;gap:8px;height:auto;padding:0 12px;background:var(--sheet-bg);border:1px solid var(--sheet-line)}
+#adminApp #cashierPosDrawer .pos-search-box svg{width:16px;height:16px;flex:none}
+#adminApp #cashierPosDrawer .cashier-reference-service strong{margin:0}
+#adminApp #cashierPosDrawer::backdrop,#adminApp .cashier-side-dialog::backdrop{backdrop-filter:blur(3px)}
+#adminApp .cashier-side-dialog .dialog-close{border:0;background:transparent;color:var(--muted);box-shadow:none}
+#adminApp #cashierPosDrawer .cashier-reference-step{grid-auto-rows:max-content}
+#adminApp #cashierPosDrawer .pos-catalog-panel{height:max-content;min-height:0;max-height:none;margin:0}
+
+#adminApp #cashierPosDrawer .cashier-reference-selected-customer{display:flex;align-items:center;gap:8px;padding:12px;background:var(--sheet-bg);border:1px solid var(--sheet-line);border-radius:12px;font-size:12px}
+#adminApp #cashierPosDrawer .cashier-reference-selected-customer small{display:flex;align-items:center;gap:5px;margin-inline-start:auto;direction:ltr;font-size:10px;color:var(--muted)}
+#adminApp #cashierPosDrawer .cashier-reference-selected-customer small svg{width:11px;height:11px}
+#adminApp #cashierPosDrawer .cashier-reference-running-total{color:var(--text);white-space:nowrap;font-size:11px;font-weight:700}
+
+#adminApp #cashierPosDrawer .cashier-reference-search-row select{display:block;width:100%;min-width:0;margin-block-start:8px;min-height:44px;background:var(--sheet-bg);color:var(--text);border-color:var(--sheet-line)}
+#adminApp #cashierPosDrawer .catalog-pagination{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-block:10px;font-size:12px}
+#adminApp #cashierPosDrawer .catalog-pagination button{min-height:44px;min-width:64px}

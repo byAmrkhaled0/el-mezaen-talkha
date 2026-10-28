@@ -1,15 +1,19 @@
 export function transformQaModule(code, name) {
   const plans={
     'admin-api.js':[
+      ['if(globalThis.__USE_EMULATORS__)connectLocalAuth(auth,connectAuthEmulator);',''],
+      ['if(globalThis.__USE_EMULATORS__)connectLocalStorage(storage,connectStorageEmulator);',''],
       ['auth = initializeAuth(app, { persistence: browserSessionPersistence });',"auth = wire(initializeAuth(app, { persistence: browserSessionPersistence }), 'auth');"],
       ['storage = getStorage(app);',"storage = wire(getStorage(app), 'storage');"],
-      ['if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);',"wire(functions, 'functions');"]],
+      ['if (globalThis.__USE_EMULATORS__) connectLocalFunctions(functions,connectFunctionsEmulator);',"wire(functions, 'functions');"]],
     'account.js':[
+      ['if(globalThis.__USE_EMULATORS__){connectLocalAuth(auth,connectAuthEmulator);connectLocalFunctions(functions,connectFunctionsEmulator);}',''],
       ['auth = getAuth(app);',"auth = wire(getAuth(app), 'auth');"],
       ['functions = getFunctions(app, "europe-west1");',"functions = wire(getFunctions(app, 'europe-west1'), 'functions');"]],
     'firebase-client.js':[
+      ['if(globalThis.__USE_EMULATORS__)connectLocalAuth(auth,connectAuthEmulator);',''],
       ['const auth = getAuth(app);',"const auth = wire(getAuth(app), 'auth');"],
-      ['if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);',"wire(functions, 'functions');"]]
+      ['if (globalThis.__USE_EMULATORS__) connectLocalFunctions(functions,connectFunctionsEmulator);',"wire(functions, 'functions');"]]
   };
   if(!plans[name])throw Error('QA_UNKNOWN_MODULE:'+name);
   const expected = name === 'admin-api.js' ? {initializeApp:1,initializeAuth:1,getAuth:0,getStorage:1,getFunctions:1} : {initializeApp:1,initializeAuth:0,getAuth:1,getStorage:0,getFunctions:1};

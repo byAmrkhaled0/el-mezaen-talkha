@@ -6,13 +6,14 @@ import {attendancePresentation} from '../src/attendance-presentation.js';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
  const nodes=new Map();
- const node=()=>({value:'',disabled:false,textContent:'',innerHTML:'',dataset:{},setAttribute(){},replaceChildren(...children){this.children=children;},classList:{contains:()=>true}});
+ const node=()=>({children:[],append(...children){this.children.push(...children);},value:'',disabled:false,textContent:'',innerHTML:'',dataset:{},setAttribute(){},replaceChildren(...children){this.children=children;},classList:{contains:()=>true}});
  const select=node();select.value='talkha';nodes.set('select',select);
  const panel={...node(),isConnected:true,querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector);},remove(){this.isConnected=false;}};
  const target={hidden:false,classList:{contains:()=>true},append(){}};
  let today={durationMinutes:480,branches:[{id:'talkha',nameAr:'طلخا'}],attendance:null},gpsResolve,gpsReject,timer,identity='own',gpsCalls=0,historyCalls=0;
  const records=[];
- const context=vm.createContext({attendancePresentation,document:{hidden:false,querySelector:()=>null,createElement:()=>panel},navigator:{geolocation:{getCurrentPosition(resolve,reject){gpsCalls++;gpsResolve=resolve;gpsReject=reject;}}},Option:class{constructor(label,value){this.text=label;this.value=value;}},getOwnStaffAttendance:async()=>today,getAttendanceMonth:async()=>{historyCalls++;return {summary:{days:0,recordedSeconds:0,automatic:0},rows:[]};},recordOwnStaffAttendance:async data=>{records.push(data);today={...today,attendance:{status:'PRESENT',branchId:'talkha',checkInTime:'10:00',scheduledEndAt:'2099-01-01T00:00:00Z'}};},enablePush:async()=>{},setInterval:fn=>{timer=fn;return 1;},clearInterval(){}});
+ let created=0;
+ const context=vm.createContext({attendancePresentation,document:{hidden:false,querySelector:()=>null,createElement:()=>created++===0?panel:node()},navigator:{geolocation:{getCurrentPosition(resolve,reject){gpsCalls++;gpsResolve=resolve;gpsReject=reject;}}},Option:class{constructor(label,value){this.text=label;this.value=value;}},getOwnStaffAttendance:async()=>today,getAttendanceMonth:async()=>{historyCalls++;return {summary:{days:0,recordedSeconds:0,automatic:0},rows:[]};},recordOwnStaffAttendance:async data=>{records.push(data);today={...today,attendance:{status:'PRESENT',branchId:'talkha',checkInTime:'10:00',scheduledEndAt:'2099-01-01T00:00:00Z'}};},enablePush:async()=>{},setInterval:fn=>{timer=fn;return 1;},clearInterval(){}});
  const source=readFileSync(new URL('../src/staff-self-attendance.js',import.meta.url),'utf8').replace(/^import[^\n]*\n/gm,'').replaceAll('export function ','function ');
  vm.runInContext(source+'\nglobalThis.mount=mountSelfAttendance;',context);
  const view=context.mount({role:'cashier',uid:'own',currentUid:()=>identity,anchor:target});

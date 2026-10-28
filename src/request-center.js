@@ -12,6 +12,7 @@ const icon = type => {
 };
 function card(row,role,action,integration,balanceLookup) {
   const c=node('article','',role==='worker'?'worker-panel request-card':'admin-panel request-card');
+  c.dataset.entity=row.id;
   const head=node('header','', 'request-card-head'), badge=node('span',row.requestType==='LEAVE'&&row.integrationStatus==='ACTIVE'?'إجازة نشطة':requestLabels[row.status]||row.status,'request-badge');badge.dataset.status=row.status;
   head.append(icon(row.requestType),node('h3',row.requestType==='LEAVE'?'طلب إجازة':'طلب سلفة'),badge);c.append(head);
   c.append(node('p',`${row.staffNameAr} • ${branchName(row.branchId)}`),node('p',row.requestType==='LEAVE'?`${row.requestData.startDate} — ${row.requestData.endDate} • ${({PERSONAL:'شخصية',SICK:'مرضية',OTHER:'أخرى'})[row.requestData.leaveType]||row.requestData.leaveType}`:amount(row.requestData.amount)),node('p',row.requestData.reason));
@@ -22,7 +23,7 @@ function card(row,role,action,integration,balanceLookup) {
     c.append(node('p',`تم صرف السلفة • ${amount(row.approvedAmount)} • ${time(row.disbursedAt)} • مرجع الحركة: ${row.disbursementReference}`),node('p',`خُصم من الرواتب: ${amount(Number(row.advanceDeductedCents||0)/100)} • المبلغ المتبقي: ${amount(Number(row.advanceRemainingCents||0)/100)}`));
   }
   if(row.responseNote)c.append(node('p',`رد الإدارة: ${row.responseNote}`));
-  const details=node('details'),history=node('ol');details.append(node('summary','عرض سجل الطلب'));
+  const details=node('section'),history=node('ol');const historyButton=node('button','سجل الطلب','small-button');historyButton.type='button';historyButton.setAttribute('aria-expanded','false');history.hidden=true;historyButton.onclick=()=>{history.hidden=!history.hidden;historyButton.setAttribute('aria-expanded',String(!history.hidden));};details.append(historyButton);
   for(const item of Object.values(row.reviewHistory||{}).sort((a,b)=>a.version-b.version))history.append(node('li',`${time(item.at)} • ${({admin:'الإدارة',manager:'المدير',worker:'العامل'})[item.actorRole]||item.actorRole} • ${requestLabels[item.to]||item.to}${item.note?` — ${item.note}`:''}`));
   details.append(history);c.append(details);
   if(['PENDING','UNDER_REVIEW'].includes(row.status)){
@@ -51,7 +52,7 @@ function card(row,role,action,integration,balanceLookup) {
       button.onclick=async()=>{const buttons=[...controls.querySelectorAll('button')];if(button.disabled)return;buttons.forEach(b=>b.disabled=true);feedback.replaceChildren(node('p','جارٍ التحقق من الجدول…'));
         try{const result=await integration(operation,{requestId:row.requestId});if(!c.isConnected)return;
           feedback.replaceChildren(node('p',result.active?'تم تفعيل الإجازة':result.conflicts?.length?'التفعيل متوقف بسبب حجوزات قائمة؛ لن يتم تغييرها':'لا توجد حجوزات متعارضة؛ يمكن للإدارة التفعيل'));
-          if(result.conflicts?.length){const details=node('details'),list=node('ul');details.append(node('summary','عرض الحجوزات المتعارضة'));
+          if(result.conflicts?.length){const details=node('section'),list=node('ul');details.append(node('h4','الحجوزات المتعارضة'));
             for(const conflict of result.conflicts)list.append(node('li',`${conflict.bookingId} • ${conflict.bookingDate} ${conflict.bookingTime} • ${branchName(conflict.branchId)} • ${conflict.status}`));details.append(list);details.open=true;feedback.append(details);}
         }catch(error){if(c.isConnected)feedback.replaceChildren(node('p',error.message||'تعذر التحقق أو التفعيل'));}finally{buttons.forEach(b=>b.disabled=false);}
       };controls.append(button);

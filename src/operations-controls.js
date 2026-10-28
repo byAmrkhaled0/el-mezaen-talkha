@@ -7,9 +7,9 @@ const money=n=>new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP'}).
 function field(form,title,input){const label=node('label',title);label.append(input);form.append(label);return input}
 function button(text){const b=node('button',text);b.type='button';b.className='small-button';return b}
 function input(type,name){const n=node('input');n.type=type;n.name=name;n.required=true;return n}
-export function mountWorkerAvailability({anchor,role,branchIds,canManage}){
- if(!anchor||!canManage||!['admin','cashier'].includes(role)||anchor.querySelector('.worker-availability'))return;
- const box=node('article');box.className='admin-panel worker-availability';box.append(node('h2','إدارة توفر العامل'),node('p','فترة مشغول أو بريك أو إجازة تمنع الحجوزات المتداخلة. الحجز القائم يجب معالجته أولًا.'));
+export function mountWorkerAvailability({anchor,role,branchIds,canManage,getCatalog=()=>[]}){
+ if(!anchor||!canManage||!['admin','manager','cashier'].includes(role)||anchor.querySelector('.worker-availability'))return;
+ const box=node('article');box.className='admin-panel worker-availability';box.append(node('h2','مواعيد وانشغال العمال'),node('p','فترة مشغول أو بريك أو إجازة تمنع الحجوزات المتداخلة. الحجز القائم يجب معالجته أولًا.'));
  const controls=node('div');controls.className='operations-controls';const branch=field(controls,'الفرع',node('select'));
  for(const id of branchIds.filter(x=>['talkha','mashaya'].includes(x))){const o=node('option',id==='talkha'?'طلخا':'المشاية');o.value=id;branch.append(o)}
  const day=field(controls,'التاريخ',input('date','dateKey'));day.value=cairoDate();const refresh=button('تحديث');controls.append(refresh);box.append(controls);
@@ -26,13 +26,17 @@ export function mountWorkerAvailability({anchor,role,branchIds,canManage}){
  for(const n of [branch,day,refresh])n.addEventListener(n===refresh?'click':'change',()=>{key='';void load()});
  document.addEventListener('mz:worker-availability',e=>{const data=e.detail||{};if(branchIds.includes(data.branchId)){branch.value=data.branchId;}pendingStaff=data.staffId||'';void load();box.scrollIntoView({behavior:'smooth',block:'start'});});
  staff.addEventListener('change',()=>key='');staff.name='staffId';controls.insertBefore(staff.closest('label'),refresh);
- const manual=document.createElement('details');manual.className='manual-availability';manual.append(node('summary','بريك أو إجازة أو فترة مستقبلية'));manual.append(form,list);box.append(manual);
- mountWorkerServiceControls({box,branch,staff,onChanged:load});
- void load();
+ const manual=node('section');manual.className='manual-availability';manual.append(node('h3','راحة أو إجازة أو موعد انشغال'),form,list);box.append(manual);
+ const quick=node('div');quick.className='timed-busy-controls';const duration=field(quick,'انشغال مؤقت من الآن',node('select'));for(const value of [15,30,60,90,120,180,240]){const option=node('option',value<60?value+' دقيقة':value/60+' ساعة');option.value=String(value);duration.append(option)}duration.value='60';const timed=button('تسجيل الانشغال');quick.append(timed);box.insertBefore(quick,manual);let timedKey='';
+ for(const control of [staff,branch,duration])control.addEventListener('change',()=>timedKey='');
+ timed.onclick=async()=>{if(timed.disabled||!staff.value)return;const selected={branchId:branch.value,staffId:staff.value,durationMinutes:Number(duration.value),idempotencyKey:timedKey||=crypto.randomUUID()};timed.disabled=true;try{await setWorkerAvailability(selected);if(branch.value!==selected.branchId)return;timedKey='';status.textContent='تم تسجيل الانشغال؛ ينتهي تلقائيًا حسب وقت السيرفر.';await load();document.dispatchEvent(new Event('mz:service-board-refresh'));}catch(error){status.textContent=error.message||'تعذر تسجيل الانشغال';}finally{timed.disabled=false;}};
+ const services=mountWorkerServiceControls({box,branch,staff,onChanged:load,getCatalog});
+ document.addEventListener('mz:worker-availability-open',()=>{if(anchor.classList.contains('active')&&!document.hidden)void Promise.all([load(),services.load()]);});
+ if(anchor.classList.contains('active'))void Promise.all([load(),services.load()]);
 }
 let handoverVersion=0;
 export async function syncCashHandover({branchId,role,uid,onChanged}){
- const anchor=document.querySelector('#cash'),closeForm=document.querySelector('#closeShiftForm');if(!anchor||!closeForm||!['admin','cashier'].includes(role))return;
+ const anchor=document.querySelector('#cash'),closeForm=document.querySelector('#closeShiftForm');if(!anchor||!closeForm||!['admin','manager','cashier'].includes(role))return;
  let picker=closeForm.querySelector('[name=handoverToUid]');if(!picker){picker=node('select');picker.name='handoverToUid';const label=node('label','تسليم العهدة إلى');label.append(picker);closeForm.querySelector('footer').before(label)}
  let box=anchor.querySelector('.cash-handover-panel');if(!box){box=node('article');box.className='admin-panel cash-handover-panel';anchor.prepend(box)}
  mountCashHandoverHistory({anchor,branchId});

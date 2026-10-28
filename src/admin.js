@@ -1,6 +1,36 @@
+import {getWorkerServiceSessions} from './admin-api.js';
+import {openManualAttendance} from './manual-attendance.js';
+import {renderReportDetails,renderReportDays,renderShiftReconciliation} from './report-details.js';
+import './report-details.css';
+import {BOOKING_BARCODE_OPTIONS,startBookingDecoder,resolveScannedBooking} from './booking-barcode.js';
+import {previewPosOrder} from './admin-api.js';
+import {mountBranchBooking} from './branch-booking.js';
+let branchBookingView;
+import {getWorkerAvailability} from './admin-api.js';
+import {readPosCustomerIntake,clearPosCustomerIntake} from './pos-customer-intake.js';
+import {renderStoredPosReview} from './stored-pos-review.js';
+import {mountOrderAdditions,renderSavedOrderActions} from './order-additions-ui.js';
+import {getOrderAdditions,submitOrderAddition,decideOrderAddition} from './admin-api.js';
+import {mountAdditionInbox,additionRoute} from './addition-inbox.js';
+let orderAdditionView=null,additionNotices=[];
+import {mountPosCatalogPaging} from './pos-catalog-paging.js';
+let serverPosCatalog=null;
+import {collectionSearchOptions,mountCollectionSearch} from './collection-search.js';
+import {boundedCollectionWindow} from './cursor-pager.js';
+import {collectionPageNavigation} from './collection-page-navigation.js';
+let collectionPaging=null;
+import {mountTransactionPages} from './cashier-transaction-pages.js';
+import {getBookingPage} from './admin-api.js';
+let serverTransactions=null;
+import {mountWorkerTaskDrawer} from './task-service-ui.js';
+let workerTaskDrawer;
 import {isOfflineMode,createConnectionMonitor,networkReachable} from './offline-connectivity.js';
 import {offlineDesk,probeOfflineBackend} from './admin-api.js';
 import {mountOfflineDesk} from './offline-admin-ui.js';
+import {decorateReceiptActions,mountCashierReference,decorateCashierMenu} from './cashier-reference-ui.js';
+import {recentCashierCustomers} from './cashier-reference-model.js';
+import {extraWorkspaceEntries,syncExtraWorkspaceTabs,mountOwnerExtraNavigation} from './extra-workspaces.js';
+let cashierReferenceUI;
 let offlineDeskView;
 let offlineConnectionMonitor,offlinePreparationBusy=false;
 window.addEventListener('online',()=>void offlineConnectionMonitor?.check());
@@ -37,6 +67,8 @@ import './admin-interface.css';
 import './closure-ui.css';
 import './admin-theme-consistency.css';
 import './admin-visual-layout.css';
+import './cashier-compact.css';
+import './order-additions.css';
 import {syncAdminWorkspace} from './admin-workspace.js';
 import {siteMediaSlots} from './site-media.js';
 import {mountSiteMediaEditor,refreshSiteMediaEditor,pendingSiteMediaFile,setSiteMediaSaveState,stageSiteMediaUpload,completeSiteMediaSave} from './site-media-editor.js';
@@ -46,7 +78,7 @@ import { isInvalidAuthSession } from "./admin-session.js";
 import { isVideoContent, safeMediaUrl, videoSource } from "./media.js";
 import { newMashayaPackages } from "./package-definitions.js";
 import { normalizePhone } from "../functions/src/core.js";
-import { ROLE_DEFAULT_PERMISSIONS, ROLE_CAPABILITY_CEILINGS, effectivePermissions } from "../functions/src/authorization.js";
+import { ROLE_DEFAULT_PERMISSIONS, ROLE_CAPABILITY_CEILINGS, effectivePermissions, canManageSharedCatalog } from "../functions/src/authorization.js";
 import { availableAtBranch } from "./branch-availability.js";
 import { weekStart } from "../functions/src/reporting.js";
 import { saveStaffTabPreference } from "./staff-tab-state.js";
@@ -66,7 +98,7 @@ const state = { user: null, role: null, staffId: "", permissions: new Set(), bra
 const branchWorkspace=createBranchWorkspace({state,navigate:id=>showSection(id)});
 const workerRequestCenter=createAdminRequestCenter(()=>state,{getWorkerRequests,updateWorkerRequest,getWorkerAdvancePolicy,setWorkerAdvancePolicy,checkWorkerLeaveConflicts,activateWorkerLeave,getCollection,getWorkerAdvanceBalance});
 const cashierAdvanceCenter=createCashierAdvanceCenter(()=>({role:state.role,uid:state.user?.uid,branchId:cashBranch(),shift:state.cash.shift}),{getReadyWorkerAdvances,disburseWorkerAdvance},()=>loadCashOperations(true));
-const permissionLabels = { websiteContent:"إدارة محتوى الموقع", dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", attendance: "الحضور والموجودون", tasks: "مهام وتنبيهات العمال", revenue: "الدفع والإيرادات", refundTransactions: "استرداد المعاملات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", faqs: "أسئلة الشات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
+const permissionLabels = { sharedCatalog:"إدارة الكتالوج الموحد للفرعين",siteMedia:"صور الرئيسية والهوية البصرية",teamOperations:"تشغيل العاملين والطابور", websiteContent:"إدارة محتوى الموقع", dashboard: "الرئيسية", pos: "نقطة البيع", bookings: "الحجوزات", attendance: "الحضور والموجودون", tasks: "مهام وتنبيهات العمال", revenue: "الدفع والإيرادات", refundTransactions: "استرداد المعاملات", expenses: "المصروفات", inventory: "البضاعة والمخزون", drinks: "المشروبات", payroll: "الرواتب والتارجت", services: "الخدمات والتصنيفات", packages: "الباقات", offers: "العروض", coupons: "أكواد الخصم", staff: "فريق العمل", customers: "العملاء", rewards: "الولاء والمحافظ", campaigns: "حملات واتساب", reviews: "التقييمات", schedule: "المواعيد والإجازات", gallery: "الصور والمعرض", results: "نتائج شغلنا", hairMedia: "فيديوهات التركيبات", celebrities: "صور المشاهير", posts: "الأخبار والمنشورات", faqs: "أسئلة الشات", settings: "إعدادات الموقع", activity: "سجل الأنشطة" };
 const roleDefaults = ROLE_DEFAULT_PERMISSIONS;
 const socialSections = new Set(["adminAssistant","websiteContent", "packages", "offers", "coupons", "reviews", "gallery", "results", "hairMedia", "celebrities", "posts", "faqs", "campaigns"]);
 let dashboardPage = 1;
@@ -78,6 +110,7 @@ let attendanceRequestVersion = 0;
 const managementSections = new Set(["branchOperations","teamAvailability","targets","customerRequests","branchNeeds","dashboard", "pos", "bookings", "calendar", "attendance", "tasks", "worker", "customers", "revenue", "expenses", "cash", "cashierGoals", "workerTargets", "dailyClosing", "inventory", "drinks", "payroll", "workerRequests", "services", "staff", "rewards", "schedule", "settings", "activity", "users", "mobileContent"]);
 const contentGrants = { gallery: "gallery", result: "results", "hair-system": "hairMedia", celebrity: "celebrities", news: "posts", offer: "offers" };
 const canManageContent = type => state.role === "admin" || (contentGrants[type] && state.permissions.has(contentGrants[type]));
+const canEditSiteMedia=()=>state.role==='admin'||state.role==='media'&&state.permissions.has('siteMedia');
 const hasContentWorkspace = () => Object.keys(contentGrants).some(canManageContent);
 
 const fields = {
@@ -145,17 +178,20 @@ sectionTitles.websiteContent = "إدارة محتوى الموقع";
 sectionTitles.workspaceHome = "البوابات الرئيسية";
 sectionTitles.cashierGoals = "أهداف الخدمات";
 sectionTitles.workerTargets="العمال — التارجت";
+sectionTitles.orderAdditions="طلب إضافة عامل";
 
 function sectionPermission(id) { return ({ calendar: "bookings", cash: "pos", cashierGoals: "dashboard", workerTargets:"teamOperations", workerRequests: "payroll", dailyClosing: "revenue", worker: "dashboard" })[id] || id; }
 const cashierSections = new Set(["pos", "calendar", "bookings", "cash", "cashierGoals", "expenses", "workerTargets"]);
 const cashierOptionalMarketing = new Set(["offers", "campaigns"]);
 function canOpenSection(id) {
-  if(id==='myAttendance')return ['worker','cashier','manager'].includes(state.role);
+  if(state.role === "manager" && (socialSections.has(id) && id !== "packages" || ["mobileContent","websiteContent"].includes(id)))return false;
+  if(id==='orderAdditions')return ['admin','manager','cashier'].includes(state.role)&&(state.role==='admin'||state.permissions.has('pos'));
+  if(id==='myAttendance')return ['worker','cashier','manager','media'].includes(state.role);
   if(id==='attendanceManagement')return state.role==='admin';
   if(id==='targets')return ['admin','cashier','manager'].includes(state.role)&&(state.role==='admin'||state.permissions.has('dashboard'));
-  if(id==='teamAvailability')return state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations');
-  if(['branchOperations','customerRequests','branchNeeds'].includes(id))return state.role==='admin'||state.role==='cashier'&&state.permissions.has('pos')&&(id==='branchNeeds'||state.permissions.has('bookings'))&&(id!=='branchOperations'||state.permissions.has('teamOperations'));
-  if(id==="workerTargets")return ["admin","cashier"].includes(state.role)&&state.permissions.has("teamOperations");
+  if(id==='teamAvailability')return state.role==='admin'||['manager','cashier'].includes(state.role)&&state.permissions.has('teamOperations');
+  if(['branchOperations','customerRequests','branchNeeds'].includes(id))return state.role==='admin'||['manager','cashier'].includes(state.role)&&state.permissions.has('pos')&&(id==='branchNeeds'||state.permissions.has('bookings'))&&(id!=='branchOperations'||state.permissions.has('teamOperations'));
+  if(id==="workerTargets")return ["admin","manager","cashier"].includes(state.role)&&state.permissions.has("teamOperations");
   if(id==="adminAssistant")return state.role==="admin";
   if (!document.getElementById(id)?.classList.contains("admin-section")) return false;
   if (id === "mobileContent" || id === "websiteContent") return state.role !== "worker" && hasContentWorkspace();
@@ -168,10 +204,10 @@ function canOpenSection(id) {
   if (id === "dailyClosing") return state.permissions.has("revenue") && state.permissions.has("expenses");
   return state.permissions.has(sectionPermission(id));
 }
-function sectionHub(id) { return socialSections.has(id) ? "social" : managementSections.has(id) ? "management" : ""; }
+function sectionHub(id) { if(state.role === "manager" && id === "packages")return "management"; return socialSections.has(id) ? "social" : managementSections.has(id) ? "management" : ""; }
 function availableHubSections(hub) {
-  const pool = hub === "social" ? socialSections : managementSections;
-  return [...pool].filter(id => $("#" + id) && canOpenSection(id) && !(id === "worker" && state.role !== "worker"));
+  const pool = hub === "social" ? socialSections : new Set([...managementSections,...(state.role === "manager" ? ["packages"] : [])]);
+  return [...pool].filter(id => sectionHub(id) === hub && $("#" + id) && canOpenSection(id) && !(id === "worker" && state.role !== "worker"));
 }
 function refreshSidebarGroups() {
   $$("#sidebar .nav-group-title").forEach(title => {
@@ -189,13 +225,14 @@ function commitAdminHistory(section, mode = "push") {
   const current = history.state?.adminSection;
   if (current === section && mode === "push") return;
   const url = new URL(location.href);
-  url.hash = section === "workspaceHome" ? "" : `admin=${encodeURIComponent(section)}`;
+  url.hash = section === "orderAdditions" && new URLSearchParams(url.hash.slice(1)).get("admin")==="orderAdditions" ? url.hash : section === "workspaceHome" ? "" : `admin=${encodeURIComponent(section)}`;
   const previousDepth = Math.max(0, Number(history.state?.adminDepth || 0));
   const payload = { ...(history.state || {}), adminSection: section, adminDepth: mode === "replace" ? previousDepth : previousDepth + 1 };
   history[mode === "replace" ? "replaceState" : "pushState"](payload, "", url);
 }
 function showWorkspaceHome({ historyMode = "push" } = {}) {
   closeScanner();
+  if(state.role === "manager"){state.hub="management";$("#adminApp").dataset.hub="management";applyAccess();return void showSection("pos",{historyMode:"replace"});}
   if (state.role === "cashier") return void showSection("calendar", { historyMode: "replace" });
   state.hub = "";
   state.section = "workspaceHome";
@@ -297,26 +334,33 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
   }
   if ($("#cashierPageTitle")) $("#cashierPageTitle").textContent = id === "cash" ? "إحصائيات الشيفت" : sectionTitles[id] || id;
   closeAdminMenu();
+  syncExtraWorkspaceTabs(id,canOpenSection,showSection);
   const activeSection = $("#" + id);
   activeSection?.classList.add("section-loading");
   const tasks = [branchWorkspace.open(id)];
   if(id === "workerRequests")tasks.push(workerRequestCenter.load());
-  if(id === "cash" && state.role === "cashier")tasks.push(cashierAdvanceCenter.load());
+  if(id === "cash" && ["manager","cashier"].includes(state.role))tasks.push(cashierAdvanceCenter.load());
   if (id === "pos" || (id === "bookings" && state.role === "cashier")) {
     if (id === "bookings" || Date.now() - state.loadedAt.cashier > 60_000) tasks.push(loadCashierDashboard());
-    if (id === "pos" && state.role === "cashier" && Date.now() - state.loadedAt.cash > 60_000) tasks.push(loadCashOperations(true));
+    if (id === "pos" && ["manager","cashier"].includes(state.role) && Date.now() - state.loadedAt.cash > 60_000) tasks.push(loadCashOperations(true));
   } else if (["dashboard", "bookings", "revenue", "expenses"].includes(id) && (id === "bookings" || Date.now() - state.loadedAt.dashboard > 45_000)) tasks.push(loadDashboard());
   if (["bookings", "staff"].includes(id) && !state.staffPresentation && (state.role === "admin" || state.permissions.has("attendance")) && Date.now() - state.loadedAt.attendance > 45_000) tasks.push(loadAttendance(true));
-  const map = { websiteContent:state.role === "admin" ? ["settings"] : [], pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["staff"], services: ["categories", "services"] };
+  const map = { websiteContent:canEditSiteMedia() ? ["settings"] : [], pos: ["categories", "services", "packages", "staff", "inventoryItems", "drinks"], revenue: ["services", "staff"], attendance: ["staff"], tasks: ["staff","categories","services","packages"], teamAvailability:["categories","services","packages"], inventory: [], drinks: [], expenses: [], payroll: ["staff", "services", "packages", "offers"], reviews: ["reviews"], packages: ["packages"], offers: ["offers"], coupons: ["coupons"], staff: ["staff"], customers: ["customers"], rewards: ["customers","walletTransactions","settings"], campaigns: ["campaigns"], schedule: ["holidays", "workerLeaves", "staff", "settings"], gallery: ["content"], results: ["content"], hairMedia: ["content"], celebrities: ["content"], posts: ["content"], mobileContent: ["content", ...(canManageContent("offer") ? ["offers"] : [])], faqs: ["faqs"], settings: state.role === "admin" ? ["settings", "branches"] : ["settings"], activity: [], users: ["staff"], services: ["categories", "services"] };
   tasks.push(...(map[id] || []).map(collection => loadCollection(collection)));
   if (state.role === "cashier" && ["bookings", "calendar"].includes(id)) tasks.push(loadCollection("staff"));
   if (id === "pos") tasks.push(loadPosOffers());
+  if(id==='pos'&&serverTransactions)tasks.push(serverTransactions.load());
+  if(orderAdditionView&&id==='pos')tasks.push(orderAdditionView.poll());
+  if(orderAdditionView&&id==='orderAdditions')tasks.push(orderAdditionView.load());
   if (id === "cash") tasks.push(loadCollection("staff"));
   if (["expenses", "payroll", "inventory", "drinks"].includes(id) && Date.now() - state.loadedAt.business > 45_000) tasks.push(loadBusiness());
   try { await Promise.all(tasks); } finally { activeSection?.classList.remove("section-loading"); }
+  if(id==='tasks')workerTaskDrawer?.refresh();
+  if(id==='teamAvailability'){document.dispatchEvent(new Event('mz:service-catalog-refresh'));document.dispatchEvent(new Event('mz:worker-availability-open'));}
+  if(['targets','workerTargets'].includes(id))document.dispatchEvent(new Event('mz:targets-open'));
   if(id==='pos'&&!isOfflineMode()) await prepareOfflinePos();
   if (id === "mobileContent") renderMobileContent();
-  if (id === "websiteContent") { $("#websiteSiteMedia").hidden=state.role!=="admin"; $("#websiteBrandMedia").hidden=state.role!=="admin"; $$('[data-cms-admin]').forEach(el=>el.hidden=state.role!=="admin"); refreshSiteMediaEditor((state.collections.get("settings")||[])[0]||{}); }
+  if (id === "websiteContent") { $("#websiteSiteMedia").hidden=!canEditSiteMedia(); $("#websiteBrandMedia").hidden=!canEditSiteMedia(); $$('[data-cms-admin]').forEach(el=>el.hidden=!(state.role==="admin"||canEditSiteMedia()&&["websiteSiteMedia","websiteBrandMedia"].includes(el.dataset.cmsAnchor))); refreshSiteMediaEditor((state.collections.get("settings")||[])[0]||{}); }
   if (id === "revenue" && state.role === "admin" && adminMobileViewport.matches) {
     const selector = $("#ownerSalesFilters [name=staffId]");
     selector.innerHTML = '<option value="all">كل العاملين</option>' + (state.collections.get("staff") || []).filter(worker => $("#dashboardBranchFilter").value === "all" || worker.branchIds?.includes($("#dashboardBranchFilter").value)).map(worker => `<option value="${escapeAttr(worker.id)}">${escapeHtml(worker.nameAr || worker.id)}</option>`).join("");
@@ -334,7 +378,7 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
     if (state.role === "cashier") await loadCashierTeam();
   }
   if (id === "bookings" && state.role === "cashier") await loadCashierTeam();
-  if (id === "cash") await loadCashOperations(false, state.role === "cashier");
+  if (id === "cash") await loadCashOperations(false, ["manager","cashier"].includes(state.role));
   if (id === "cashierGoals") await loadCashierGoals();
   if (id === "activity") await loadAuditEvents("");
   if (["attendance", "tasks"].includes(id)) await loadAttendance();
@@ -385,7 +429,7 @@ function applyAccess() {
   if ($("#editBranchTarget")) $("#editBranchTarget").hidden = state.role !== "admin";
   if ($("#openAdminPassword")) $("#openAdminPassword").hidden = !["admin", "manager"].includes(state.role);
   if ($("#reportRebuild")) $("#reportRebuild").hidden = state.role !== "admin";
-  if ($("#cashierReportsPanel")) $("#cashierReportsPanel").hidden = state.role !== "cashier" || !state.permissions.has("pos");
+  if ($("#cashierReportsPanel")) $("#cashierReportsPanel").hidden = !["manager","cashier"].includes(state.role) || !state.permissions.has("pos");
   $$("[data-cashier-content]").forEach(button => { button.hidden = state.role !== "cashier" || !hasContentWorkspace(); });
   $$("[data-cashier-offers]").forEach(button => { button.hidden = state.role !== "cashier" || !state.permissions.has("offers"); });
   $$("[data-cashier-campaigns]").forEach(button => { button.hidden = state.role !== "cashier" || !state.permissions.has("campaigns"); });
@@ -393,7 +437,7 @@ function applyAccess() {
     $("#reportBranch").querySelector('option[value="all"]')?.remove();
     $("#reportBranch").value = state.branchIds[0] || "";
   }
-  $$('[data-cashier-target]').forEach(button => { button.hidden = state.role !== "cashier" || !state.permissions.has("dashboard"); });
+  $$('[data-cashier-target]').forEach(button => { button.hidden = !["manager","cashier"].includes(state.role) || !state.permissions.has("dashboard"); });
   syncAdminMobileVisibility();
   const closingScope = $("#dailyClosingForm")?.elements.branchId;
   if (closingScope) {
@@ -413,13 +457,15 @@ const cashierHeaderHomes = {
   branch: $("#cashierBranchLabel").parentElement
 };
 function renderRoleShell() {
-  const cashier = state.role === "cashier";
+  const cashier = ["manager","cashier"].includes(state.role);
+  document.documentElement.dataset.adminLayout=cashier?"cashier":"admin";
   const mobileNav = $(".cashier-mobile-nav");
   if (cashier) mobileNav.innerHTML = '<button type="button" data-section="pos">المعاملات</button><button type="button" data-section="bookings">الحجوزات</button><button type="button" data-cashier-jump="team">الفريق</button><button type="button" data-cashier-jump="tasks">المهام</button><button type="button" data-cashier-more>المزيد</button>';
-  if (state.role === "manager") mobileNav.innerHTML = '<button type="button" data-section="dashboard">الرئيسية</button><button type="button" data-section="bookings">الحجوزات</button><button type="button" data-section="attendance">الفريق</button><button type="button" data-section="mobileContent">المحتوى</button><button type="button" data-open-workspace-home>المزيد</button>';
+  if (state.role === "media") mobileNav.innerHTML = '<button type="button" data-section="mobileContent">المحتوى</button><button type="button" data-section="offers">العروض</button><button type="button" data-section="campaigns">الحملات</button><button type="button" data-open-workspace-home>المزيد</button>';
   if (state.role === "worker") mobileNav.innerHTML = '<button type="button" data-section="worker">الرئيسية</button><button type="button" data-worker-jump="attendance">الحضور</button><button type="button" data-worker-jump="bookings">مواعيدي</button><button type="button" data-worker-jump="tasks">المهام</button><button type="button" data-worker-jump="profile">حسابي</button>';
   const adminNav = $('#sidebar nav[aria-label="أقسام لوحة الإدارة"]');
   adminNav.hidden = cashier;
+  if(state.role==='admin')mountOwnerExtraNavigation(adminNav,canOpenSection);
   $("#cashierSidebarNav").hidden = !cashier;
   $(".admin-header").hidden = cashier;
   $("#cashierHeader").hidden = !cashier;
@@ -428,10 +474,18 @@ function renderRoleShell() {
   if ($("#ownerMobileNav")) $("#ownerMobileNav").hidden = state.role !== "admin";
   $("#sidebarCollapse").hidden = cashier;
   if (cashier) {
+    $("#cashierHeader .cashier-role-badge").textContent = state.role === "manager" ? "مدير الفرع" : "كاشير";
+    $("#cashierHeader .cashier-header-title small").textContent = state.role === "manager" ? "تشغيل وإدارة الفرع · مزين مصر" : "إدارة عمليات الكاشير · مزين مصر";
     const primary = adminNav.querySelector(".sidebar-primary");
     const selectors = ['[data-section="pos"]', '[data-section="calendar"]', '[data-section="bookings"]', '[data-go="cash"]', '[data-cashier-target]'];
     $("#cashierSidebarItems").replaceChildren(...selectors.map(selector => primary.querySelector(selector)?.cloneNode(true)).filter(Boolean));
-    for(const id of ['myAttendance','branchOperations','teamAvailability','targets','customerRequests','branchNeeds']){const link=adminNav.querySelector(`[data-section="${id}"]`)?.cloneNode(true);if(link&&canOpenSection(id)){$("#cashierSidebarItems").append(link);link.hidden=false;}}
+    for(const group of extraWorkspaceEntries(canOpenSection)){const link=document.createElement('button');link.type='button';link.dataset.section=group.sections[0][0];link.dataset.extraWorkspace=group.id;link.textContent=group.label;$('#cashierSidebarItems').append(link);}
+    if(state.role==='manager'){
+      const group=document.createElement('details');group.className='admin-workspace-group';const summary=document.createElement('summary');summary.textContent='إدارة الفرع';group.append(summary);
+      for(const id of ['branchNeeds','staff','payroll','revenue','expenses','inventory','drinks','services','packages','schedule','customers','rewards','workerRequests']){const link=adminNav.querySelector(`[data-section="${id}"]`)?.cloneNode(true);if(link&&canOpenSection(id)){link.hidden=false;group.append(link);}}
+      $('#cashierSidebarItems').append(group);
+    }
+    decorateCashierMenu();
     const shiftLink=$('#cashierSidebarItems [data-go="cash"]');if(shiftLink?.lastChild)shiftLink.lastChild.textContent='ورديتي';
     const marketing = [["offers", "العروض"], ["campaigns", "حملات واتساب"]].filter(([id]) => state.permissions.has(id));
     $("#cashierMarketingLinks").hidden = !marketing.length;
@@ -452,9 +506,8 @@ const adminMobileViewport = matchMedia("(max-width: 720px)");
 function syncAdminMobileVisibility() {
   const visible = state.role === "admin" && adminMobileViewport.matches;
   $$('[data-admin-mobile-only], .workspace-mobile-admin-links, .mobile-admin-menu, .mobile-quick-actions').forEach(element => { element.hidden = !visible; });
-  if ($(".workspace-mobile-admin-links") && state.role === "manager" && adminMobileViewport.matches) $(".workspace-mobile-admin-links").hidden = false;
   if ($("#ownerMobileHome")) $("#ownerMobileHome").hidden = !visible;
-  if ($("#managerBranchOpen")) $("#managerBranchOpen").hidden = state.role !== "manager" || !adminMobileViewport.matches;
+  if ($("#managerBranchOpen")) $("#managerBranchOpen").hidden = state.role !== "manager" || state.branchIds.length<2 || !adminMobileViewport.matches;
   if ($("#ownerMobileNav")) $("#ownerMobileNav").hidden = !visible;
   if ($("#ownerSalesMobile")) $("#ownerSalesMobile").hidden = !visible;
   if ($("#ownerExpensesMobile")) $("#ownerExpensesMobile").hidden = !visible;
@@ -492,7 +545,7 @@ function openAccessEditor(id) {
   state.editingUserId = id;
   $("#accessName").value = item.name || "";
   $("#accessEmail").value = item.email || "";
-  $("#accessRole").value = ["manager", "cashier", "worker"].includes(item.role) ? item.role : "cashier";
+  $("#accessRole").value = ["manager", "cashier", "worker", "media"].includes(item.role) ? item.role : "cashier";
   $$('#accessForm input[name="branchIds"]').forEach(input => { input.checked = (item.branchIds || []).includes(input.value); });
   renderAccessPermissionPicker($("#accessRole").value, item.permissions || roleDefaults[$("#accessRole").value]);
   syncAccessWorkerField($("#accessRole").value, item.staffId || "");
@@ -517,7 +570,7 @@ async function submitAccessEdit(event) {
 function renderUserAccounts() {
   const statusFilter = document.querySelector("#accountStatusFilter")?.value;
   const items = (state.collections.get("users") || []).filter(item => !statusFilter || (item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE")) === statusFilter);
-  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.username || item.phone || item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => escapeHtml(value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value)).join("، ") || "غير محدد"}</p><p><b>UID:</b> <bdi>${escapeHtml(item.id)}</bdi></p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<p>${escapeHtml((item.authProviders || []).join(" • "))} • ${escapeHtml(item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE"))} • آخر دخول: ${escapeHtml(item.lastSignInAt ? dateTime(item.lastSignInAt) : "غير متاح")}</p>${item.role === "worker" ? (()=>{const row=(state.workerRankingRows||[]).find(r=>r.staffId===item.staffId);return row?`<p class="account-worker-performance"><b>أداء الفرع المختار:</b> ${money(row.achieved)} / ${money(row.target)} • ${row.achievementPercent==null?'بدون هدف':Math.round(row.achievementPercent)+'%'}<br>${Number(row.completedBookings)} حجز مكتمل • ${Number(row.completedTasks)} مهمة مكتملة • ترتيب #${Number(row.rank)}</p>`:'<p>الأداء متاح من ترتيب الفريق بعد اختيار فرع العامل.</p>';})():""}<div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions">${item.role === "worker" ? `<button class="small-button" type="button" data-access-action="username" data-uid="${escapeAttr(item.id)}">تعيين اسم مستخدم</button>` : ""}<button class="small-button" type="button" data-access-action="disable" data-uid="${escapeAttr(item.id)}">تعطيل</button><button class="small-button" type="button" data-access-action="activate" data-uid="${escapeAttr(item.id)}">تفعيل</button><button class="small-button" type="button" data-access-action="revoke" data-uid="${escapeAttr(item.id)}">إبطال الجلسات</button>${item.staffId ? `<button class="small-button" type="button" data-access-action="unlink" data-uid="${escapeAttr(item.id)}">فك الربط</button>` : ""}<button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
+  $("#userAccountsList").innerHTML = items.map(item => `<article class="entity-card user-access-card"><h3>${escapeHtml(item.name || item.email || item.id)}</h3><p>${escapeHtml(item.username || item.phone || item.email || "—")} • ${escapeHtml(({ admin: "أدمن", manager: "مسؤول الفرع", cashier: "كاشير", worker: "عامل", media: "الميديا" })[item.role] || item.role || "—")}</p><p><b>الفروع:</b> ${item.role === "admin" ? "كل الفروع" : (item.branchIds || []).map(value => escapeHtml(value === "talkha" ? "طلخا" : value === "mashaya" ? "المشاية" : value)).join("، ") || "غير محدد"}</p><p><b>UID:</b> <bdi>${escapeHtml(item.id)}</bdi></p>${item.staffId ? `<p><b>عضو الفريق:</b> ${escapeHtml((state.collections.get("staff") || []).find(member => member.id === item.staffId)?.nameAr || item.staffId)}</p>` : ""}<p>${escapeHtml((item.authProviders || []).join(" • "))} • ${escapeHtml(item.accountStatus || (item.active === false ? "DISABLED" : "ACTIVE"))} • آخر دخول: ${escapeHtml(item.lastSignInAt ? dateTime(item.lastSignInAt) : "غير متاح")}</p>${item.role === "worker" ? (()=>{const row=(state.workerRankingRows||[]).find(r=>r.staffId===item.staffId);return row?`<p class="account-worker-performance"><b>أداء الفرع المختار:</b> ${money(row.achieved)} / ${money(row.target)} • ${row.achievementPercent==null?'بدون هدف':Math.round(row.achievementPercent)+'%'}<br>${Number(row.completedBookings)} حجز مكتمل • ${Number(row.completedTasks)} مهمة مكتملة • ترتيب #${Number(row.rank)}</p>`:'<p>الأداء متاح من ترتيب الفريق بعد اختيار فرع العامل.</p>';})():""}<div class="permission-tags">${(item.role === "admin" ? ["كل الصلاحيات"] : item.permissions || []).map(value => `<span>${escapeHtml(permissionLabels[value] || value)}</span>`).join("")}</div>${state.role === "admin" && item.role !== "admin" && item.id !== state.user?.uid ? `<div class="entity-actions">${item.role === "worker" ? `<button class="small-button" type="button" data-access-action="username" data-uid="${escapeAttr(item.id)}">تعيين اسم مستخدم</button>` : ""}<button class="small-button" type="button" data-access-action="disable" data-uid="${escapeAttr(item.id)}">تعطيل</button><button class="small-button" type="button" data-access-action="activate" data-uid="${escapeAttr(item.id)}">تفعيل</button><button class="small-button" type="button" data-access-action="revoke" data-uid="${escapeAttr(item.id)}">إبطال الجلسات</button>${item.staffId ? `<button class="small-button" type="button" data-access-action="unlink" data-uid="${escapeAttr(item.id)}">فك الربط</button>` : ""}<button class="small-button" type="button" data-edit-user-access="${escapeAttr(item.id)}">تعديل الصلاحيات</button><button class="small-button danger" type="button" data-secure-delete-user="${escapeAttr(item.id)}" data-secure-delete-label="حساب ${escapeAttr(item.name || item.email || "العامل")}">حذف الحساب</button></div>` : ""}</article>`).join("") || '<div class="empty-state">لا توجد حسابات مسجلة.</div>';
 }
 
 function workerSelectOptions(selected = "", branchId = "") {
@@ -558,7 +611,7 @@ function renderAttendance() {
     const record = item.attendance;
     const present = isToday && item.status === "PRESENT";
     const statusText = item.status === "PRESENT" ? (isToday ? "موجود الآن" : "حضر ولم يسجل الانصراف") : item.status === "CHECKED_OUT" ? "حضر وانصرف" : "غير حاضر";
-    return `<article class="attendance-card ${present ? "present" : ""}"><header><img src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt=""><div><b>${escapeHtml(item.nameAr)}</b><small>${(item.branchIds || []).map(id => escapeHtml(branchLabel(id))).join(" • ")}</small></div></header><span class="attendance-state">${statusText}</span>${record ? `<small>الحضور ${escapeHtml(record.checkInTime || dateTime(record.checkInAt))}${record.checkOutTime ? ` • الانصراف ${escapeHtml(record.checkOutTime)}` : ""}</small><small>المسافة المسجلة: ${Number(record.locationEvidence?.distanceMeters || 0)} متر</small>` : ""}<footer>${present && !item.accountRole && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button class="small-button" type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(record?.branchId || item.branchIds?.[0] || "")}">تنبيه ${escapeHtml(item.nameAr)}</button>` : ""}</footer></article>`;
+    return `<article class="attendance-card ${present ? "present" : ""}"><header><img src="${escapeAttr(safeMediaUrl(item.imageUrl) || "/assets/el-mezaen-mark-v2.webp")}" alt=""><div><b>${escapeHtml(item.nameAr)}</b><small>${(item.branchIds || []).map(id => escapeHtml(branchLabel(id))).join(" • ")}</small></div></header><span class="attendance-state">${statusText}</span>${record ? `<small>الحضور ${escapeHtml(record.checkInTime || dateTime(record.checkInAt))}${record.checkOutTime ? ` • الانصراف ${escapeHtml(record.checkOutTime)}` : ""}</small><small>${record.locationEvidence?.method==="MANUAL"?"تسجيل حضور يدوي بواسطة مسؤول الفرع":Number.isFinite(record.locationEvidence?.distanceMeters)?"المسافة المسجلة: "+Number(record.locationEvidence.distanceMeters)+" متر":"الموقع غير متاح في السجل"}</small>` : ""}<footer>${isToday && !item.accountRole && ["admin","manager","cashier"].includes(state.role) && (state.role==="admin"||state.permissions.has(state.role==="cashier"?"teamOperations":"attendance")) && (!record || present) ? `<button class="small-button" type="button" data-manual-attendance="${present?"checkOut":"checkIn"}" data-manual-staff="${escapeAttr(item.staffId)}" data-manual-branch="${escapeAttr(record?.branchId||($("#attendanceBranch")?.value!=="all"?$("#attendanceBranch")?.value:item.branchIds?.find(id=>state.role==="admin"||state.branchIds.includes(id)))||"")}" data-manual-name="${escapeAttr(item.nameAr)}">${present?"تسجيل انصراف يدوي":"تسجيل حضور يدوي"}</button>`:""}${present && !item.accountRole && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button class="small-button" type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(record?.branchId || item.branchIds?.[0] || "")}">تنبيه ${escapeHtml(item.nameAr)}</button>` : ""}</footer></article>`;
   }).join("") || '<div class="empty-state">لا يوجد عمال مطابقون للفرع والتاريخ.</div>';
   renderStaffSummary();
 }
@@ -717,7 +770,12 @@ async function submitWorkerTask(event) {
   const button = form.querySelector('button[type="submit"]');
   const data = Object.fromEntries(new FormData(form));
   await withButtonBusy(button, async () => {
-    await createWorkerTask({ ...data, idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
+    const {taskMode,serviceChoice,durationMinutes,...payload}=data;
+    if(taskMode==='service'){const [kind,...id]=String(serviceChoice||'').split(':');payload.serviceKind=kind;payload.serviceId=id.join(':');}
+    if(taskMode==='manual')payload.durationMinutes=Number(durationMinutes);
+    if(taskMode==='booking')payload.queueBooking=true;
+    await createWorkerTask({ ...payload, idempotencyKey: form.dataset.key ||= crypto.randomUUID() });
+    workerTaskDrawer?.close();
     form.reset(); form.dataset.key = "";
     if ($("#taskBranch option")) $("#taskBranch").value = state.branchIds[0] || "talkha";
     await loadAttendance();
@@ -729,21 +787,30 @@ async function sendWorkerAlert(button) {
   const staffId = button.dataset.notifyWorker;
   const branchId = button.dataset.notifyBranch;
   const bookingId = button.dataset.notifyBooking || "";
-  const defaultMessage = bookingId ? "عندك ميعاد الآن، راجع تفاصيل الحجز" : "مطلوب تواجدك الآن في منطقة العمل";
+  const receipt=bookingId?(state.receiptLookup?.get(bookingId)||state.dashboard.bookings.find(item=>item.id===bookingId)):null;
+  const assignedServices=(receipt?.items||[]).filter(item=>item.workerId===staffId).map(item=>item.nameAr).join(" + ");
+  const defaultMessage = bookingId ? (`طلب ${bookingId} • ${receipt?.customerName||"عميل"} • ${assignedServices||"راجع تفاصيل الحجز"}`).slice(0,240) : "مطلوب تواجدك الآن في منطقة العمل";
   const message = prompt("رسالة التنبيه للعامل", defaultMessage)?.trim();
   if (!message) return;
   await withButtonBusy(button, async () => {
-    await notifyWorker({ staffId, branchId, bookingId, message, idempotencyKey: crypto.randomUUID() });
-    toast("تم إرسال التنبيه للعامل");
+    const fingerprint=JSON.stringify([staffId,branchId,bookingId,message]);
+    if(button.dataset.alertFingerprint!==fingerprint){button.dataset.alertFingerprint=fingerprint;button.dataset.alertKey=crypto.randomUUID();}
+    const result=await notifyWorker({ staffId, branchId, bookingId, message, idempotencyKey:button.dataset.alertKey });
+    toast(result?.delivery?.sent>0?'تم حفظ التنبيه وقبوله للإرسال على أجهزة العامل':'التنبيه محفوظ في حساب العامل؛ لا يوجد تأكيد إرسال للموبايل. راجع تفعيل الإشعارات');
   }).catch(error => toast(error.message || "تعذر إرسال التنبيه", true));
 }
 
+const assignmentSuggestions=new Map();
+const assignmentContext=item=>JSON.stringify([state.user?.uid,state.role,$('#headerBranchFilter').value,item.branchId,item.id,item.bookingDate,item.bookingTime,item.orderRevision||0]);
+async function suggestBookingWorker(bookingId,button){const item=state.dashboard.bookings.find(value=>value.id===bookingId);if(!item)return;const key=assignmentContext(item);await withButtonBusy(button,async()=>{const result=await getWorkerAvailability({branchId:item.branchId,dateKey:item.bookingDate,bookingId:item.id});if(key!==assignmentContext(item))return;assignmentSuggestions.set(key,{at:Date.now(),rows:result.candidates||[]});renderBookings();const select=document.querySelector(`[data-assign-worker-select="${CSS.escape(item.id)}"]`),best=result.candidates?.find(row=>row.canAssign);if(select&&best)select.value=best.id;toast(best?'تم اقتراح أقل عامل ضغطًا من المتاحين للموعد':'لا يوجد عامل متاح لهذا الموعد؛ راجع الوقت أو الجدول',!best);}).catch(error=>toast(error.message||'تعذر مراجعة العمال',true));}
 async function assignBookingToWorker(bookingId, staffId, button) {
   const item = state.dashboard.bookings.find(value => value.id === bookingId);
   if (!item || !staffId) return toast("اختر العامل أولًا", true);
   await withButtonBusy(button, async () => {
-    const result = await rescheduleBooking({ id: item.id, date: item.bookingDate, time: item.bookingTime, staffId, requestId: crypto.randomUUID() });
-    Object.assign(item, { staffId: result.workerId, staffNameAr: result.workerNameAr });
+    const fingerprint=JSON.stringify([item.id,staffId,item.bookingDate,item.bookingTime]);if(button.dataset.assignmentFingerprint!==fingerprint){button.dataset.assignmentFingerprint=fingerprint;button.dataset.assignmentKey=crypto.randomUUID();}
+    const result = await rescheduleBooking({ id: item.id, date: item.bookingDate, time: item.bookingTime, staffId, requestId:button.dataset.assignmentKey });
+    Object.assign(item, { staffId: result.workerId, staffNameAr: result.workerNameAr, ...(result.items?{items:result.items,workerIds:result.workerIds,orderRevision:result.orderRevision}:{}) });
+    assignmentSuggestions.clear();
     renderBookings();
     toast(`تم تحويل الحجز إلى ${result.workerNameAr}`);
   }).catch(error => toast(error.message || "تعذر تحويل الحجز", true));
@@ -858,7 +925,8 @@ async function loadCashierDashboard(silent = false) {
 }
 
 async function refreshCashierOperations() {
-  if (state.role !== "cashier") return;
+  if(serverTransactions)void serverTransactions.load();
+  if (!["manager","cashier"].includes(state.role)) return;
   await Promise.allSettled([loadCashOperations(true), loadCashierDashboard(true)]);
 }
 
@@ -911,7 +979,7 @@ function renderCalendar() {
   const workers = new Map((state.calendar.staff || []).map(item => [item.id, item.nameAr || item.id]));
   const boardQuickActions = item => {
     if (!["pending", "confirmed", "arrived"].includes(item.status)) return "";
-    const action = (name, label) => `<button type="button" class="small-button" data-booking-action="${name}" data-booking-id="${escapeAttr(item.id)}">${label}</button>`;
+    const action = (name, label) => `<button type="button" class="small-button board-action-${name}" data-booking-action="${name}" data-booking-id="${escapeAttr(item.id)}" data-expected-total="${Number(item.total)}" data-expected-revision="${Number(item.orderRevision||0)}">${label}</button>`;
     const main = item.status === "pending" ? action("confirmed", "تأكيد") : item.status === "confirmed" ? action("arrived", "وصل") : "";
     const noShow = ["confirmed", "arrived"].includes(item.status) ? action("no_show", "لم يحضر") : "";
     const complete = item.status === "arrived" ? action(item.paymentStatus === "paid" ? "completed" : "checkout", item.paymentStatus === "paid" ? "اكتملت" : "تحصيل وإكمال") : "";
@@ -921,7 +989,7 @@ function renderCalendar() {
   const groups = [{ key: "pending", label: "قيد المراجعة", color: "warning" }, { key: "confirmed", label: "مؤكدة", color: "primary", statuses: ["confirmed", "arrived"] }, { key: "completed", label: "اكتملت", color: "success" }, { key: "cancelled", label: "ملغاة", color: "danger", statuses: ["cancelled", "rejected"] }, { key: "no_show", label: "لم تحضر", color: "muted" }];
   target.innerHTML = groups.map(group => {
     const items = bookings.filter(item => (group.statuses || [group.key]).includes(item.status));
-    return `<section class="booking-board-column"><header><span><i class="board-status-dot ${group.color}"></i>${group.label}<b>${items.length}</b></span><small>${money(items.reduce((sum, item) => sum + Number(item.total || 0), 0))}</small></header><div class="booking-board-items">${items.map(item => `<article class="booking-board-card"><button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${item.status === "arrived" ? "وصل · " : ""}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small></button>${boardQuickActions(item)}</article>`).join("") || '<p class="booking-board-empty">لا توجد حجوزات هنا</p>'}</div></section>`;
+    return `<section class="booking-board-column"><header><span><i class="board-status-dot ${group.color}"></i>${group.label}<b>${items.length}</b></span><small>${money(items.reduce((sum, item) => sum + Number(item.total || 0), 0))}</small></header><div class="booking-board-items">${items.map(item => `<article class="booking-board-card" data-booking-status="${escapeAttr(item.status)}"><button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${item.status === "arrived" ? "وصل · " : ""}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small></button>${boardQuickActions(item)}</article>`).join("") || '<p class="booking-board-empty">لا توجد حجوزات هنا</p>'}</div></section>`;
   }).join("");
 }
 
@@ -954,7 +1022,7 @@ function renderCashOperations() {
   const isOpen = state.cash.state?.status === "OPEN" && shift.status === "OPEN";
   const ownsShift=state.role!=="cashier"||shift.cashierUid===state.user?.uid;
   const advanceShortcut = document.querySelector('[data-cash-movement="ADVANCE"]');
-  if(advanceShortcut){advanceShortcut.hidden=state.role!=="cashier";advanceShortcut.disabled=state.role!=="cashier";}
+  if(advanceShortcut){advanceShortcut.hidden=!["manager","cashier"].includes(state.role);advanceShortcut.disabled=!["manager","cashier"].includes(state.role);}
   const shiftShortcut = $(".sidebar-end-shift");
   if (shiftShortcut) {shiftShortcut.textContent = isOpen ? "إنهاء الشيفت" : "بدء الشيفت";if(isOpen&&!ownsShift)shiftShortcut.textContent="الوردية مع كاشير آخر";shiftShortcut.disabled=isOpen&&!ownsShift||Boolean(state.cash.state?.pendingHandoverId);}
   if ($("#cashierNoShiftNotice")) $("#cashierNoShiftNotice").hidden = state.role !== "cashier" || isOpen;
@@ -992,7 +1060,7 @@ function renderCashOperations() {
 }
 
 function renderShiftKpis() {
-  if (state.role !== "cashier") return;
+  if (!["manager","cashier"].includes(state.role)) return;
   const current = state.cash.snapshot;
   const values = { posTodayRevenue: current?.netRevenue, posTodayOrders: current?.transactionsCount,
     posTodayCash: current?.expectedCash, posTodayCard: current?.cardSales, posTodayTransfer: current?.transferSales,
@@ -1099,14 +1167,14 @@ function reportNumbers(totals) {
 }
 function showShiftReport(report) {
   const result = $("#shiftReportResult");
-  result.innerHTML = `${reportPrintHeader("تقرير إغلاق الشيفت", report.branchName || branchLabel(report.branchId), report.businessDate, report.closedAt)}<p>الكاشير: ${escapeHtml(report.cashierName || report.cashierUid)} • الوردية: ${escapeHtml(report.shiftId)}</p><p>من ${escapeHtml(dateTime(report.openedAt))} إلى ${escapeHtml(dateTime(report.closedAt))}</p>${reportNumbers({ grossRevenue: report.grossRevenue, netRevenue: report.netCollected, cash: report.cash, card: report.card, transfer: report.transfer, other: report.other, refunds: report.refunds, expenses: report.expenses, advances: report.advances, payrollCashPaid: report.payrollCashPaid ?? null, transactions: report.transactions, cashIn: report.cashIn, cashOut: report.cashOut })}<p>رصيد البداية ${money(report.openingCash)} • المتوقع ${money(report.expectedCash)} • الفعلي ${money(report.actualCash)} • الفرق ${money(report.variance)}</p>${report.notes ? `<p>الملاحظة: ${escapeHtml(report.notes)}</p>` : ""}`;
+  result.innerHTML = `${reportPrintHeader("تقرير إغلاق الشيفت", report.branchName || branchLabel(report.branchId), report.businessDate, report.closedAt)}<p>الكاشير: ${escapeHtml(report.cashierName || report.cashierUid)} • الوردية: ${escapeHtml(report.shiftId)}</p><p>من ${escapeHtml(dateTime(report.openedAt))} إلى ${escapeHtml(dateTime(report.closedAt))}</p>${reportNumbers({ grossRevenue: report.grossRevenue, netRevenue: report.netCollected, cash: report.cash, card: report.card, transfer: report.transfer, other: report.other, refunds: report.refunds, expenses: report.expenses, advances: report.advances, payrollCashPaid: report.payrollCashPaid ?? null, transactions: report.transactions, cashIn: report.cashIn, cashOut: report.cashOut })}${renderShiftReconciliation(report)}${report.notes ? `<p>الملاحظة: ${escapeHtml(report.notes)}</p>` : ""}`;
   $("#shiftReportPrint").disabled = false;
 }
 function showCurrentShiftReport() {
   const shift = state.cash.shift;
   const live = state.cash.snapshot;
   if (!shift || !live || shift.status !== "OPEN") return toast("ابدأ الشيفت أو اختر تقرير وردية مغلقة", true);
-  $("#shiftReportResult").innerHTML = `${reportPrintHeader("ملخص الوردية الحالية · مبدئي", branchLabel(shift.branchId), shift.businessDate, new Date().toISOString())}<p>${escapeHtml(shift.cashierName || "الكاشير")} • منذ ${escapeHtml(dateTime(shift.openedAt))}</p>${reportNumbers({ grossRevenue: live.grossRevenue, netRevenue: live.netRevenue, cash: live.cashSales, card: live.cardSales, transfer: live.transferSales, other: live.otherSales, refunds: live.refunds, expenses: live.expenses, advances: live.advances, payrollCashPaid: live.payrollCashPaid ?? null, cashIn: live.cashIn, cashOut: live.cashOut, transactions: live.transactionsCount })}<p>الرصيد المتوقع ${money(live.expectedCash)}. الأرقام مبدئية حتى إغلاق الشيفت.</p>`;
+  $("#shiftReportResult").innerHTML = `${reportPrintHeader("ملخص الوردية الحالية · مبدئي", branchLabel(shift.branchId), shift.businessDate, new Date().toISOString())}<p>${escapeHtml(shift.cashierName || "الكاشير")} • منذ ${escapeHtml(dateTime(shift.openedAt))}</p>${reportNumbers({ grossRevenue: live.grossRevenue, netRevenue: live.netRevenue, cash: live.cashSales, card: live.cardSales, transfer: live.transferSales, other: live.otherSales, refunds: live.refunds, expenses: live.expenses, advances: live.advances, payrollCashPaid: live.payrollCashPaid ?? null, cashIn: live.cashIn, cashOut: live.cashOut, transactions: live.transactionsCount })}${renderShiftReconciliation({openingCash:shift.openingCash,cash:live.cashSales,cashIn:live.cashIn,cashOut:live.cashOut,expectedCash:live.expectedCash})}<p>الأرقام مبدئية حتى إغلاق الشيفت؛ الجرد الفعلي والفرق يتحددوا وقت الإغلاق.</p>`;
   $("#shiftReportPrint").disabled = false;
 }
 async function loadShiftReport(button = $("#shiftReportLoad")) {
@@ -1124,7 +1192,7 @@ function reportKey() {
 }
 function showBusinessReports(reports, missingBranches, combined = null, resultNode = $("#reportResult"), printButton = $("#reportPrint")) {
   if (combined) reports = [combined, ...reports];
-  const body = reports.map(report => `${reportPrintHeader(`تقرير ${({ daily: "يومي", weekly: "أسبوعي", monthly: "شهري" })[report.type]}`, report.branchName || branchLabel(report.branchId), `${report.periodStart} — ${report.periodEnd}`, report.generatedAt)}${reportNumbers(report.totals)}${report.attendance ? `<p>عدد الحضور المسجل: ${Number(report.attendance.checkedIn || 0)}</p>` : ""}${report.target ? `<p>الهدف ${money(report.target.amount)} • المحقق ${money(report.target.actual)} • المتبقي ${money(report.target.remaining)} • الإنجاز ${report.target.percent}%</p>` : ""}${report.days?.length ? `<div class="v7-report-days">${report.days.map(day => `<span>${escapeHtml(day.key)}: ${day.available ? money(day.netRevenue) : "تقرير يومي ناقص"}</span>`).join("")}</div>` : ""}`);
+  const body = reports.map(report => `<article class="business-report">${reportPrintHeader(`تقرير ${({ daily: "يومي", weekly: "أسبوعي", monthly: "شهري" })[report.type]}`, report.branchName || branchLabel(report.branchId), `${report.periodStart} — ${report.periodEnd}`, report.generatedAt)}${reportNumbers(report.totals)}${report.attendance ? `<p>عدد سجلات الحضور: ${Number(report.attendance.checkedIn || 0)} — قد يتكرر نفس الموظف بين الأيام والورديات.</p>` : ""}${report.target ? `<p>هدف الفرع الشهري ${money(report.target.amount)} • المحقق ${money(report.target.actual)} • المتبقي ${money(report.target.remaining)} • الإنجاز ${report.target.percent}%</p>` : ""}${renderReportDetails(report)}${renderReportDays(report.days)}</article>`);
   resultNode.innerHTML = `${missingBranches.length ? `<p class="v7-report-warning">لا يوجد تقرير محفوظ: ${missingBranches.map(branchLabel).map(escapeHtml).join("، ")}</p>` : ""}${body.join("") || "لم يُنشأ هذا التقرير بعد."}`;
   printButton.disabled = !reports.length;
 }
@@ -1139,7 +1207,7 @@ async function loadBusinessReport(button = $("#reportLoad")) {
   });
 }
 async function loadCashierPeriodReport(button = $("#cashierReportLoad")) {
-  if (state.role !== "cashier" || !state.permissions.has("pos")) return;
+  if (!["manager","cashier"].includes(state.role) || !state.permissions.has("pos")) return;
   const type = $("#cashierReportType").value;
   const date = $("#cashierReportDate").value;
   const periodKey = type === "monthly" ? $("#cashierReportMonth").value : type === "weekly" && date ? weekStart(date) : date;
@@ -1306,7 +1374,7 @@ async function submitBranchTarget(event) {
 }
 
 async function loadCashierGoals() {
-  if (state.role !== "cashier" || !state.permissions.has("dashboard")) return;
+  if (!["manager","cashier"].includes(state.role) || !state.permissions.has("dashboard")) return;
   const panel = $("#cashierShiftTargets");
   panel.hidden = false;
   const branchId = state.branchIds[0];
@@ -1458,18 +1526,18 @@ function bookingRowMini(item) {
   return `<tr><td><b>${escapeHtml(item.code)}</b></td><td><span class="branch-pill">${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><small>${money(item.total)}</small></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br><small>${escapeHtml(item.bookingTime || "")}</small></td><td><span class="status-pill" data-status="${escapeAttr(item.status)}">${statusLabel(item.status)}</span></td><td>${paymentLabel(item.paymentStatus)}</td></tr>`;
 }
 
-function receiptActionButtons(id, printLabel = "طباعة الإيصال", includeDetails = true) {
+function receiptActionButtons(id, printLabel = "طباعة الإيصال", includeDetails = true, includeReprint = true) {
   const safeId = escapeAttr(id);
-  return `${includeDetails ? `<button class="receipt-action receipt-details" data-open-receipt="${safeId}">تفاصيل</button>` : ""}<button class="receipt-action receipt-print" data-print-booking="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>${escapeHtml(printLabel)}</button>${includeDetails ? "" : `<button type="button" class="receipt-action" data-reprint-booking="${safeId}">إعادة طباعة الإيصال</button>`}<button class="receipt-action receipt-whatsapp" data-whatsapp-receipt="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1"/></svg>إرسال واتساب</button>`;
+  return `${includeDetails ? `<button class="receipt-action receipt-details" data-open-receipt="${safeId}">تفاصيل</button>` : ""}<button class="receipt-action receipt-print" data-print-booking="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>${escapeHtml(printLabel)}</button>${includeDetails || !includeReprint ? "" : `<button type="button" class="receipt-action" data-reprint-booking="${safeId}">إعادة طباعة الإيصال</button>`}<button class="receipt-action receipt-whatsapp" data-whatsapp-receipt="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1"/></svg>إرسال واتساب</button>`;
 }
 
 function canRefundBooking(item) { return item.paymentStatus === "paid" && Boolean(item.paymentMethod) && (state.role === "admin" || state.permissions.has("revenue") || state.permissions.has("refundTransactions")); }
 
 function receiptDrawerOperations(item) {
   const id = escapeAttr(item.id);
-  const action = (name, label) => `<button type="button" class="small-button" data-booking-action="${name}" data-booking-id="${id}">${label}</button>`;
+  const action = (name, label) => `<button type="button" class="small-button" data-booking-action="${name}" data-booking-id="${id}" data-expected-total="${Number(item.total)}" data-expected-revision="${Number(item.orderRevision||0)}">${label}</button>`;
   if (item.source === "pos") {
-    return canRefundBooking(item) ? action("refund", "استرداد") : item.paymentStatus === "unpaid" && state.permissions.has("revenue") ? action("markPaid", "تسجيل الدفع") : item.paymentStatus === "paid" && state.role === "cashier" ? '<small>الاسترداد يتطلب مديرًا أو صلاحية استرداد.</small>' : "";
+    return canRefundBooking(item) ? action("refund", "استرداد") : item.paymentStatus === "unpaid" && item.orderState !== "VOIDED" && state.permissions.has("revenue") ? action("markPaid", "إكمال وتحصيل") + action("void", "إلغاء الشيك") : item.paymentStatus === "paid" && state.role === "cashier" ? '<small>الاسترداد يتطلب مديرًا أو صلاحية استرداد.</small>' : "";
   }
   if (!state.permissions.has("bookings")) return "";
   const states = { pending: [["confirmed", "تأكيد"], ["rejected", "رفض"], ["cancelled", "إلغاء"]], confirmed: [["arrived", "وصل للفرع"], ["no_show", "لم يحضر"], ["cancelled", "إلغاء"]], arrived: [["no_show", "لم يحضر"]] };
@@ -1482,11 +1550,12 @@ function receiptDrawerOperations(item) {
 }
 
 function openReceiptDrawer(id) {
-  const item = state.dashboard.bookings.find(value => value.id === id);
+  const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   if (!item) return toast("تعذر العثور على الشيك", true);
   $("#receiptDrawerTitle").textContent = `${item.source === "pos" ? "شيك" : "حجز"} ${item.code || item.receiptNumber || item.id}`;
   const lines = item.items || [];
-  $("#receiptDrawerBody").innerHTML = `<h3 class="receipt-section-title">ملخص العملية</h3><section class="receipt-drawer-summary"><div><span>رقم العملية</span><b>${escapeHtml(item.receiptNumber || item.code || item.id)}</b><small>${escapeHtml(dateTime(item.createdAt || item.bookingDate))}</small></div><div><span>العميل</span><b>${escapeHtml(item.customerName || "عميل نقدي")}</b><small>${escapeHtml(item.phone || "لا يوجد رقم")}</small></div><div><span>الفرع</span><b>${escapeHtml(branchLabel(item.branchId))}</b><small>${escapeHtml(item.bookingDate || String(item.createdAt || "").slice(0, 10))} ${escapeHtml(item.bookingTime || "")}</small></div><div><span>الحالة</span><b>${escapeHtml(statusLabel(item.status))}</b><small>${escapeHtml(paymentLabel(item.paymentStatus))} • ${escapeHtml(paymentMethod(item.paymentMethod))}</small></div><div><span>الإجمالي</span><b>${money(item.total)}</b><small>الخصم ${money(item.discountAmount)}</small></div></section><section class="receipt-drawer-lines" aria-label="بنود العملية"><h3 class="receipt-section-title">الخدمات والبنود</h3>${lines.map(line => `<article><div><b>${escapeHtml(line.nameAr || "بند")}</b><small>${escapeHtml(line.workerNameAr || item.staffNameAr || "بدون عامل")} • الكمية ${Number(line.qty || 1)}</small></div><strong>${money(line.lineTotal ?? Number(line.price || 0) * Number(line.qty || 1))}</strong></article>`).join("") || '<p>تفاصيل البنود غير متاحة لهذا السجل القديم.</p>'}</section><footer class="receipt-drawer-actions"><h3 class="receipt-section-title">إجراءات العملية</h3>${item.source === "pos" && item.paymentStatus === "unpaid" && state.permissions.has("revenue") ? `<label>طريقة الدفع<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select></label>` : ""}${receiptDrawerOperations(item)}${receiptActionButtons(item.id, "طباعة الإيصال", false)}</footer>`;
+  $("#receiptDrawerBody").innerHTML = `<h3 class="receipt-section-title">ملخص العملية</h3><section class="receipt-drawer-summary"><div><span>رقم العملية</span><b>${escapeHtml(item.receiptNumber || item.code || item.id)}</b><small>${escapeHtml(dateTime(item.createdAt || item.bookingDate))}</small></div><div><span>العميل</span><b>${escapeHtml(item.customerName || "عميل نقدي")}</b><small>${escapeHtml(item.phone || "لا يوجد رقم")}</small></div><div><span>الفرع</span><b>${escapeHtml(branchLabel(item.branchId))}</b><small>${escapeHtml(item.bookingDate || String(item.createdAt || "").slice(0, 10))} ${escapeHtml(item.bookingTime || "")}</small></div><div><span>الحالة</span><b>${escapeHtml(statusLabel(item.status))}</b><small>${escapeHtml(paymentLabel(item.paymentStatus))} • ${escapeHtml(paymentMethod(item.paymentMethod))}${item.serviceStatus==='READY_FOR_CHECKOUT'?' • تمت الخدمة — جاهز للتحصيل':item.serviceStatus==='IN_PROGRESS'?' • الخدمة جارية':''}</small></div><div><span>الإجمالي</span><b>${money(item.total)}</b><small>الخصم ${money(item.discountAmount)}</small></div></section><section class="receipt-drawer-lines" aria-label="بنود العملية"><h3 class="receipt-section-title">الخدمات والبنود</h3>${lines.map(line => `<article><div><b>${escapeHtml(line.nameAr || "بند")}</b><small>${escapeHtml(line.workerNameAr || item.staffNameAr || "بدون عامل")} • الكمية ${Number(line.qty || 1)}</small></div><strong>${money(line.lineTotal ?? Number(line.price || 0) * Number(line.qty || 1))}</strong></article>`).join("") || '<p>تفاصيل البنود غير متاحة لهذا السجل القديم.</p>'}</section><footer class="receipt-drawer-actions"><h3 class="receipt-section-title">إجراءات العملية</h3>${item.source === "pos" && item.paymentStatus === "unpaid" && state.permissions.has("revenue") ? `<label>طريقة الدفع<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select></label>` : ""}${receiptDrawerOperations(item)}${receiptActionButtons(item.id, "طباعة الإيصال", false)}</footer>`;
+  decorateReceiptActions($("#receiptDrawer .receipt-drawer-actions"));
   if (!$("#receiptDrawer").open) $("#receiptDrawer").showModal();
 }
 
@@ -1509,7 +1578,7 @@ function renderBranchFilters() {
     if (!select) return;
     const current = select.value;
     select.innerHTML = `<option value="all">${allLabel}</option>` + [...branches].map(([id, name]) => `<option value="${escapeAttr(id)}">${escapeHtml(name)}</option>`).join("");
-    select.value = branches.has(current) ? current : state.role === "cashier" && allowedBranches.length === 1 ? allowedBranches[0] : "all";
+    select.value = branches.has(current) ? current : ["manager","cashier"].includes(state.role) && allowedBranches.length === 1 ? allowedBranches[0] : "all";
   });
   if ($("#headerBranchFilter") && $("#dashboardBranchFilter")) $("#headerBranchFilter").value = $("#dashboardBranchFilter").value;
   const staffFilter = $("#dashboardStaffFilter");
@@ -1545,12 +1614,14 @@ function renderBookings() {
     const canCheckout = state.permissions.has("pos") || state.permissions.has("revenue");
     const canRefund = canRefundBooking(item);
     const presentWorkers = state.attendance.dateKey === cairoDateKey() && (state.attendance.branchId === item.branchId || state.attendance.branchId === "all") ? (state.attendance.rows || []).filter(worker => worker.status === "PRESENT" && (worker.branchIds || []).includes(item.branchId)) : [];
-    const workerOptions = presentWorkers.map(worker => `<option value="${escapeAttr(worker.staffId)}" ${worker.staffId === item.staffId ? "selected" : ""}>${escapeHtml(worker.nameAr)} · ${escapeHtml(staffOperationalLabel({ ...worker, id: worker.staffId }, item.branchId))}</option>`).join("");
-    const workerControls = !terminal && ["pending", "confirmed"].includes(item.status) && (state.permissions.has("bookings") || state.role === "admin") ? `<div class="booking-worker-controls"><select data-assign-worker-select="${escapeAttr(item.id)}"><option value="">${state.role === "cashier" ? "اختر عاملًا · التواجد غير مؤكد" : "اختر الموجود بالمحل"}</option>${workerOptions}</select><button type="button" data-assign-booking="${escapeAttr(item.id)}">تحويل</button></div>` : "";
+    const suggestion=assignmentSuggestions.get(assignmentContext(item));
+    const ranked=suggestion&&Date.now()-suggestion.at<30000?suggestion.rows:null;
+    const workerOptions = ranked?ranked.map(worker=>`<option value="${escapeAttr(worker.id)}" ${!worker.canAssign?'disabled':''}>${escapeHtml(worker.nameAr)} · ${escapeHtml(worker.reason)} · ${worker.bookingCount} حجوزات / ${worker.workloadMinutes} دقيقة</option>`).join(''):presentWorkers.map(worker => `<option value="${escapeAttr(worker.staffId)}" ${worker.staffId === item.staffId ? "selected" : ""}>${escapeHtml(worker.nameAr)} · ${escapeHtml(staffOperationalLabel({ ...worker, id: worker.staffId }, item.branchId))}</option>`).join("");
+    const workerControls = !terminal && !item.productOnly && ["pending", "confirmed"].includes(item.status) && (state.permissions.has("bookings") || state.role === "admin") ? `<div class="booking-worker-controls"><select data-assign-worker-select="${escapeAttr(item.id)}"><option value="">${state.role === "cashier" ? "اختر عاملًا · التواجد غير مؤكد" : "اختر الموجود بالمحل"}</option>${workerOptions}</select><button type="button" data-suggest-worker="${escapeAttr(item.id)}">اقتراح الأقل ضغطًا</button><button type="button" data-assign-booking="${escapeAttr(item.id)}">تحويل</button></div>` : "";
     const workerAlert = !terminal && item.staffId && item.staffId !== "none" && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(item.branchId)}" data-notify-booking="${escapeAttr(item.id)}">تنبيه ${escapeHtml(item.staffNameAr || "العامل")}</button>` : "";
-    const checkout = !terminal && canCheckout ? `<button class="pay booking-checkout" data-booking-action="${item.paymentStatus === "paid" ? "completed" : "checkout"}" data-booking-id="${escapeAttr(item.id)}">${item.paymentStatus === "paid" ? "إكمال وإخفاء" : "تحصيل وإكمال"}</button>` : "";
+    const checkout = !terminal && canCheckout ? `<button class="pay booking-checkout" data-expected-total="${Number(item.total)}" data-expected-revision="${Number(item.orderRevision||0)}" data-booking-action="${item.paymentStatus === "paid" ? "completed" : "checkout"}" data-booking-id="${escapeAttr(item.id)}">${item.paymentStatus === "paid" ? "إكمال وإخفاء" : "تحصيل وإكمال"}</button>` : "";
     const stateActions = item.status === "pending" ? `<button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "confirmed" ? `<button data-booking-action="arrived" data-booking-id="${escapeAttr(item.id)}">وصل</button><button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "arrived" ? `<button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button>` : "";
-    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}${workerControls}${workerAlert}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b>${!terminal ? `<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select>` : ""}<div class="row-actions">${checkout}${canRefund ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="row-actions">${!terminal && canCheckout ? `<button data-booking-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>` : ""}${receiptActionButtons(item.id)}${["pending", "confirmed"].includes(item.status) ? `<button data-reschedule-booking="${escapeAttr(item.id)}">إعادة جدولة</button>` : ""}${stateActions}${state.role === "admin" && item.paymentStatus !== "paid" && item.source !== "pos" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}</div></td></tr>`;
+    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}${item.staffPreference==="any"?'<small class="booking-no-preference">العميل لم يحدد عاملًا</small>':''}${workerControls || workerAlert ? `<details class="booking-row-menu"><summary>العامل والتنبيه</summary><div class="booking-menu-body">${workerControls}${workerAlert}</div></details>` : ""}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b>${!terminal ? `<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select>` : ""}<div class="row-actions">${checkout}${canRefund ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="booking-primary-actions"><button type="button" data-open-receipt="${escapeAttr(item.id)}">تفاصيل الحجز</button>${item.status === "pending" ? `<button type="button" class="primary" data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button>` : ""}<details class="booking-row-menu"><summary>المزيد من الإجراءات</summary><div class="booking-menu-body">${!terminal && canCheckout ? `<button data-booking-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>` : ""}${receiptActionButtons(item.id,"طباعة الإيصال",false,false)}${["pending", "confirmed"].includes(item.status) ? `<button data-reschedule-booking="${escapeAttr(item.id)}">إعادة جدولة</button>` : ""}${item.status === "pending" ? stateActions.replace(/<button[^>]*data-booking-action="confirmed"[^>]*>تأكيد<\/button>/, "") : stateActions}${state.role === "admin" && item.paymentStatus !== "paid" && item.source !== "pos" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}</div></details></div></td></tr>`;
   }).join("") || emptyRow(9);
 }
 
@@ -1564,6 +1635,7 @@ function renderPosReceipts() {
 
 let cashierTransactionsPage = 1;
 function renderCashierTransactions() {
+  if(typeof serverTransactions!=='undefined'&&serverTransactions?.render())return;
   const target = $("#cashierTransactionsTable");
   if (!target) return;
   const query = $("#cashierTransactionSearch")?.value.trim().toLowerCase() || "";
@@ -1592,7 +1664,7 @@ function setPosView(view = "new") {
   const pos = $("#pos");
   if (!pos) return;
   pos.dataset.posView = view === "receipts" ? "receipts" : "new";
-  if (state.role === "cashier") $("#cashierPageTitle").textContent = pos.dataset.posView === "new" ? "فاتورة جديدة" : "المعاملات";
+  if (["manager","cashier"].includes(state.role)) $("#cashierPageTitle").textContent = pos.dataset.posView === "new" ? "فاتورة جديدة" : "المعاملات";
   pos.classList.remove("mobile-ticket-open");
   $$('#pos [data-pos-view], #pos [data-new-pos]').forEach(button => button.classList.toggle("active", (button.hasAttribute("data-new-pos") ? "new" : button.dataset.posView) === pos.dataset.posView));
   if (pos.dataset.posView === "receipts") renderPosReceipts();
@@ -1605,10 +1677,12 @@ function hasPosDraft() {
 function resetPosDraft({ focus = true } = {}) {
   const form = $("#posForm");
   if (!form) return;
+  cashierReferenceUI?.close();cashierReferenceUI?.reset();
   const branchId = $("#posBranch")?.value || state.branchIds[0] || "talkha";
   form.reset();
   if ($(`#posBranch option[value="${CSS.escape(branchId)}"]`)) $("#posBranch").value = branchId;
   $("#posCustomer").value = "";
+  clearPosCustomerIntake();
   $("#posPhone").value = "";
   $("#posFirstName").value = "";
   $("#posLastName").value = "";
@@ -1627,10 +1701,12 @@ function resetPosDraft({ focus = true } = {}) {
   state.posCart = [];
   state.posIdempotencyKey = "";
   state.posBookingId = "";
+  state.posBookingSnapshot=null;
   $("#posSubmit").textContent = "حفظ الطلب وتجهيز الشيك";
   setPosView("new");
   renderPos();
-  if (focus) requestAnimationFrame(() => $("#posPhone")?.focus());
+  if(cashierReferenceUI)setPosView('receipts');
+  if (focus&&!cashierReferenceUI) requestAnimationFrame(() => $("#posPhone")?.focus());
 }
 
 async function openNewPosDraft() {
@@ -1638,15 +1714,16 @@ async function openNewPosDraft() {
   resetPosDraft({ focus: false });
   await showSection("pos");
   setPosView("new");
-  requestAnimationFrame(() => $("#posPhone")?.focus());
+  if(cashierReferenceUI)cashierReferenceUI.open();else requestAnimationFrame(() => $("#posPhone")?.focus());
 }
 
 async function openBookingInPos(id) {
-  const booking = state.dashboard.bookings.find(item => item.id === id) || state.calendar.bookings.find(item => item.id === id);
+  const booking = state.receiptLookup?.get(id)||state.dashboard.bookings.find(item => item.id === id) || state.calendar.bookings.find(item => item.id === id);
   if (!booking) return toast("الحجز غير موجود", true);
   await showSection("pos");
   resetPosDraft({ focus: false });
   state.posBookingId = id;
+  state.posBookingSnapshot={...booking,items:(booking.items||[]).map(item=>({...item}))};
   $("#posBranch").value = booking.branchId || "talkha";
   $("#posPhone").value = booking.phone || "";
   $("#posFirstName").value = booking.customer?.firstName || String(booking.customerName || "عميل").split(" ")[0];
@@ -1656,6 +1733,7 @@ async function openBookingInPos(id) {
   $("#posSubmit").textContent = "تحصيل الحجز وتجهيز الشيك";
   renderPos();
   toast(`تم فتح الحجز ${booking.code} بدون إنشاء حجز جديد`);
+  cashierReferenceUI?.open({at:3});
 }
 
 function rememberPosCustomer(customer) {
@@ -1785,7 +1863,7 @@ async function createReceiptCanvas(item) {
   barcode.height = 125;
   try {
     const { default: JsBarcode } = await import("jsbarcode");
-    JsBarcode(barcode, String(item.code || item.id), { format: "CODE128", displayValue: true, height: 64, fontSize: 18, margin: 6, background: "#ffffff", lineColor: "#071a2c" });
+    JsBarcode(barcode, String(item.code || item.id), { ...BOOKING_BARCODE_OPTIONS, displayValue: true, fontSize: 18 });
     context.drawImage(barcode, 130, y + 28, 640, 125);
   } catch {}
   context.textAlign = "center";
@@ -1800,7 +1878,7 @@ function canvasBlob(canvas) {
 }
 
 async function openReceiptInWhatsapp(id, preparedBlob = null) {
-  const item = state.dashboard.bookings.find(value => value.id === id);
+  const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   if (!item) return toast("تعذر العثور على الشيك", true);
   const phone = whatsappPhone(item.phone);
   if (!phone) return toast("رقم واتساب العميل غير صحيح", true);
@@ -1840,7 +1918,7 @@ async function openReceiptInWhatsapp(id, preparedBlob = null) {
 }
 
 async function printReceipt(id) {
-  const item = state.dashboard.bookings.find(value => value.id === id);
+  const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   if (!item) return toast("تعذر العثور على الشيك", true);
   const popup = window.open("", "_blank", "width=460,height=760");
   if (!popup) return toast("اسمح بالنوافذ المنبثقة لطباعة الشيك", true);
@@ -1872,25 +1950,19 @@ async function acceptScannedValue(value) {
 }
 async function openScanner() {
   if (!$("#scannerDialog").open) $("#scannerDialog").showModal();
+  if(matchMedia("(pointer:fine)").matches)$("#scannerCode").focus();
   try {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("UNSUPPORTED_CAMERA"), { name: "NotSupportedError" });
     closeScanner(false);
     const generation = scanGeneration;
-    scanLocked=false;
+    scanLocked=false;scanLastValue="";scanLastAt=0;
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("#scannerCamera").value || "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
     if (generation !== scanGeneration) { stream.getTracks().forEach(track => track.stop()); return; }
     scanStream = stream;
     const video = $("#scannerVideo"); video.srcObject = scanStream; await video.play();
-    if ("BarcodeDetector" in window) {
-      const detector = new BarcodeDetector({ formats: ["code_128", "qr_code"] });
-      const tick = async () => { if (!scanStream || scanLocked) return; const codes = await detector.detect(video).catch(() => []); await acceptScannedValue(codes[0]?.rawValue); if (scanStream && !scanLocked) requestAnimationFrame(tick); }; tick();
-    } else {
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
-      if (generation !== scanGeneration) return;
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromStream(scanStream, video, (result) => { if (result && generation === scanGeneration) acceptScannedValue(result.getText()); });
-      if (generation !== scanGeneration) controls?.stop?.(); else scanControls = controls;
-    }
+    const controls=await startBookingDecoder({video,stream,NativeDetector:"BarcodeDetector" in window?window.BarcodeDetector:null,isCurrent:()=>generation===scanGeneration&&Boolean(scanStream)&&!scanLocked,onValue:acceptScannedValue,onError:()=>toast('تعذر تشغيل قارئ الباركود؛ أعد فتح الماسح أو اكتب الكود',true),loadFallback:async()=>{const {BrowserMultiFormatReader}=await import('@zxing/browser');return new BrowserMultiFormatReader();}});
+    if(generation!==scanGeneration)controls?.stop?.();else scanControls=controls;
+
   } catch (error) {
     scanControls?.stop?.(); scanControls = null; scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;
     const message = error?.name === "NotAllowedError" ? "تم رفض إذن الكاميرا؛ فعّله من إعدادات الموقع أو استخدم الإدخال اليدوي" : error?.name === "NotFoundError" ? "لا توجد كاميرا متاحة على هذا الجهاز؛ استخدم الإدخال اليدوي" : error?.name === "NotReadableError" ? "الكاميرا مستخدمة في تطبيق آخر؛ أغلق التطبيق ثم حاول مجددًا" : "هذا المتصفح لا يسمح بالكاميرا هنا؛ افتح الموقع في Chrome أو Safari واستخدم الإدخال اليدوي";
@@ -1898,7 +1970,16 @@ async function openScanner() {
   }
 }
 function closeScanner(closeDialog = true) { ++scanGeneration; scanControls?.stop?.(); scanControls = null; scanStream?.getTracks().forEach(track => track.stop()); scanStream = null;scanLocked=false; const video=$("#scannerVideo");if(video)video.srcObject=null; if(closeDialog && $("#scannerDialog").open)$("#scannerDialog").close(); }
-async function findScanned() { const raw=$("#scannerCode").value.trim();if(!raw){scanLocked=false;return}if(raw.toLowerCase().startsWith("mzc_")){try{const result=await scanCustomerCode(raw);closeScanner();await showSection("pos");rememberPosCustomer(result.customer);toast(`تم فتح العميل ${result.customer.firstName||""}`)}catch(error){scanLocked=false;toast(error.message||"كود العميل غير صحيح",true)}return}const code=raw.toUpperCase();const found=state.dashboard.bookings.find(item=>String(item.code).toUpperCase()===code);if(!found){scanLocked=false;return toast("لم يتم العثور على الحجز أو المنتج",true)}closeScanner();$("#bookingSearch").value=found.code;renderBookings();document.querySelector(`[data-booking-row="${CSS.escape(found.code)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});toast("تم فتح الحجز");}
+async function findScanned() {
+ const raw=$('#scannerCode').value.trim();if(!raw){scanLocked=false;return;}
+ if(raw.toLowerCase().startsWith('mzc_')){try{const result=await scanCustomerCode(raw);closeScanner();await showSection('pos');rememberPosCustomer(result.customer);toast(`تم فتح العميل ${result.customer.firstName||''}`);}catch(error){scanLocked=false;toast(error.message||'كود العميل غير صحيح',true);}return;}
+ const uid=state.user?.uid,generation=scanGeneration,branchId=$('#headerBranchFilter')?.value||'all';scanLocked=true;
+ try{const found=await resolveScannedBooking(raw,{cached:[...(state.receiptLookup?.values()||[]),...(state.calendar.bookings||[]),...(state.dashboard.bookings||[])],allowed:row=>(state.role==='admin'||state.branchIds.includes(row.branchId))&&(branchId==='all'||row.branchId===branchId),lookup:code=>{if(isOfflineMode()||navigator.onLine===false)throw Error('الحجز غير محمّل؛ اتصل بالإنترنت للبحث بالباركود');return getBookingPage({branchId,search:code,take:2});}});
+  if(uid!==state.user?.uid||generation!==scanGeneration)return;
+  if(!found){scanLocked=false;return toast('لم نجد حجزًا بهذا الباركود في الفرع المحدد',true);}
+  state.receiptLookup ||= new Map();state.receiptLookup.set(found.id,found);closeScanner();openReceiptDrawer(found.id);toast('تم فتح الحجز '+(found.code||found.id));
+ }catch(error){if(uid===state.user?.uid&&generation===scanGeneration){scanLocked=false;toast(error.message||'تعذر قراءة الحجز؛ حاول مرة أخرى',true);}}
+}
 
 function renderRevenue() {
   const serviceSelect = $("#revenueService");
@@ -2060,15 +2141,14 @@ async function automaticallyPrepareOffline(){
     await offlineDeskView?.update();
   }finally{offlinePreparationBusy=false;}
 }
-function posCatalogItems() {
-  const branchId = $("#posBranch")?.value || "talkha";
+function posCatalogItems(branchId = $("#posBranch")?.value || "talkha") {
   const categories = new Map((state.collections.get("categories") || []).map(item => [item.id, item.nameAr || item.id]));
-  const services = (state.collections.get("services") || []).filter(item => item.active !== false && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: item.type === "product" ? "product" : "service", section: item.type === "product" ? "product" : "service", categoryId: item.categoryId || "", nameAr: item.nameAr, price: Number(item.price || 0), category: item.type === "product" ? "بضاعة" : categories.get(item.categoryId) || "بدون تصنيف" }));
-  const packages = (state.collections.get("packages") || []).filter(item => item.active !== false && item.status !== "expired" && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: "package", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups : [], category: "باقة" }));
-  const offers = state.posOffers.filter(item => item.active !== false && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: "offer", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.newPrice || 0), choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups : [], category: "عرض" }));
+  const services = (state.collections.get("services") || []).filter(item => item.active !== false && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: item.type === "product" ? "product" : "service", section: item.type === "product" ? "product" : "service", categoryId: item.categoryId || "", nameAr: item.nameAr, price: Number(item.price || 0), duration: Number(item.duration || 0), category: item.type === "product" ? "بضاعة" : categories.get(item.categoryId) || "بدون تصنيف" }));
+  const packages = (state.collections.get("packages") || []).filter(item => item.active !== false && item.status !== "expired" && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: "package", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), duration: Number(item.duration || 0), choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups : [], category: "باقة" }));
+  const offers = state.posOffers.filter(item => item.active !== false && availableAtBranch(item, branchId)).map(item => ({ id: item.id, kind: "offer", section: "package", categoryId: "", nameAr: item.nameAr, price: Number(item.newPrice || 0), duration: Number(item.duration || 0), choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups : [], category: "عرض" }));
   const inventory = (state.collections.get("inventoryItems") || state.business.inventory || []).filter(item => item.active !== false && item.category === "product" && item.branchId === branchId).map(item => ({ id: item.id, kind: "inventory", section: "product", categoryId: "", nameAr: item.nameAr, price: Number(item.sellingPrice || 0), stockQty: Number(item.stockQty || 0), category: inventoryCategory(item.category) }));
-  const drinks = (state.collections.get("drinks") || state.business.drinks || []).filter(item => item.active !== false && [branchId, "all"].includes(item.branchId)).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: `${drinkType(item.type)}${item.branchId === "all" ? " • كل الفروع" : ""}` }));
-  return [...services, ...packages, ...offers, ...inventory, ...drinks];
+  const drinks = (state.collections.get("drinks") || state.business.drinks || []).filter(item => item.active !== false && [branchId, "all"].includes(item.branchId)).map(item => ({ id: item.id, kind: "drink", section: "drink", categoryId: "", nameAr: item.nameAr, price: Number(item.price || 0), duration: Number(item.duration || 0), drinkOptions: Array.isArray(item.drinkOptions) ? item.drinkOptions : [], category: `${drinkType(item.type)}${item.branchId === "all" ? " • كل الفروع" : ""}` }));
+  return [...new Map([...services,...packages,...offers,...inventory,...drinks,...(state.posPinnedItems||[]).filter(item=>item.branchId===branchId),...(state.posRemoteItems||[]).filter(item=>item.branchId===branchId)].map(item=>[`${item.kind}:${item.id}`,item])).values()];
 }
 
 function fillCategoryFilter(selector, currentValue = "") {
@@ -2102,11 +2182,12 @@ function renderPos() {
     rail.hidden = section !== "service";
     rail.innerHTML = section === "service" ? `<button class="${category === "all" ? "active" : ""}" data-pos-category="all">كل الخدمات</button>${categories.map(item=>`<button class="${category === item.id ? "active" : ""}" data-pos-category="${escapeAttr(item.id)}">${escapeHtml(item.nameAr||item.id)}</button>`).join("")}` : "";
   }
+  if(typeof serverPosCatalog!=='undefined')serverPosCatalog?.ensure();
   const query = $("#posItemSearch").value.trim().toLowerCase();
   if (section === "service" && !category && !query) {
     $("#posItems").innerHTML = '<div class="filter-empty"><b>اختر تصنيف الخدمات</b><p>أو اكتب اسم الخدمة في البحث لعرضها مباشرة.</p></div>';
   } else {
-    const visible = posCatalogItems().filter(item => item.section === section && (section !== "service" || !category || category === "all" || item.categoryId === category) && (!query || `${item.nameAr} ${item.category}`.toLowerCase().includes(query))).slice(0, 30);
+    const visible = (typeof serverPosCatalog!=='undefined'&&serverPosCatalog?.rows()!==null&&serverPosCatalog?serverPosCatalog.rows():posCatalogItems()).filter(item => (section==='all'||item.section === section) && (section !== "service" || !category || category === "all" || item.categoryId === category) && (!query || `${item.nameAr} ${item.category}`.toLowerCase().includes(query))).slice(0, 30);
     $("#posItems").innerHTML = visible.map(item => `<button type="button" class="pos-item ${item.kind === "inventory" && item.stockQty <= 0 ? "out" : ""}" data-pos-add="${escapeAttr(item.id)}" data-pos-kind="${escapeAttr(item.kind)}" ${item.kind === "inventory" && item.stockQty <= 0 ? "disabled" : ""}><span>${escapeHtml(item.category)}</span><b>${escapeHtml(item.nameAr)}</b><strong>${money(item.price)}</strong>${item.kind === "inventory" ? `<small>المتاح: ${Number(item.stockQty || 0)}</small>` : ""}</button>`).join("") || '<div class="filter-empty"><b>لا توجد نتائج</b><p>غيّر التصنيف أو اكتب جزءًا من الاسم.</p></div>';
   }
   renderPosCart();
@@ -2115,7 +2196,9 @@ function renderPos() {
 function renderPosCart() {
   if ($("#posCouponStatus")) $("#posCouponStatus").textContent = "الخصم بيتطبق حسب شروط الكود والأصناف الموجودة في الفاتورة.";
   if (!$("#posCart")) return;
+  if(state.posBookingId&&typeof renderStoredPosReview==='function'&&renderStoredPosReview({snapshot:state.posBookingSnapshot,query:$,money,escapeHtml})){cashierReferenceUI?.update();return;}
   const index = new Map(posCatalogItems().map(item => [`${item.kind}:${item.id}`, item]));
+  state.posPinnedItems=state.posCart.map(line=>index.get(`${line.kind}:${line.id}`)).filter(Boolean).map(item=>({...item,branchId:$("#posBranch").value}));
   state.posCart = state.posCart.filter(line => index.has(`${line.kind}:${line.id}`));
   $("#posCart").innerHTML = state.posCart.map(line => {
     const item = index.get(`${line.kind}:${line.id}`);
@@ -2123,7 +2206,7 @@ function renderPosCart() {
     const quantity = ["inventory", "product", "drink"].includes(line.kind) ? `<input type="number" min="1" max="${line.kind === "inventory" ? Math.max(1, item.stockQty) : 20}" value="${line.qty}" data-pos-qty="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="الكمية">` : "";
     const staff=(state.collections.get("staff")||[]).filter(member=>member.active!==false&&member.available!==false&&availableAtBranch(member,$("#posBranch").value));const needsWorker=["service","package","offer"].includes(line.kind);const worker=needsWorker?`<select data-pos-worker="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="العامل لخدمة ${escapeAttr(item.nameAr)}"><option value="none">بدون عامل</option>${staff.map(member=>`<option value="${escapeAttr(member.id)}" ${member.id===(line.workerId||$("#posStaff").value)?"selected":""}>${escapeHtml(member.nameAr)}</option>`).join("")}</select>`:"";
     const serviceWorkerId=line.workerId||$("#posStaff").value;
-    const serviceAction=needsWorker&&(state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations'))&&serviceWorkerId&&serviceWorkerId!=='none'?`<button class="small-button" type="button" data-service-draft-worker="${escapeAttr(serviceWorkerId)}" data-service-draft-duration="${Math.max(5,Math.ceil((Number(item.duration)||30)/5)*5)}">تشغيل الخدمة وحجز وقت العامل</button>`:'';
+    const serviceAction=needsWorker&&(state.role==='admin'||['manager','cashier'].includes(state.role)&&state.permissions.has('teamOperations'))&&serviceWorkerId&&serviceWorkerId!=='none'?`<button class="small-button" type="button" data-service-draft-worker="${escapeAttr(serviceWorkerId)}" data-service-draft-id="${escapeAttr(item.id)}" data-service-draft-kind="${escapeAttr(item.kind)}" data-service-draft-duration="${Math.max(5,Math.ceil((Number(item.duration)||30)/5)*5)}">تشغيل الخدمة وحجز وقت العامل</button>`:'';
     const packageChoices = item.choiceGroups?.length ? `<div class="pos-package-choices">${item.choiceGroups.map(group => `<label><span>${escapeHtml(group.labelAr || "اختيار الباقة")}${group.required === false ? "" : " *"}</span><select data-pos-choice="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" data-choice-group="${escapeAttr(group.id)}" aria-label="${escapeAttr(group.labelAr || "اختيار الباقة")}" ${group.required === false ? "" : "required"}><option value="">اختر واحدًا</option>${(group.options || []).map(option => `<option value="${escapeAttr(option.id)}" ${line.choices?.[group.id] === option.id ? "selected" : ""}>${escapeHtml(option.labelAr || option.id)}</option>`).join("")}</select></label>`).join("")}</div>` : "";
     return `<div class="pos-cart-line"><div><b>${escapeHtml(item.nameAr)}</b><small>${money(item.price)} × ${line.qty}${line.option ? ` • ${escapeHtml(line.option)}` : ""}</small></div><div class="pos-line-controls">${worker}${serviceAction}${options}${quantity}${packageChoices}</div><strong>${money(item.price * line.qty)}</strong><button type="button" data-pos-remove="${escapeAttr(line.id)}" data-pos-kind="${escapeAttr(line.kind)}" aria-label="حذف ${escapeAttr(item.nameAr)}">×</button></div>`;
   }).join("") || '<p>لم تتم إضافة أصناف بعد.</p>';
@@ -2135,6 +2218,7 @@ function renderPosCart() {
   if ($("#posMobileTotal")) $("#posMobileTotal").textContent = total;
   if ($("#posMobileCount")) $("#posMobileCount").textContent = `${count} ${count === 1 ? "صنف" : "أصناف"}`;
   if ($("#posCartCount")) $("#posCartCount").textContent = `${count} ${count === 1 ? "صنف" : "أصناف"}`;
+  cashierReferenceUI?.update();
 }
 
 async function applyPosCoupon(button) {
@@ -2175,8 +2259,8 @@ async function submitPosOrder(event) {
   try {
     if (state.posBookingId) {
       if(isOfflineMode())throw new Error("تحصيل حجز سابق يحتاج اتصال؛ الأوفلاين يدعم الشيكات الجديدة فقط");
-      const booking = state.dashboard.bookings.find(item => item.id === state.posBookingId);
-      const result = await changeBooking(state.posBookingId, booking?.paymentStatus === "paid" ? "completed" : "checkout", $("#posPaymentMethod").value);
+      const booking = state.receiptLookup?.get(state.posBookingId)||state.dashboard.bookings.find(item => item.id === state.posBookingId);
+      const result = await changeBooking(state.posBookingId, booking?.paymentStatus === "paid" ? "completed" : "checkout", $("#posPaymentMethod").value,"","",{expectedTotal:Number(state.posBookingSnapshot?.total),expectedOrderRevision:Number(state.posBookingSnapshot?.orderRevision||0)});
       if (booking) Object.assign(booking, { status: "completed", paymentStatus: "paid", paymentMethod: $("#posPaymentMethod").value, orderState: "PAID" });
       const receiptId = state.posBookingId;
       resetPosDraft();
@@ -2189,15 +2273,16 @@ async function submitPosOrder(event) {
     if(isOfflineMode()) {
       const catalog=new Map(posCatalogItems().map(item=>[`${item.kind}:${item.id}`,item]));
       const prices=state.posCart.map(line=>({id:line.id,kind:line.kind,qty:line.qty,unitPrice:catalog.get(`${line.kind}:${line.id}`)?.price,nameAr:catalog.get(`${line.kind}:${line.id}`)?.nameAr||line.id}));
-      await offlineDesk.enqueue({idempotencyKey:state.posIdempotencyKey,branchId:$('#posBranch').value,customer:{firstName:$('#posFirstName').value,lastName:$('#posLastName').value,phone:$('#posPhone').value},staffId:$('#posStaff').value,items:state.posCart.map(line=>({...line,workerId:line.workerId||$('#posStaff').value})),discountAmount:Number($('#posDiscount').value||0),couponCode:$('#posCouponCode')?.value.trim(),redeemPoints:Number($('#posRedeemPoints')?.value||0),redeemCashback:Number($('#posRedeemCashback')?.value||0),paymentMethod:$('#posPaymentMethod').value,paid:$('#posPaid').checked},prices);
+      await offlineDesk.enqueue({idempotencyKey:state.posIdempotencyKey,branchId:$('#posBranch').value,customer:{firstName:$('#posFirstName').value,lastName:$('#posLastName').value,phone:$('#posPhone').value,intake:readPosCustomerIntake()},staffId:$('#posStaff').value,items:state.posCart.map(line=>({...line,workerId:line.workerId||$('#posStaff').value})),discountAmount:Number($('#posDiscount').value||0),couponCode:$('#posCouponCode')?.value.trim(),redeemPoints:Number($('#posRedeemPoints')?.value||0),redeemCashback:Number($('#posRedeemCashback')?.value||0),paymentMethod:$('#posPaymentMethod').value,paid:$('#posPaid').checked},prices);
       resetPosDraft();toast('اتحفظ الشيك على الجهاز؛ في انتظار المزامنة. اطبعه من قسم الشيكات المنتظرة');
       document.querySelector('#offlineSalesDesk').open=true;document.querySelector('#offlineSalesDesk').scrollIntoView({behavior:'smooth',block:'start'});
       await offlineDeskView?.update();return;
     }
-    const result = await createPosOrder({ idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), couponCode: $("#posCouponCode")?.value.trim(), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
+    const result = await createPosOrder({ ...(Number.isFinite(cashierReferenceUI?.pricingTotal?.())?{expectedTotal:cashierReferenceUI.pricingTotal()}:{}), idempotencyKey: state.posIdempotencyKey, branchId: $("#posBranch").value, customer: { firstName: $("#posFirstName").value, lastName: $("#posLastName").value, phone: $("#posPhone").value, intake: readPosCustomerIntake() }, staffId: $("#posStaff").value, items: state.posCart.map(line=>({...line,workerId:line.workerId||$("#posStaff").value})), discountAmount: Number($("#posDiscount").value || 0), couponCode: $("#posCouponCode")?.value.trim(), redeemPoints:Number($("#posRedeemPoints")?.value||0), redeemCashback:Number($("#posRedeemCashback")?.value||0), paymentMethod: $("#posPaymentMethod").value, paid: $("#posPaid").checked });
     const receipt = result.receipt || { id: result.bookingCode, code: result.bookingCode, source: "pos", total: result.total, paymentStatus: result.paymentStatus, bookingDate: cairoDateKey(), createdAt: new Date().toISOString(), items: [] };
     applyPosReceiptLocally(receipt);
     resetPosDraft();
+    renderSavedOrderActions($("#pos"),receipt);
     toast(`تم حفظ الطلب ${result.bookingCode} وتجهيز الشيك`);
     await refreshCashierOperations();
     await printReceipt(receipt.id || result.bookingCode);
@@ -2206,6 +2291,7 @@ async function submitPosOrder(event) {
 }
 
 function selectPosCustomer(id) {
+  clearPosCustomerIntake();
   const customer = (state.collections.get("customers") || []).find(item => item.id === id);
   if (!customer) {
     $("#posFirstName").value = "";
@@ -2226,6 +2312,7 @@ function toggleExpenseInventory() {
 }
 
 function resetExpenseForm() {
+  cashierReferenceUI?.closeExpense();
   const form = $("#expenseForm");
   form.reset();
   form.dataset.idempotencyKey = "";
@@ -2259,6 +2346,7 @@ function startExpenseEdit(id) {
   $("#expenseFormTitle").textContent = "تعديل الحركة المالية";
   $("#expenseSubmit").textContent = "حفظ التعديل";
   $("#expenseCancelEdit").hidden = false;
+  cashierReferenceUI?.openExpense();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -2331,9 +2419,10 @@ async function paySalary(staffId) {
 
 let collectionRequestEpoch=0;
 let packageLoadFailed=false;
+let requiredPackageIds=null;
 const collectionLoads = new Map(), collectionLoadVersions = new Map(), collectionCacheScopes = new Map();
 function collectionReadScope(collection) {
-  return JSON.stringify([collectionRequestEpoch, state.user?.uid || '', state.role, [...state.permissions].sort(), [...state.branchIds].sort(), $("#headerBranchFilter").value, collection, 100, '']);
+  return JSON.stringify([collectionRequestEpoch, state.user?.uid || '', state.role, [...state.permissions].sort(), [...state.branchIds].sort(), $("#headerBranchFilter").value, collection, 100, typeof collectionSearchOptions==='function'?collectionSearchOptions(collection):'']);
 }
 async function loadCollection(collection, refresh = false) {
   if(collection==='packages')packageLoadFailed=false;
@@ -2341,7 +2430,8 @@ async function loadCollection(collection, refresh = false) {
   if (!refresh && collectionCacheScopes.get(collection) === scope && state.collections.has(collection)) return renderCollection(collection);
   let entry = collectionLoads.get(scope);
   if (!entry || refresh) {
-    entry = {promise: Promise.resolve().then(() => getCollection(collection, 100, "", branchId))};
+    const filters=typeof collectionSearchOptions==='function'?collectionSearchOptions(collection):{};
+    entry = {promise: Promise.resolve().then(() => Object.keys(filters).length?getCollection(collection,25,"",branchId,filters):getCollection(collection,["customers","content","reviews","offers","campaigns","walletTransactions","activityLogs","users"].includes(collection)?25:100,"",branchId))};
     collectionLoads.set(scope, entry);
   }
   collectionLoadVersions.set(collection, entry);
@@ -2349,9 +2439,15 @@ async function loadCollection(collection, refresh = false) {
   try {
     const result = await entry.promise;
     if (!current()) return;
+    if(collection==='packages'&&state.role==='admin'&&typeof collectionSearchOptions==='function'){
+      requiredPackageIds=null;
+      const check=await getCollection('packages',30,'',branchId,{pageMode:'search',ids:newMashayaPackages.map(item=>item.id)});
+      if(!current())return;requiredPackageIds=check.items.map(item=>item.id);
+    }
     state.collections.set(collection, result.items || []);
     collectionCacheScopes.set(collection, scope);
     state.collectionCursors.set(collection, result.nextCursor || null);
+    if(typeof collectionPaging!=='undefined')collectionPaging?.reset(collection);
     renderCollection(collection);
     $$(`[data-load-more="${CSS.escape(collection)}"]`).forEach(button => { button.hidden = !result.nextCursor; });
   } catch (error) { if (current()) {
@@ -2382,11 +2478,12 @@ function renderRequiredPackageStatus() {
   const panel = $("#requiredPackagesStatus");
   if (!panel) return;
   const packages = state.collections.get("packages") || [];
-  const existingIds = new Set(packages.map(item => item.id));
+  const existingIds = new Set(requiredPackageIds||packages.map(item => item.id));
   const missing = newMashayaPackages.filter(item => !existingIds.has(item.id));
   panel.hidden = state.role !== "admin";
   if (panel.hidden) return;
   const button = panel.querySelector("[data-install-required-packages]");
+  if(typeof collectionSearchOptions==='function'&&requiredPackageIds===null){panel.querySelector('b').textContent='لم يكتمل التحقق من الباقات المطلوبة';$('#requiredPackagesMessage').textContent='أعد فتح القسم للتحقق بالمعرّفات من السيرفر؛ الصفحة الحالية وحدها لا تثبت غياب باقة.';button.hidden=true;return;}
   if (!state.collections.has("packages")) {
     panel.querySelector("b").textContent = packageLoadFailed ? "تعذر تحميل الباقات" : "جاري تحميل الباقات…";
     $("#requiredPackagesMessage").textContent = packageLoadFailed ? "أعد فتح القسم للمحاولة؛ تعذر التحقق من الباقات الموجودة." : "انتظر اكتمال التحميل قبل مراجعة الباقات المتاحة.";
@@ -2402,7 +2499,8 @@ function renderRequiredPackageStatus() {
 async function installRequiredPackages(button) {
   if (state.role !== "admin") return toast("إضافة الباقات متاحة للأدمن فقط", true);
   if(!state.collections.has('packages'))return toast('انتظر تحميل الباقات الحالية أولًا',true);
-  const existingIds = new Set((state.collections.get("packages") || []).map(item => item.id));
+  if(typeof collectionSearchOptions==='function'&&requiredPackageIds===null)return toast('انتظر التحقق من الباقات المطلوبة',true);
+  const existingIds = new Set(requiredPackageIds||(state.collections.get("packages") || []).map(item => item.id));
   const missing = newMashayaPackages.filter(item => !existingIds.has(item.id));
   if (!missing.length) return toast("الباقات الثلاث موجودة بالفعل");
   if (!confirm(`سيتم إنشاء ${missing.length} باقات ناقصة بفرع المشاية فقط، دون تعديل الباقات الحالية. متابعة؟`)) return;
@@ -2414,6 +2512,7 @@ async function installRequiredPackages(button) {
 }
 
 async function loadMoreCollection(collection, button) {
+  if(typeof collectionPaging!=='undefined'&&collectionPaging?.supports(collection)){await collectionPaging.navigate(collection);return;}
   const cursor = state.collectionCursors.get(collection);
   const epoch = collectionRequestEpoch, branchId = $("#headerBranchFilter").value;
   if (!cursor) return;
@@ -2422,7 +2521,7 @@ async function loadMoreCollection(collection, button) {
     if (epoch !== collectionRequestEpoch || branchId !== $("#headerBranchFilter").value) return;
     const current = state.collections.get(collection) || [];
     const merged = new Map([...current, ...(result.items || [])].map(item => [item.id, item]));
-    state.collections.set(collection, [...merged.values()]);
+    state.collections.set(collection, boundedCollectionWindow(current,result.items||[],state.posCart.map(item=>item.id)));
     state.collectionCursors.set(collection, result.nextCursor || null);
     button.hidden = !result.nextCursor;
     renderCollection(collection);
@@ -2430,9 +2529,11 @@ async function loadMoreCollection(collection, button) {
 }
 
 function renderCollection(collection) {
+  if(typeof collectionPaging!=='undefined')collectionPaging?.decorate(collection);
   const query = document.querySelector(`[data-entity-search="${CSS.escape(collection)}"]`)?.value.trim().toLowerCase() || "";
   let canonicalQuery = ""; try { canonicalQuery = normalizePhone(query); } catch {}
-  let items = (state.collections.get(collection) || []).filter(item => !query || [item.nameAr, item.nameEn, item.name, item.comment, item.titleAr, item.titleEn, item.specialtyAr, item.code, item.bookingCode, item.id, item.firstName, item.lastName, item.phone, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query)) || (canonicalQuery && whatsappPhone(item.phone) === `2${canonicalQuery}`)).sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || a.name || a.titleAr || `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.id || "").localeCompare(String(b.nameAr || b.name || b.titleAr || `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.id || ""), "ar"));
+  const serverSearch=typeof collectionSearchOptions==='function'&&collectionSearchOptions(collection).pageMode==='search';
+  let items = (state.collections.get(collection) || []).filter(item => !query || serverSearch || [item.nameAr, item.nameEn, item.name, item.comment, item.titleAr, item.titleEn, item.specialtyAr, item.code, item.bookingCode, item.id, item.firstName, item.lastName, item.phone, item.email, item.action, item.key, item.questionAr, item.questionEn, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query)) || (canonicalQuery && whatsappPhone(item.phone) === `2${canonicalQuery}`)).sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.nameAr || a.name || a.titleAr || `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.id || "").localeCompare(String(b.nameAr || b.name || b.titleAr || `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.id || ""), "ar"));
   if (collection === "inventoryItems") {
     const allItems = state.collections.get(collection) || [];
     $$('entity-panel[data-collection="inventoryItems"]').forEach(panel => {
@@ -2467,7 +2568,7 @@ function renderCollection(collection) {
     if (segment === "vip") items = items.filter(item => Number(item.totalSpent || 0) > 0).sort((a, b) => Number(b.totalSpent || 0) - Number(a.totalSpent || 0)).slice(0, 50);
     if (segment === "rewards") items = items.filter(item => Number(item.pointsBalance || 0) > 0 || Number(item.cashbackBalance || 0) > 0);
     const summary = $("#customerSegmentSummary");
-    if (summary) summary.innerHTML = `<span><b>${items.length}</b> نتيجة ظاهرة</span><span><b>${allCustomers.length}</b> عميل في الصفحة الحالية</span><span>البحث والتصفية فوريان بدون طلبات إضافية</span>`;
+    if (summary) summary.innerHTML = `<span><b>${items.length}</b> نتيجة ظاهرة</span><span><b>${allCustomers.length}</b> عميل في الصفحة الحالية</span><span>البحث من السيرفر ببداية الحقل المختار • تقسيم العملاء حسب الصفحة المعروضة</span>`;
   }
   if (collection === "settings") { fillSettings(items[0] || {}); return; }
   const targets = $$(`[data-list="${collection}"]`);
@@ -2698,6 +2799,7 @@ function renderField([name, label, type, required = false, options = null, full 
     return `<label class="${className}">${label}<select name="${name}" ${required ? "required" : ""}><option value="">اختر العامل</option>${staff.map(member => `<option value="${escapeAttr(member.id)}" ${String(value) === member.id ? "selected" : ""}>${escapeHtml(member.nameAr || member.id)}</option>`).join("")}</select></label>`;
   }
   if (type === "branch-scope") {
+    if(canManageSharedCatalog(state.role,state.permissions,state.editor.collection))return `<label class="${className}">نطاق الكتالوج<select name="${name}" required><option value="talkha,mashaya" selected>موحد لطلخا والمشاية</option></select></label>`;
     const scope = Array.isArray(item[name]) ? item[name].join(",") : String(value);
     const allowed = state.role === "admin" ? ["talkha", "mashaya"] : state.branchIds;
     const options = state.role === "admin" || allowed.length > 1 ? [["talkha,mashaya", "طلخا والمشاية"], ...allowed.map(id => [id, branchLabel(id)])] : allowed.map(id => [id, branchLabel(id)]);
@@ -2711,7 +2813,7 @@ function renderField([name, label, type, required = false, options = null, full 
   const accept = type === "file" ? 'accept="image/jpeg,image/png,image/webp,image/avif"' : type === "video-file" ? 'accept="video/*"' : type === "media-file" ? 'accept="image/*,video/*"' : "";
   const uploadClass = inputType === "file" ? "media-upload-field full" : className;
   const hint = type === "file" ? "JPG أو PNG أو WebP أو AVIF — يتم ضغط الصورة تلقائيًا" : type === "video-file" ? "اختر الفيديو من الهاتف؛ سيتم إنشاء صورة غلاف وحفظ الرابط تلقائيًا" : type === "media-file" ? "صورة، أو فيديو MP4 (H.264) / WebM أقل من 30MB — للفيديو تُنشأ صورة غلاف تلقائيًا" : "";
-  return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? 'step="any"' : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
+  return `<label class="${uploadClass}">${label}<input name="${name}" type="${inputType}" value="${inputType === "file" ? "" : escapeAttr(dateValue)}" ${required ? "required" : ""} ${type === "number" ? (name==="duration"? (item.type==='product'?'min="0" max="480" step="5"':'min="5" max="480" step="5"'):'step="any"') : ""} ${accept}>${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
 
 let editorPreviewUrls = [];
@@ -2779,7 +2881,7 @@ async function saveEditor(event) {
   [["nameAr", "nameEn"], ["descriptionAr", "descriptionEn"], ["titleAr", "titleEn"], ["bodyAr", "bodyEn"], ["specialtyAr", "specialtyEn"], ["bioAr", "bioEn"], ["reasonAr", "reasonEn"]].forEach(([ar, en]) => { if (payload[ar] != null) payload[en] = existing[en] || payload[ar]; });
   if(["content","services","packages","offers","staff"].includes(collection)) {
     const requested=String(payload.branchIds||'').split(/[،,]/).map(v=>v.trim()).filter(Boolean);
-    if(!requested.length||requested.some(id=>!["talkha","mashaya"].includes(id)||state.role!=="admin"&&!state.branchIds.includes(id)))return toast('اختر فرعًا مصرحًا به قبل الرفع',true);
+    if(!requested.length||requested.some(id=>!["talkha","mashaya"].includes(id)||state.role!=="admin"&&!canManageSharedCatalog(state.role,state.permissions,collection)&&!state.branchIds.includes(id)))return toast('اختر فرعًا مصرحًا به قبل الرفع',true);
   }
   const saveButton = $("#editorSave");
   const saveLabel = saveButton.textContent;
@@ -2904,7 +3006,7 @@ async function updateReview(id, action, featured = false) {
 }
 
 function openRefundDialog(id) {
-  const item = state.dashboard.bookings.find(value => value.id === id);
+  const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   if (!item || !canRefundBooking(item)) return toast("الاسترداد يتطلب مديرًا أو صلاحية استرداد، ومعاملة مدفوعة", true);
   const form = $("#cashierRefundForm");
   form.dataset.bookingId = id;
@@ -2927,7 +3029,7 @@ async function submitRefund(event) {
 
 async function updateBookingAction(id, action, options = {}) {
   if (action === "refund" && !options.reason) return openRefundDialog(id);
-  const original = state.dashboard.bookings.find(value => value.id === id);
+  const original = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   const method = action === "refund" ? original?.paymentMethod : (($("#receiptDrawer")?.open ? $("#receiptDrawer").querySelector(`[data-payment-method="${CSS.escape(id)}"]`) : null) || document.querySelector(`[data-payment-method="${CSS.escape(id)}"]`))?.value || "cash";
   try {
     let reason = "";
@@ -2940,9 +3042,10 @@ async function updateBookingAction(id, action, options = {}) {
       idempotencyKey = state.bookingActionKeys.get(operationKey) || crypto.randomUUID();
       state.bookingActionKeys.set(operationKey, idempotencyKey);
     }
-    const item = state.dashboard.bookings.find(value => value.id === id);
+    const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
     const wasPaid = item?.paymentStatus === "paid";
-    const result = await changeBooking(id, action, method, reason, idempotencyKey);
+    if(action==='confirmed'&&item){const selected=document.querySelector(`[data-assign-worker-select="${CSS.escape(id)}"]`)?.value;if(selected&&selected!==item.staffId){const key='review-assignment:'+id+':'+selected,requestId=state.bookingActionKeys.get(key)||crypto.randomUUID();state.bookingActionKeys.set(key,requestId);const moved=await rescheduleBooking({id:item.id,date:item.bookingDate,time:item.bookingTime,staffId:selected,requestId});Object.assign(item,{staffId:moved.workerId,staffNameAr:moved.workerNameAr,...(moved.items?{items:moved.items,workerIds:moved.workerIds,orderRevision:moved.orderRevision}:{})});state.bookingActionKeys.delete(key);assignmentSuggestions.clear();}}
+    const result = await changeBooking(id, action, method, reason, idempotencyKey,{expectedTotal:Number.isFinite(options.expectedTotal)?options.expectedTotal:Number(item?.total),expectedOrderRevision:Number.isFinite(options.expectedOrderRevision)?options.expectedOrderRevision:Number(item?.orderRevision||0)});
     if (idempotencyKey) state.bookingActionKeys.delete(`${action}:${id}`);
     if (item) {
       if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed", "void"].includes(action)) item.status = result.status || (action === "void" ? "cancelled" : action);
@@ -2980,7 +3083,7 @@ async function updateBookingAction(id, action, options = {}) {
 }
 
 async function promptRescheduleBooking(id) {
-  const item = state.dashboard.bookings.find(value => value.id === id);
+  const item = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   if (!item) return;
   const date = prompt("التاريخ الجديد YYYY-MM-DD", item.bookingDate || cairoDateKey())?.trim();
   if (!date) return;
@@ -3094,6 +3197,18 @@ let pushSyncing = false;
 let pushConnectionPromise;
 const connectAdminPush = () => pushConnectionPromise ||= enablePush().finally(() => { pushConnectionPromise = null; });
 const operationalNotices=[];
+let completedNotices=[],completionPollVersion=0,completionPollAt=0,completionPollScope='';
+async function pollCompletedServices(){
+ if(!['admin','manager','cashier'].includes(state.role)||!canOpenSection('pos'))return;
+ const branch=$('#headerBranchFilter').value,scope=JSON.stringify([state.user?.uid,state.role,branch,state.branchIds]);
+ if(scope===completionPollScope&&Date.now()-completionPollAt<55000)return;
+ completionPollScope=scope;completionPollAt=Date.now();const version=++completionPollVersion;
+ const branches=branch==='all'?(state.role==='admin'?['talkha','mashaya']:state.branchIds):[branch];
+ try{const result=await Promise.all(branches.map(branchId=>getWorkerServiceSessions({branchId,view:'completed'})));if(version!==completionPollVersion||branch!==$('#headerBranchFilter').value)return;
+ completedNotices=result.flatMap(row=>row.items||[]);state.receiptLookup ||= new Map();for(const row of completedNotices)state.receiptLookup.set(row.booking.id,row.booking);renderAdminAlerts();
+ }catch{if(version===completionPollVersion){completionPollAt=0;completedNotices=[];renderAdminAlerts();}}
+}
+
 let targetAchievementNotices=[],targetNoticeCursor=null;
 async function loadTargetAchievementAlerts(full=false){if(state.role!=="admin"){targetAchievementNotices=[];targetNoticeCursor=null;return;}try{const previous=targetNoticeCursor;const result=await getTargetAchievementNotifications({branchId:"all",...(!full&&previous?{after:previous}:{})});if(state.role!=="admin")return;const incoming=result.items||[];if(previous&&!full&&incoming.some(x=>!x.read&&!targetAchievementNotices.some(y=>y.id===x.id)))toast('عامل حقق التارجت — راجع جرس التنبيهات');targetAchievementNotices=(full||!previous?incoming:[...new Map([...incoming,...targetAchievementNotices].map(x=>[x.id,x])).values()]).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,50);targetNoticeCursor=result.cursor||previous;renderAdminAlerts();}catch(error){console.warn('Target achievement inbox unavailable',error.message);}}
 
@@ -3110,13 +3225,15 @@ function renderAdminAlerts() {
     .filter(item => item.source !== "pos" && (item.status === "pending" || (item.status === "confirmed" && item.bookingDate === now) || (item.status === "no_show" && item.bookingDate === now)))
     .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || `${a.bookingDate || ""} ${a.bookingTime || ""}`.localeCompare(`${b.bookingDate || ""} ${b.bookingTime || ""}`))
     .slice(0, 15) : [];
-  const scopedNotices=[...operationalNotices,...(state.role==="admin"?targetAchievementNotices:[])].filter(n=>$("#headerBranchFilter").value==="all"||n.branchId===$("#headerBranchFilter").value);
-  const unreadNotices=scopedNotices.filter(n=>!n.read).length;
+  const scopedNotices=[...completedNotices,...operationalNotices.filter(row=>row.type!=='service_completed'),...(state.role==="admin"?targetAchievementNotices:[])].filter(n=>$("#headerBranchFilter").value==="all"||n.branchId===$("#headerBranchFilter").value);
+  const additionAlerts=canOpenSection('orderAdditions')?additionNotices.filter(n=>$('#headerBranchFilter').value==='all'||n.branchId===$('#headerBranchFilter').value):[];
+  const unreadNotices=scopedNotices.filter(n=>!n.read&&n.type!=='order_addition').length+additionAlerts.length;
   const count = $("#adminAlertsCount");
   if (count) { count.textContent = String(bookingNotices.length+unreadNotices); count.hidden = bookingNotices.length+unreadNotices === 0; count.setAttribute("aria-label", `${bookingNotices.length} حجوزات للمتابعة • ${unreadNotices} تنبيه جديد`); }
   if ($("#adminAlertsNewCount")) $("#adminAlertsNewCount").textContent = `${bookingNotices.length} حجوزات للمتابعة • ${unreadNotices} تنبيه جديد`;
   const target = $("#adminAlertsList");
-  if (target) target.innerHTML = scopedNotices.map(n=>`<button type="button" class="admin-alert-item" data-go="${n.staffId?'staff':'dashboard'}"><b>${escapeHtml(n.title)}</b><span>${escapeHtml(n.body)}</span><small>${n.read?"مقروء":"جديد"}</small></button>`).join("") + bookingNotices.map(item => { const attention = item.status === "pending" ? item.source === "website" ? "حجز جديد من الموقع · يحتاج تأكيد" : "يحتاج تأكيد" : item.status === "no_show" ? "لم يحضر · متابعة" : item.bookingTime < currentTime ? "موعد متأخر" : "موعد اليوم"; return `<button type="button" class="admin-alert-item booking-notice" data-calendar-booking="${escapeAttr(item.id)}"><b>${escapeHtml(item.customerName || "عميل")} <small>${escapeHtml(attention)}</small></b><span>${escapeHtml(item.phone || "")} · ${escapeHtml(item.bookingDate || "—")} ${escapeHtml(item.bookingTime || "")} · ${escapeHtml(branchLabel(item.branchId))} · ${Number(item.serviceNamesAr?.length || 0)} خدمات</span></button>`; }).join("") || '<p class="empty-state">لا توجد إشعارات حجوزات في السجلات المحمّلة.</p>';
+  const additionMarkup=additionAlerts.map(row=>`<a class="admin-alert-item" href="#${additionRoute(row.id,row.branchId)}" data-addition-request="${escapeAttr(row.id)}" data-addition-branch="${escapeAttr(row.branchId)}"><b>طلب إضافة من ${escapeHtml(row.staffNameAr||'عامل')}</b><span>${escapeHtml(row.customerName||'عميل')} · ${escapeHtml(row.bookingId)} · ${money(row.quotedTotal)}</span><small>عرض الطلب ومراجعته ←</small></a>`).join('');
+  if (target) target.innerHTML = additionMarkup+scopedNotices.filter(n=>n.type!=='order_addition').map(n=>`<button type="button" class="admin-alert-item" ${n.type==='service_completed'?`data-completed-booking="${escapeAttr(n.bookingId)}"`:`data-go="${n.staffId?'staff':'dashboard'}"`}><b>${escapeHtml(n.title)}</b><span>${escapeHtml(n.body)}</span><small>${n.read?"مقروء":"جديد"}</small></button>`).join("") + bookingNotices.map(item => { const attention = item.status === "pending" ? item.source === "website" ? "حجز جديد من الموقع · يحتاج تأكيد" : "يحتاج تأكيد" : item.status === "no_show" ? "لم يحضر · متابعة" : item.bookingTime < currentTime ? "موعد متأخر" : "موعد اليوم"; return `<button type="button" class="admin-alert-item booking-notice" data-calendar-booking="${escapeAttr(item.id)}"><b>${escapeHtml(item.customerName || "عميل")} <small>${escapeHtml(attention)}</small></b><span>${escapeHtml(item.phone || "")} · ${escapeHtml(item.bookingDate || "—")} ${escapeHtml(item.bookingTime || "")} · ${escapeHtml(branchLabel(item.branchId))} · ${Number(item.serviceNamesAr?.length || 0)} خدمات</span></button>`; }).join("") || '<p class="empty-state">لا توجد إشعارات حجوزات في السجلات المحمّلة.</p>';
   const preview = $("#dashboardAlertsPreview");
   if (preview) preview.innerHTML = alerts.slice(0, 3).map(item => `<button type="button" class="admin-alert-item ${item.type}" data-go="${escapeAttr(item.section)}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.body)}</span></button>`).join("") || '<p class="empty-state">لا توجد تنبيهات تشغيلية حاليًا.</p>';
   const health = $("#pushHealth");
@@ -3172,6 +3289,7 @@ async function requestAdminPush(button) {
 }
 
 async function handlePushButton(button) {
+  if(canOpenSection('orderAdditions'))await orderAdditionView?.poll(true);
   if(state.role==="admin")await loadTargetAchievementAlerts(true);
   if (state.role === "cashier" && Date.now() - state.loadedAt.cashier > 30_000) await loadCashierDashboard(true);
   else if (state.role !== "cashier" && Date.now() - state.loadedAt.dashboard > 30_000) await loadDashboard(true);
@@ -3206,7 +3324,7 @@ function renderAdminSearch() {
   let canonicalQuery = ""; try { canonicalQuery = normalizePhone(query); } catch {}
   if (!query) { results.hidden = true; results.innerHTML = ""; return; }
   const sections = Object.entries(sectionTitles).filter(([id, label]) => $("#" + id) && (state.role === "admin" || state.permissions.has(id)) && label.toLowerCase().includes(query)).slice(0, 5);
-  const customers = (state.collections.get("customers") || []).filter(item => [item.firstName, item.lastName, item.phone, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query)) || (canonicalQuery && whatsappPhone(item.phone) === `2${canonicalQuery}`)).slice(0, 5);
+  const customers = (state.collections.get("customers") || []).filter(item => [item.firstName, item.lastName, item.phone, item.email, item.action, item.key, item.questionAr, item.questionEn, `${item.firstName || ""} ${item.lastName || ""}`].some(value => String(value || "").toLowerCase().includes(query)) || (canonicalQuery && whatsappPhone(item.phone) === `2${canonicalQuery}`)).slice(0, 5);
   const operations = state.dashboard.bookings.filter(item => [item.code, item.customerName, item.phone].some(value => String(value || "").toLowerCase().includes(query))).slice(0, 6);
   results.innerHTML = sections.map(([id, label]) => `<button type="button" data-admin-search-section="${escapeAttr(id)}"><span>قسم</span><b>${escapeHtml(label)}</b></button>`).join("") + customers.map(item => `<button type="button" data-admin-search-customer="${escapeAttr(item.id)}"><span>عميل</span><b>${escapeHtml(`${item.firstName || ""} ${item.lastName || ""}`.trim() || item.phone)}</b><small>${escapeHtml(item.phone || "")}</small></button>`).join("") + operations.map(item => `<button type="button" data-admin-search-operation="${escapeAttr(item.id)}" data-operation-kind="${item.source === "pos" ? "pos" : "booking"}"><span>${item.source === "pos" ? "شيك" : "حجز"}</span><b>${escapeHtml(item.code || item.id)}</b><small>${escapeHtml(item.customerName || item.phone || "")}</small></button>`).join("") || '<p>لا توجد نتيجة. جرّب اسم قسم أو رقم عميل أو شيك أو حجز.</p>';
   results.hidden = false;
@@ -3214,6 +3332,7 @@ function renderAdminSearch() {
 
 document.addEventListener("click", async event => {
   const cashierJump = event.target.closest("[data-cashier-jump]");
+  if(cashierJump&&state.role==='manager'){await showSection(cashierJump.dataset.cashierJump==='tasks'?'tasks':'branchOperations');return;}
   if (cashierJump && state.role === "cashier") {
     if (state.section !== "calendar") await showSection("calendar");
     (cashierJump.dataset.cashierJump === "tasks" ? $("#cashierTaskForm") : $("#cashierTeamGrid"))?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3260,9 +3379,9 @@ document.addEventListener("click", async event => {
       if (["revenue", "expenses"].includes(state.section)) await loadOwnerHistory(state.section === "revenue" ? "sales" : "expenses");
     }
   }
-  if (event.target.closest("[data-cashier-more]") && state.role === "cashier") { $("#cashierMoreSheet").showModal(); return; }
+  if (event.target.closest("[data-cashier-more]") && ["manager","cashier"].includes(state.role)) { $("#cashierMoreSheet").showModal(); return; }
   if(event.target.closest("[data-section=workerTargets]"))$("#cashierMoreSheet")?.close();
-  if (event.target.closest("[data-cashier-password]") && state.role === "cashier") { $("#cashierMoreSheet").close(); $("#staffPasswordDialog").showModal(); return; }
+  if (event.target.closest("[data-cashier-password]") && ["manager","cashier"].includes(state.role)) { $("#cashierMoreSheet").close(); $("#staffPasswordDialog").showModal(); return; }
   if (event.target.closest("#ownerMoreNotifications")) return void $("#pushButton").click();
   if (event.target.closest("#mobileContentAdd")) return void $("#mobileContentTypes").showModal();
   const contentTypeButton = event.target.closest("[data-mobile-content-create]");
@@ -3314,9 +3433,13 @@ document.addEventListener("click", async event => {
   const searchCustomer = event.target.closest("[data-admin-search-customer]"); if (searchCustomer) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; await showSection("customers"); openCustomerDrawer(searchCustomer.dataset.adminSearchCustomer); }
   const searchOperation = event.target.closest("[data-admin-search-operation]"); if (searchOperation) { $("#adminSearchResults").hidden = true; $("#adminGlobalSearch").value = ""; if (searchOperation.dataset.operationKind === "pos") { await showSection("pos"); setPosView("receipts"); $("#posReceiptSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderPosReceipts(); } else { await showSection("bookings"); $("#bookingSearch").value = searchOperation.querySelector("b")?.textContent || ""; renderBookings(); } }
   const section = event.target.closest("[data-section]"); if (section) await withButtonBusy(section, async()=>{if (section.dataset.section === "expenses") state.expenseInventoryKind = "all";await showSection(section.dataset.section)});
-  const publicBooking = event.target.closest("[data-open-public-booking]"); if (publicBooking) { window.open("/booking/", "_blank", "noopener"); return; }
+  const publicBooking = event.target.closest("[data-open-public-booking]"); if (publicBooking) {
+    if(!canOpenSection('bookings'))return toast('لا تملك صلاحية إضافة حجز',true);
+    branchBookingView ||= mountBranchBooking({getContext:()=>({uid:state.user?.uid,role:state.role,branchIds:state.branchIds.filter(id=>['talkha','mashaya'].includes(id)),branchId:$('#calendarBranchFilter').value,date:$('#calendarDate').value}),onCreated:async result=>{$('#calendarBranchFilter').value=result.branchId;$('#calendarDate').value=result.date;await loadCalendar();toast('تم تأكيد الحجز '+result.bookingCode);}});
+    return withButtonBusy(publicBooking,()=>branchBookingView.open());
+  }
   const todayBookings = event.target.closest("[data-booking-today]"); if (todayBookings) { $("#bookingDateFilter").value = cairoDateKey(); renderBookings(); return; }
-  const cashShortcut = event.target.closest("[data-cash-shortcut]"); if (cashShortcut) { await showSection("cash"); $(`[data-cash-movement="${cashShortcut.dataset.cashShortcut}"]`)?.click(); return; }
+  const cashShortcut = event.target.closest("[data-cash-shortcut]"); if (cashShortcut) { if(cashierReferenceUI)await loadCashOperations(true);else await showSection("cash"); $(`[data-cash-movement="${cashShortcut.dataset.cashShortcut}"]`)?.click(); return; }
   const cashierPayments = event.target.closest("[data-cashier-payments]"); if (cashierPayments) { await showSection("bookings"); $("#bookingPaymentFilter").value = "unpaid"; $("#bookingStatusFilter").value = "active"; renderBookings(); return; }
   const go = event.target.closest("[data-go]"); if (go) { go.closest("dialog")?.close(); await withButtonBusy(go,()=>showSection(go.dataset.go)); }
   const cashierTarget = event.target.closest("[data-cashier-target]"); if (cashierTarget) await withButtonBusy(cashierTarget, openCashierTargets);
@@ -3335,23 +3458,25 @@ document.addEventListener("click", async event => {
     form.elements.category.closest("label").hidden = type === "ADVANCE";
     $("#cashMovementTitle").textContent = type === "ADVANCE" ? "سلفة موظف" : type === "CASH_IN" ? "إضافة كاش" : "سحب كاش";
     form.querySelector('[type="submit"]').className = `small-button ${type === "CASH_IN" ? "success" : "danger"}`;
+    form.querySelector('[type="submit"]').textContent = type === "CASH_IN" ? "إضافة" : "سحب";
     $("#cashMovementDialog").showModal();
   }
   const openReceipts = event.target.closest("[data-open-receipts]"); if (openReceipts) await withButtonBusy(openReceipts, async () => { await showSection("pos"); setPosView("receipts"); });
   const newPos = event.target.closest("[data-new-pos]"); if (newPos) await withButtonBusy(newPos, openNewPosDraft);
   const installPackages = event.target.closest("[data-install-required-packages]"); if (installPackages) await installRequiredPackages(installPackages);
   const loadMore = event.target.closest("[data-load-more]"); if (loadMore) await loadMoreCollection(loadMore.dataset.loadMore, loadMore);
-  const calendarBooking = event.target.closest("[data-calendar-booking]"); if (calendarBooking) { calendarBooking.closest("dialog")?.close(); await showSection("bookings"); $("#bookingSearch").value = calendarBooking.dataset.calendarBooking; $("#bookingStatusFilter").value = "all"; renderBookings(); }
+  const calendarBooking = event.target.closest("[data-calendar-booking]"); if (calendarBooking) { calendarBooking.closest("dialog")?.close(); return openReceiptDrawer(calendarBooking.dataset.calendarBooking); }
   const posView = event.target.closest("#pos [data-pos-view]"); if (posView) setPosView(posView.dataset.posView);
   const add = event.target.closest("[data-new]"); if (add) openEditor(add.dataset.new, "", add.dataset.presetType ? { type: add.dataset.presetType, mediaType: add.dataset.presetMedia || "image" } : add.dataset.presetCategory ? { category: add.dataset.presetCategory } : {});
   const stockExpense = event.target.closest("[data-open-stock-expense]"); if (stockExpense) { state.expenseInventoryKind = stockExpense.dataset.openStockExpense; await showSection("expenses"); $("#expenseCategory").value = "inventory"; toggleExpenseInventory(); renderBusiness(); $("#expenseForm")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-  const serviceDraft=event.target.closest('[data-service-draft-worker]');if(serviceDraft){const draft={staffId:serviceDraft.dataset.serviceDraftWorker,branchId:$("#posBranch").value,durationMinutes:Number(serviceDraft.dataset.serviceDraftDuration),bookingId:state.posBookingId||''};await showSection('teamAvailability');document.dispatchEvent(new CustomEvent('mz:service-start-draft',{detail:draft}));return;}
+  const serviceDraft=event.target.closest('[data-service-draft-worker]');if(serviceDraft){const draft={staffId:serviceDraft.dataset.serviceDraftWorker,serviceId:serviceDraft.dataset.serviceDraftId,serviceKind:serviceDraft.dataset.serviceDraftKind,branchId:$("#posBranch").value,durationMinutes:Number(serviceDraft.dataset.serviceDraftDuration),bookingId:state.posBookingId||''};await showSection('teamAvailability');document.dispatchEvent(new CustomEvent('mz:service-start-draft',{detail:draft}));return;}
   const availabilityButton=event.target.closest('[data-worker-availability]');if(availabilityButton){await showSection('teamAvailability');document.dispatchEvent(new CustomEvent('mz:worker-availability',{detail:{staffId:availabilityButton.dataset.workerAvailability,branchId:availabilityButton.dataset.workerBranch}}));return;}
   const edit = event.target.closest("[data-edit-collection]"); if (edit) openEditor(edit.dataset.editCollection, edit.dataset.editId);
   const remove = event.target.closest("[data-delete-collection]"); if (remove) await withButtonBusy(remove,()=>deleteItem(remove.dataset.deleteCollection, remove.dataset.deleteId));
   const toggle = event.target.closest("[data-toggle-collection]"); if (toggle) await withButtonBusy(toggle,()=>toggleItem(toggle.dataset.toggleCollection, toggle.dataset.toggleId));
-  const booking = event.target.closest("[data-booking-action]"); if (booking) await withButtonBusy(booking,()=>updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction));
+  const booking = event.target.closest("[data-booking-action]"); if (booking) await withButtonBusy(booking,()=>updateBookingAction(booking.dataset.bookingId, booking.dataset.bookingAction,{expectedTotal:Number(booking.dataset.expectedTotal),expectedOrderRevision:Number(booking.dataset.expectedRevision)}));
   const notify = event.target.closest("[data-notify-worker]"); if (notify) await sendWorkerAlert(notify);
+  const suggest=event.target.closest("[data-suggest-worker]");if(suggest)await suggestBookingWorker(suggest.dataset.suggestWorker,suggest);
   const assign = event.target.closest("[data-assign-booking]"); if (assign) { const select = document.querySelector(`[data-assign-worker-select="${CSS.escape(assign.dataset.assignBooking)}"]`); await assignBookingToWorker(assign.dataset.assignBooking, select?.value || "", assign); }
   const workerTaskStatus = event.target.closest("[data-worker-task-status]"); if (workerTaskStatus) await withButtonBusy(workerTaskStatus, async () => { await updateWorkerTask(workerTaskStatus.dataset.taskId, workerTaskStatus.dataset.workerTaskStatus); await loadWorkerWorkspace(); toast("تم تحديث حالة المهمة"); });
   const adminTaskCancel = event.target.closest("[data-admin-task-cancel]"); if (adminTaskCancel && confirm("إلغاء هذه المهمة؟")) await withButtonBusy(adminTaskCancel, async () => { await updateWorkerTask(adminTaskCancel.dataset.adminTaskCancel, "CANCELLED"); await Promise.all([loadAttendance(),loadWorkerRanking()]); toast("تم إلغاء المهمة"); });
@@ -3362,6 +3487,7 @@ document.addEventListener("click", async event => {
   const reportTab = event.target.closest("[data-cashier-report-tab]"); if (reportTab) selectCashierReportTab(reportTab.dataset.cashierReportTab);
   const dialogClose = event.target.closest("[data-close-dialog]"); if (dialogClose) $("#" + dialogClose.dataset.closeDialog)?.close();
   const receipt=event.target.closest("[data-whatsapp-receipt]");if(receipt)await withButtonBusy(receipt,()=>openReceiptInWhatsapp(receipt.dataset.whatsappReceipt));
+  const completedBooking=event.target.closest('[data-completed-booking]');if(completedBooking){const id=completedBooking.dataset.completedBooking;$('#adminAlertsDialog')?.close();openReceiptDrawer(id);}
   const receiptDetails=event.target.closest("[data-open-receipt]");if(receiptDetails)openReceiptDrawer(receiptDetails.dataset.openReceipt);
   const manualOffer=event.target.closest("[data-manual-whatsapp-offer]");if(manualOffer)await withButtonBusy(manualOffer,()=>openManualWhatsappOffer(manualOffer.dataset.manualWhatsappOffer)).catch(error=>toast(error.message,true));
   const offerPreview=event.target.closest("[data-preview-offer]");if(offerPreview){const offer=(state.collections.get("offers")||[]).find(item=>item.id===offerPreview.dataset.previewOffer);if(offer)alert(`${offer.nameAr}\n${offer.descriptionAr||""}\n${branchScopeLabel(offer.branchIds)}\nالسعر: ${money(offer.newPrice)}`);}
@@ -3382,7 +3508,7 @@ document.addEventListener("click", async event => {
   const editExpense = event.target.closest("[data-edit-expense]"); if (editExpense) startExpenseEdit(editExpense.dataset.editExpense);
   const posAdd = event.target.closest("[data-pos-add]"); if (posAdd) addPosItem(posAdd.dataset.posAdd, posAdd.dataset.posKind);
   const posRemove = event.target.closest("[data-pos-remove]"); if (posRemove) { state.posCart = state.posCart.filter(line => line.id !== posRemove.dataset.posRemove || line.kind !== posRemove.dataset.posKind); renderPosCart(); }
-  const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; renderCollection("services"); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  const serviceCategory = event.target.closest("[data-service-category]"); if (serviceCategory) { $("#serviceCategoryFilter").value = serviceCategory.dataset.serviceCategory; void loadCollection("services",true); $(".services-column")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   const salary = event.target.closest("[data-pay-salary]"); if (salary) await withButtonBusy(salary,()=>paySalary(salary.dataset.paySalary));
   const editServiceTarget = event.target.closest("[data-edit-service-target]"); if (editServiceTarget) {
     const item = (state.business.serviceTargets || []).find(value => value.id === editServiceTarget.dataset.editServiceTarget);
@@ -3399,7 +3525,7 @@ document.addEventListener("click", async event => {
 document.addEventListener("input", event => {
   if (event.target.id === "manualOfferMessage") state.manualOffer.message = event.target.value;
   if (event.target.id === "adminGlobalSearch") renderAdminSearch();
-  if (event.target.matches("[data-entity-search]")) renderCollection(event.target.dataset.entitySearch);
+  if (event.target.matches("[data-entity-search]")&&!event.target.dataset.serverSearch) renderCollection(event.target.dataset.entitySearch);
   if (event.target.id === "posReceiptSearch") renderPosReceipts();
   if (event.target.id === "dashboardOperationSearch") { dashboardPage = 1; renderRecentOperations(); }
   if (event.target.id === "posItemSearch" || event.target.id === "posDiscount") event.target.id === "posItemSearch" ? renderPos() : renderPosCart();
@@ -3546,6 +3672,15 @@ $("#bookingDateFilter")?.addEventListener("change", renderBookings);
 [$("#cashierTransactionSearch"), $("#cashierTransactionType"), $("#cashierTransactionPayment"), $("#cashierTransactionStaff")].filter(Boolean).forEach(input => input.addEventListener(input.tagName === "INPUT" ? "input" : "change", () => { cashierTransactionsPage = 1; renderCashierTransactions(); }));
 $("#cashierTransactionsPrev")?.addEventListener("click", () => { cashierTransactionsPage--; renderCashierTransactions(); });
 $("#cashierTransactionsNext")?.addEventListener("click", () => { cashierTransactionsPage++; renderCashierTransactions(); });
+serverTransactions=mountTransactionPages({getPage:getBookingPage,getBranch:()=>$('#headerBranchFilter')?.value||'all',offline:()=>isOfflineMode()||navigator.onLine===false,onRows:rows=>state.receiptLookup=new Map(rows.map(row=>[row.id,row])),money,dateTime,paymentMethod,paymentLabel});
+const additionPage=document.createElement('section');additionPage.id='orderAdditions';additionPage.className='admin-section';$('#pos').after(additionPage);
+function openAdditionRequest(row){$('#adminAlertsDialog').close();if(!row)return void showSection('pos');const url=new URL(location.href);url.hash=additionRoute(row.id,row.branchId);history.pushState({...history.state,adminSection:'orderAdditions',adminDepth:Math.max(0,Number(history.state?.adminDepth||0))+1},'',url);state.hub='';void showSection('orderAdditions',{historyMode:'none'});}
+orderAdditionView=mountAdditionInbox({anchor:additionPage,context:()=>{const route=new URLSearchParams(location.hash.slice(1)),selected=$('#headerBranchFilter').value,allowedBranches=state.role==='admin'?['talkha','mashaya']:state.branchIds.filter(id=>['talkha','mashaya'].includes(id));return {uid:state.user?.uid,allowed:canOpenSection('orderAdditions'),branches:selected==='all'?allowedBranches:allowedBranches.filter(id=>id===selected),branchId:route.get('branch')||$('#posBranch').value,requestId:route.get('admin')==='orderAdditions'?route.get('request')||'':''};},api:{get:getOrderAdditions,decide:decideOrderAddition},onNotices:rows=>{additionNotices=rows;renderAdminAlerts();},onOpen:openAdditionRequest,onChanged:()=>refreshCashierOperations()});
+document.addEventListener('click',event=>{const link=event.target.closest('[data-addition-request]');if(link){event.preventDefault();openAdditionRequest({id:link.dataset.additionRequest,branchId:link.dataset.additionBranch});}});
+$('#headerBranchFilter').addEventListener('change',()=>{orderAdditionView.contextChanged();if(state.user)void orderAdditionView.poll(true);if(state.section==='orderAdditions')void orderAdditionView.load();});
+serverPosCatalog=mountPosCatalogPaging({target:$('#posItems'),decorateRow:item=>({...item,category:item.section==='service'?((state.collections.get('categories')||[]).find(row=>row.id===item.categoryId)?.nameAr||item.category||'خدمات'):item.section==='package'?(item.kind==='offer'?'العروض':'الباقات'):item.section==='product'?'المنتجات':item.section==='drink'?'المشروبات':item.category}),getContext:()=>({branchId:$('#posBranch').value,section:$('#posSectionFilter').value||'all',category:$('#posCategoryFilter').value||'',search:$('#posItemSearch').value.trim(),uid:state.user?.uid||''}),getPage:options=>getCollection('posCatalog',options.take,options.cursor||'',options.branchId,options),offline:()=>isOfflineMode()||navigator.onLine===false,onRows:(rows,context)=>{const pinned=new Set(state.posCart.map(x=>`${x.kind}:${x.id}`));state.posRemoteItems=[...new Map([...(state.posRemoteItems||[]).filter(x=>x.branchId===context.branchId&&pinned.has(`${x.kind}:${x.id}`)),...rows].map(x=>[`${x.kind}:${x.id}`,x])).values()];},onRender:renderPos});
+collectionPaging=collectionPageNavigation({state,scope:collectionReadScope,getPage:getCollection,getBranch:()=>$('#headerBranchFilter').value,render:renderCollection,getOptions:collectionSearchOptions,onError:message=>toast(message,true)});
+mountCollectionSearch({reload:loadCollection,render:collection=>{for(const target of $$(`[data-list="${collection}"]`))target.innerHTML='<p role="status">جاري البحث في السجلات…</p>';}});
 [$("#calendarSearch"), $("#calendarStaffFilter"), $("#calendarPaymentFilter")].filter(Boolean).forEach(input => input.addEventListener(input.tagName === "INPUT" ? "input" : "change", renderCalendar));
 $("#applyRevenueFilter").addEventListener("click", renderRevenue);
 $("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookings.csv", ["code", "branch", "customer", "phone", "items", "staff", "date", "time", "subtotal", "discount", "total", "status", "payment"], state.dashboard.bookings.map(item => [item.code, item.branchNameAr || branchLabel(item.branchId), item.customerName, item.phone, (item.serviceNamesAr || []).join(" + "), item.staffNameAr, item.bookingDate, item.bookingTime, item.subtotal, item.discountAmount, item.total, item.status, item.paymentStatus])));
@@ -3557,6 +3692,7 @@ $("#editorDialog").addEventListener("close", () => { editorPreviewUrls.forEach(u
 window.addEventListener("pagehide", () => closeScanner(false));
 $("#scannerCamera").addEventListener("change", openScanner);
 $("#findScannedBooking").addEventListener("click", event => withButtonBusy(event.currentTarget, findScanned));
+$("#scannerCode").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();$("#findScannedBooking").click();}});
 $("#secureDeleteClose").addEventListener("click", closeSecureDelete);
 $("#secureDeleteCancel").addEventListener("click", closeSecureDelete);
 $("#secureDeleteForm").addEventListener("submit", submitSecureDelete);
@@ -3613,9 +3749,18 @@ $("#posTicketClose").addEventListener("click", () => $("#pos").classList.remove(
 $("#posBranch").addEventListener("change", () => { state.posCart = []; renderPos(); void loadPosOffers(); if(!isOfflineMode())void prepareOfflinePos(); });
 $("#posSectionFilter").addEventListener("change", () => { $("#posItemSearch").value = ""; renderPos(); });
 $("#posCategoryFilter").addEventListener("change", renderPos);
-$("#serviceCategoryFilter").addEventListener("change", () => renderCollection("services"));
+$("#serviceCategoryFilter").addEventListener("change", () => void loadCollection("services",true));
 $("#posCustomer").addEventListener("change", event => selectPosCustomer(event.target.value));
-let phoneLookupTimer;$("#posPhone").addEventListener("input",event=>{clearTimeout(phoneLookupTimer);const phone=event.target.value;try{normalizePhone(phone)}catch{return}phoneLookupTimer=setTimeout(async()=>{try{const result=await findCustomerByPhone(phone);if(result.customer){rememberPosCustomer(result.customer);toast("تم العثور على العميل بدون تحميل قاعدة العملاء كاملة")}}catch{}},350)});
+let phoneLookupTimer,phoneLookupVersion=0;
+$("#posPhone").addEventListener("input",event=>{
+ clearTimeout(phoneLookupTimer);const version=++phoneLookupVersion,phone=event.target.value,uid=state.user?.uid;
+ try{normalizePhone(phone)}catch{return}
+ phoneLookupTimer=setTimeout(async()=>{try{
+  const result=await findCustomerByPhone(phone);
+  if(version!==phoneLookupVersion||uid!==state.user?.uid||normalizePhone($("#posPhone").value)!==normalizePhone(phone))return;
+  if(result.customer){rememberPosCustomer(result.customer);toast("تم العثور على العميل بدون تحميل قاعدة العملاء كاملة")}
+ }catch{}},350);
+});
 $("#expenseForm").addEventListener("submit", submitExpense);
 $("#expenseCategory").addEventListener("change", toggleExpenseInventory);
 $("#expenseCancelEdit").addEventListener("click", resetExpenseForm);
@@ -3698,22 +3843,22 @@ if ("serviceWorker" in navigator) {
 }
 let dashboardRefreshTimer;
 async function bootstrapAdmin(user) {
+  branchBookingView?.dispose();branchBookingView=null;
   collectionRequestEpoch++;
   collectionLoads.clear(); collectionLoadVersions.clear(); collectionCacheScopes.clear();
   if (!user) { location.replace("/login/"); return; }
   try {
     const access = await currentAccess(user);
     const destination=staffRouteGuard(location.pathname,access.role); if(destination){location.replace(destination);return;}
-    if (!["admin", "manager", "cashier", "worker"].includes(access.role) || (access.role !== "admin" && !access.branchIds?.length)) {
+    if (!["admin", "manager", "cashier", "worker", "media"].includes(access.role) || (access.role !== "admin" && !access.branchIds?.length)) {
       await logout();
       location.replace("/login/?reason=access");
       return;
     }
-    offlineDeskView ||= mountOfflineDesk({desk:offlineDesk,onError:error=>toast(error.message,true)});
     state.user = user; state.role = access.role; state.staffId = access.staffId || ""; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = effectivePermissions(access.role, access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
     for(const id of ['headerBranchFilter','dashboardBranchFilter','calendarBranchFilter','attendanceBranch','taskBranch','reportBranch','auditBranch','expenseBranchFilter','serviceTargetBranchFilter','posBranch','campaignBranchFilter']) if($('#'+id)) $('#'+id).value=state.branchIds[0];
     $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"]').forEach(input => { input.value = user.email || ""; });
-    const roleName = ({ admin: "أدمن", manager: "مدير", cashier: "كاشير", worker: "عامل" })[access.role] || access.role;
+    const roleName = ({ admin: "أدمن", manager: "مسؤول الفرع", cashier: "كاشير", worker: "عامل", media: "الميديا" })[access.role] || access.role;
     const userName = user.displayName || user.email || "حساب مزين";
     $("#welcomeText").textContent = `مزين مصر • ${roleName}`;
     $("#workspaceUserName").textContent = userName;
@@ -3725,7 +3870,7 @@ async function bootstrapAdmin(user) {
     $("#headerBranchLabel").textContent = state.branchIds.length > 1 ? "طلخا والمشاية" : branchLabel(state.branchIds[0]);
     $("#cashierBranchLabel").textContent = state.branchIds.map(branchLabel).join(" / ") || "الفرع";
     $("#managerBranchLabel").textContent = state.branchIds.length === 1 ? branchLabel(state.branchIds[0]) : "الفروع المصرح بها";
-    $("#cashierBranchLabel").hidden = access.role !== "cashier";
+    $("#cashierBranchLabel").hidden = !["manager","cashier"].includes(access.role);
     $("#logoutButton").dataset.avatar = String(userName).trim().charAt(0) || "م";
     personalAttendanceView?.dispose();
     for(const [id,label] of [['myAttendance','حضوري وساعات عملي'],['attendanceManagement','مدد وسجل الحضور']]){
@@ -3735,6 +3880,10 @@ async function bootstrapAdmin(user) {
     personalAttendanceView=mountSelfAttendance({role:state.role,uid:user.uid,currentUid:()=>state.user?.uid,anchor:$('#myAttendance')});
     if(state.role==='admin')attendanceManagementView=mountAttendanceManagement($('#attendanceManagement'));
     renderRoleShell();
+    offlineDeskView ||= mountOfflineDesk({desk:offlineDesk,onError:error=>toast(error.message,true)});
+    const connectionHost=document.querySelector(document.documentElement.dataset.adminLayout==='cashier'?'#cashierHeader .cashier-header-tools':'.admin-header .header-actions');
+    if(connectionHost&&$('#offlineSalesDesk'))connectionHost.append($('#offlineSalesDesk'));
+    void offlineDeskView.update();
     $("#authLoading").hidden = true; $("#adminApp").hidden = false;
     if (state.role === 'worker') {
       document.documentElement.dataset.theme = 'dark';
@@ -3749,11 +3898,11 @@ async function bootstrapAdmin(user) {
     if(state.role==="admin"){const ranking=$("#workerRanking")?.closest("article");if(ranking)$("#staff").append(ranking);}
     Object.assign(sectionTitles,branchWorkspace.labels);
     if(['admin','cashier','manager'].includes(state.role))mountMonthlyTargetPanel({anchor:$('#branchTargetPanel'),role:state.role,branchIds:state.branchIds});
-    if(state.role==='admin'||state.role==='cashier'&&state.permissions.has('teamOperations'))mountMonthlyTargetPanel({anchor:$('#workerTargetPanel'),role:state.role,branchIds:state.branchIds,mode:'workers'});
-    mountWorkerAvailability({anchor:$('#teamAvailability'),role:state.role,branchIds:state.branchIds,canManage:state.role==='admin'||state.permissions.has('teamOperations')});
+    if(state.role==='admin'||['manager','cashier'].includes(state.role)&&state.permissions.has('teamOperations'))mountMonthlyTargetPanel({anchor:$('#workerTargetPanel'),role:state.role,branchIds:state.branchIds,mode:'workers'});
+    mountWorkerAvailability({anchor:$('#teamAvailability'),role:state.role,branchIds:state.branchIds,canManage:state.role==='admin'||state.permissions.has('teamOperations'),getCatalog:branchId=>posCatalogItems(branchId)});
     mountBranchWorkerAccounts({anchor:$('#teamAvailability'),role:state.role,branchIds:state.branchIds});
-    if(state.role!=="worker"&&state.role!=="cashier")mountDashboardScope({branchIds:state.branchIds});
-    if (state.role === "cashier" && state.branchIds.length === 1) {
+    if(state.role==="admin"||state.role==="manager")mountDashboardScope({branchIds:state.branchIds});
+    if (["manager","cashier"].includes(state.role) && state.branchIds.length === 1) {
       $("#dashboardBranchFilter").value = state.branchIds[0];
       $("#headerBranchFilter").value = state.branchIds[0];
       $("#calendarBranchFilter").value = state.branchIds[0];
@@ -3762,11 +3911,26 @@ async function bootstrapAdmin(user) {
       $("#openShiftForm [name=branchId]").value = state.branchIds[0];
       $("#openShiftForm [name=branchId]").disabled = true;
     }
-    if (state.role === "cashier") await loadCashOperations(true);
+    if (["manager","cashier"].includes(state.role)) await loadCashOperations(true);
     syncDashboardTargetBranchOptions();
     syncPushButtons();
     if ("Notification" in window && Notification.permission === "granted") void connectAdminPush().then(() => { pushRegistrationReady = true; syncPushButtons(); }).catch(error => console.debug("Push token refresh deferred", error?.message || error));
-    const desktopInitialSection = access.role === "worker" ? "worker" : access.role === "cashier" ? ["calendar", "bookings", "pos"].find(canOpenSection) : (access.role === "admin" && adminMobileViewport.matches) || (matchMedia("(min-width: 1024px)").matches && access.role !== "worker") ? ["dashboard", "pos", "bookings", "attendance", "customers"].find(canOpenSection) : "";
+    if(canOpenSection('tasks'))workerTaskDrawer ||= mountWorkerTaskDrawer({getCatalog:()=>posCatalogItems($('#taskBranch').value),prepareDraft:async draft=>{if(state.branchIds.includes(draft.branchId))$('#taskBranch').value=draft.branchId;await loadAttendance();if([...$('#taskStaff').options].some(option=>option.value===draft.staffId))$('#taskStaff').value=draft.staffId;}});
+    if(canOpenSection('pos'))cashierReferenceUI ||= mountCashierReference({
+      getCustomers:()=>recentCashierCustomers(state.collections.get('customers')||[],state.dashboard.bookings||[]),
+      getBookings:()=>state.dashboard.bookings||[],getCatalog:()=>posCatalogItems(),getVisibleCatalog:()=>serverPosCatalog?.rows()??posCatalogItems(),
+      searchCustomers:options=>getCollection('posCustomers',options.take,options.cursor||'',$('#posBranch').value,options),isOffline:()=>isOfflineMode()||navigator.onLine===false,getCustomerScope:()=>JSON.stringify([state.user?.uid,$('#posBranch').value]),
+      getDraft:()=>({firstName:$('#posFirstName').value,phone:$('#posPhone').value,existingOrder:Boolean(state.posBookingId),paymentStatus:state.posBookingSnapshot?.paymentStatus,items:state.posBookingId&&state.posBookingSnapshot?state.posBookingSnapshot.items:state.posCart}),
+      getPricingContext:()=>({uid:state.user?.uid,branchId:$('#posBranch').value,customer:{firstName:$('#posFirstName').value,lastName:$('#posLastName').value,phone:$('#posPhone').value},staffId:$('#posStaff').value,items:state.posCart.map(line=>({...line,workerId:line.workerId||$('#posStaff').value})),discountAmount:Number($('#posDiscount').value||0),couponCode:$('#posCouponCode').value.trim(),redeemPoints:Number($('#posRedeemPoints')?.value||0),redeemCashback:Number($('#posRedeemCashback')?.value||0),paymentMethod:$('#posPaymentMethod').value,paid:$('#posPaid').checked}),
+      previewOrder:()=>previewPosOrder({branchId:$('#posBranch').value,customer:{firstName:$('#posFirstName').value,lastName:$('#posLastName').value,phone:$('#posPhone').value},staffId:$('#posStaff').value,items:state.posCart.map(line=>({...line,workerId:line.workerId||$('#posStaff').value})),discountAmount:Number($('#posDiscount').value||0),couponCode:$('#posCouponCode').value.trim(),redeemPoints:Number($('#posRedeemPoints')?.value||0),redeemCashback:Number($('#posRedeemCashback')?.value||0),paymentMethod:$('#posPaymentMethod').value,paid:$('#posPaid').checked}),
+      validatePhone:phone=>Boolean(normalizePhone(phone)),
+      selectCustomer:customer=>{clearPosCustomerIntake();if(customer.id)rememberPosCustomer(customer);else{$('#posCustomer').value='';$('#posFirstName').value=customer.firstName||'';$('#posLastName').value=customer.lastName||'';$('#posPhone').value=customer.phone||'';}},
+      lookupCustomer:async phone=>{const uid=state.user?.uid;if(isOfflineMode())return recentCashierCustomers(state.collections.get('customers')||[],state.dashboard.bookings||[]).find(c=>normalizePhone(c.phone)===normalizePhone(phone))||null;const result=await findCustomerByPhone(phone);if(uid!==state.user?.uid)throw Error('الحساب اتغير؛ افتح الفاتورة من الحساب الحالي');return result.customer;},
+      onClose:()=>setPosView('receipts'),onError:error=>toast(error.message,true),
+      onExpense:()=>{if(state.role!=='admin'&&!state.permissions.has('expenses'))throw Error('حسابك لا يملك صلاحية تسجيل مصروف');resetExpenseForm();$('#expenseForm [name="branchId"]').value=$('#posBranch').value;}
+    });
+    if(cashierReferenceUI)setPosView('receipts');
+    const desktopInitialSection = access.role === "worker" ? "worker" : access.role === "media" ? ["mobileContent","offers","campaigns"].find(canOpenSection) : ["manager","cashier"].includes(access.role) ? ["pos", "calendar", "bookings"].find(canOpenSection) : (access.role === "admin" && adminMobileViewport.matches) || (matchMedia("(min-width: 1024px)").matches && access.role !== "worker") ? ["dashboard", "pos", "bookings", "attendance", "customers"].find(canOpenSection) : "";
     const requestedSection = new URLSearchParams(location.hash.slice(1)).get("admin");
     const initialSection = requestedSection && canOpenSection(requestedSection) ? requestedSection : desktopInitialSection;
     if (initialSection) {
@@ -3787,22 +3951,34 @@ async function bootstrapAdmin(user) {
       });
       offlineConnectionMonitor.start();
     }
-    if(state.role !== 'worker') void watchWorkerPush(payload=>{
+    if(!['worker','media'].includes(state.role)) void watchWorkerPush(payload=>{
       const branch=payload.data?.branchId, selected=$("#headerBranchFilter").value;
       if(branch && (selected!=='all' && branch!==selected || state.role!=='admin' && !state.branchIds.includes(branch)))return;
-      operationalNotices.unshift({branchId:branch,title:payload.notification?.title||'تحديث التشغيل',body:payload.notification?.body||'',read:false});operationalNotices.splice(20);renderAdminAlerts();
-      state.workerRankingKey=null;void loadDashboard(true);
-      if(payload.data?.type==='worker_task'){void loadWorkerRanking();if(state.section==='tasks')void loadAttendance(true);}
+      if(payload.data?.type==='service_completed'){completionPollAt=0;void pollCompletedServices();}
+      if(payload.data?.type==='order_addition'){void orderAdditionView?.poll(true);if(state.section==='orderAdditions')void orderAdditionView?.load();}
+      operationalNotices.unshift({type:payload.data?.type,entityId:payload.data?.entityId,branchId:branch,title:payload.notification?.title||'تحديث التشغيل',body:payload.notification?.body||'',read:false});operationalNotices.splice(20);renderAdminAlerts();
+      state.workerRankingKey=null;
+      if(['branchOperations','teamAvailability'].includes(state.section))document.dispatchEvent(new Event('mz:service-board-refresh'));
+      else if(['attendance','tasks'].includes(state.section))void loadAttendance(true);
+      else if(state.section==='pos')void loadCashierDashboard(true);
+      else if(state.section==='calendar')void loadCalendar(true);
+      else if(['dashboard','bookings','revenue','expenses'].includes(state.section))void loadDashboard(true);
+      if(payload.data?.type==='worker_task'&&['staff','workerTargets'].includes(state.section))void loadWorkerRanking();
     }).then(unsub=>window.addEventListener('beforeunload',unsub,{once:true})).catch(()=>{});
+    if(canOpenSection('orderAdditions'))void orderAdditionView?.poll(true);
+    void pollCompletedServices();
     clearInterval(dashboardRefreshTimer);
     dashboardRefreshTimer = state.role === "worker" ? null : setInterval(() => {
       if (document.hidden || navigator.onLine===false) return;
+      void pollCompletedServices();
+      if(canOpenSection('orderAdditions'))void orderAdditionView?.poll();
       if(state.role==="admin"&&!["dashboard","bookings","revenue","expenses"].includes(state.section))void loadTargetAchievementAlerts();
       if (state.section === "pos" || (state.section === "bookings" && state.role === "cashier")) loadCashierDashboard(true);
       else if (state.section === "calendar") loadCalendar(true);
       else if (["dashboard", "bookings", "revenue", "expenses"].includes(state.section)) loadDashboard(true);
       else if (["attendance", "tasks"].includes(state.section)) loadAttendance(true);
       else if (state.section === "worker") loadWorkerWorkspace(true);
+      else if (["branchOperations","teamAvailability"].includes(state.section))document.dispatchEvent(new Event("mz:service-board-refresh"));
     }, 60000);
   } catch (error) {
     if (isInvalidAuthSession(error)) {
@@ -3921,3 +4097,7 @@ document.querySelector('#adminAlertsDialog')?.addEventListener('click',async()=>
 
 let offlineRefreshTimer;
 window.addEventListener('offline-pos-confirmed',()=>{clearTimeout(offlineRefreshTimer);offlineRefreshTimer=setTimeout(()=>{if(navigator.onLine!==false)void refreshCashierOperations().catch(error=>toast(error.message,true));},1000);});
+
+document.addEventListener('click',event=>{const button=event.target.closest('[data-manual-attendance]');if(!button)return;openManualAttendance({staffId:button.dataset.manualStaff,branchId:button.dataset.manualBranch,label:button.dataset.manualName,action:button.dataset.manualAttendance,uid:state.user?.uid,currentUid:()=>state.user?.uid,onRecorded:async()=>{await loadAttendance();await personalAttendanceView?.load();}});});
+
+$('#headerBranchFilter').addEventListener('change',()=>{completionPollVersion++;completionPollAt=0;completedNotices=[];renderAdminAlerts();void pollCompletedServices();});

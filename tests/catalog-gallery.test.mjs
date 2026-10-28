@@ -42,8 +42,9 @@ test('live gallery and branch data win over cache while existing offline cache i
 test('gallery routes reuse App Check client once and preserve failure behavior', async () => {
   for (const route of ['results', 'hair-systems']) {
     const code = await fs.readFile(new URL(`../src/${route}.js`, import.meta.url), 'utf8');
-    assert.equal((code.match(/await getCatalog\(\)/g) || []).length, 1);
-    assert.match(code, /from \"\.\/firebase-client\.js\"/);
+    assert.equal((code.match(route==='results'?/await getCatalogMetadata\(\)/g:/await getCatalog\(\)/g) || []).length, 1);
+    if(route==='results')assert.match(code,/createCursorPager\(getCatalogPage/);
+    assert.match(code, /from ['"]\.\/firebase-client\.js['"]/);
     assert.match(source, /if \(!firebaseConfigured\) return \{ \.\.\.localCatalog\(\), preview: true \}/);
     if(route==='results'){const {sharedEditorial}=await import('../src/public-editorial.js');assert.deepEqual(sharedEditorial([{id:'foreign',type:'result',active:true,status:'published',branchIds:['mashaya'],imageUrl:'https://example.test/result.webp'},{id:'private',type:'result',active:true,private:true,imageUrl:'https://example.test/private.webp'}],'result').map(x=>x.id),['foreign']);}else assert.match(code,/publicSubset\(/);
     assert.match(code, /if \(catalog\.offline\)/);

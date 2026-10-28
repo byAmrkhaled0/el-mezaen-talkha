@@ -1,0 +1,16 @@
+export const legacyCollectionError=error=>!/permission-denied|unauthenticated/.test(error?.code||'')&&/قسم غير صالح|invalid.collection/i.test(error?.message||'')&&/invalid-argument|400/.test(String(error?.code||'')+' '+String(error?.message||''));
+export const COMPATIBILITY_NOTICE='الباك إند يحتاج تحديث النسخة الجديدة؛ المعروض مؤقتًا من السجلات الحديثة المتاحة فقط.';
+export async function legacyCollectionPage(data,{collection,offers,snapshot}){
+ const take=Math.min(50,Number(data.take||data.limit||25)),branch=data.branchId,search=String(data.search||'').trim().toLowerCase();let rows=[];
+ if(data.collection==='bookings'){
+  rows=(await snapshot(branch)).bookings||[];
+  rows=rows.filter(x=>(!branch||branch==='all'||x.branchId===branch)&&(!search||[x.customerName,x.phone,x.code,x.receiptNumber].some(v=>String(v||'').toLowerCase().startsWith(search)))&&(!data.source||data.source==='all'||(data.source==='pos'?x.source==='pos':x.source!=='pos'))&&(!data.paymentMethod||data.paymentMethod==='all'||x.paymentMethod===data.paymentMethod)&&(!data.staffId||data.staffId==='all'||x.staffId===data.staffId));
+ }else if(data.collection==='posCustomers'){
+  rows=(await collection('customers',100,'',branch)).items||[];rows=rows.filter(x=>x.lastBranchId===branch&&(!search||String(x[data.searchField||'firstName']||'').toLowerCase().startsWith(search)));
+ }else if(data.collection==='posCatalog'){
+  const groups={service:['services'],package:['packages','offers'],product:['services','inventoryItems'],drink:['drinks'],all:['services','packages','offers','inventoryItems','drinks']};
+  const values=await Promise.all((groups[data.section||'all']||[]).map(async name=>({name,items:(await(name==='offers'?offers(branch):collection(name,100,'',branch))).items||[]})));
+  for(const group of values)for(const x of group.items){if(x.active===false||['stopped','expired','draft'].includes(x.status)||(['services','packages','offers'].includes(group.name)?!x.branchIds?.includes(branch):![branch,...(group.name==='drinks'?['all']:[])].includes(x.branchId)))continue;const kind=({packages:'package',offers:'offer',inventoryItems:'inventory',drinks:'drink'})[group.name]||(x.type==='product'?'product':'service'),section=['product','inventory'].includes(kind)?'product':['package','offer'].includes(kind)?'package':kind;if(data.section&&data.section!=='all'&&section!==data.section||search&&!String(x.nameAr||'').toLowerCase().startsWith(search)||section==='service'&&data.category&&data.category!=='all'&&x.categoryId!==data.category||kind==='inventory'&&x.category!=='product')continue;const price=Number(kind==='inventory'?x.sellingPrice:kind==='offer'?x.newPrice:x.price);if(!Number.isFinite(price)||price<0)continue;rows.push({id:x.id,kind,section,branchId:branch,categoryId:x.categoryId||'',nameAr:x.nameAr,category:section==='package'?'الباقات والعروض':section==='product'?'بضاعة':section==='drink'?'مشروبات':x.categoryId||'خدمات',price,duration:Number(x.duration)||0,stockQty:Number(x.stockQty)||0,choiceGroups:x.choiceGroups||[],drinkOptions:x.drinkOptions||[]});}
+ }else {rows=(await collection(data.collection,100,'',branch)).items||[];if(search)rows=rows.filter(x=>String(x[data.searchField||'nameAr']||'').toLowerCase().startsWith(search));}
+ return {items:rows.slice(0,take),take,hasMore:false,nextCursor:null,compatibility:true,warning:COMPATIBILITY_NOTICE};
+}

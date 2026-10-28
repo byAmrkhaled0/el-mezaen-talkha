@@ -1,0 +1,11 @@
+import {defineConfig,mergeConfig} from 'vite';
+import base from './vite.config.js';
+export default defineConfig(({command})=>{
+ if(command!=='serve')throw Error('Local review config cannot be used to build or publish');
+ return mergeConfig(base,{server:{host:'127.0.0.1',port:4203,strictPort:true,headers:{'Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' http://127.0.0.1:5001 http://127.0.0.1:9099 http://127.0.0.1:9199 http://127.0.0.1:8080 ws://127.0.0.1:4203; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"}},plugins:[{name:'local-review-demo-only',enforce:'pre',configureServer(server){server.middlewares.use((req,res,next)=>{if(new URL(req.url,'http://localhost').pathname!=='/firebase-config.js')return next();if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)||!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host||'')){res.writeHead(403);return res.end();}res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','no-store');res.end(`window.__FIREBASE_CONFIG__={apiKey:'demo-local-key',authDomain:'demo-el-mezaen-local.firebaseapp.com',projectId:'demo-el-mezaen-local',storageBucket:'demo-el-mezaen-local.appspot.com',appId:'1:123:web:local'};window.__USE_EMULATORS__=true;window.__APP_CHECK_SITE_KEY__='';window.__VAPID_KEY__='';window.__SITE_URL__='http://127.0.0.1:4203';`);});},transformIndexHtml(html){
+ const badge='<div class="local-review-badge" role="note">تجربة محلية — بيانات وهمية</div>';
+ const styles='<style>.local-review-badge{position:fixed;inset-inline-start:10px;bottom:8px;z-index:999999;background:#714300;color:#fff;padding:5px 9px;border-radius:7px;font:12px sans-serif;pointer-events:none}body.worker-app>.local-review-badge{position:static;max-width:calc(100% - 24px);width:fit-content;margin:6px auto;box-sizing:border-box;font-size:11px}</style>';
+ html=html.replace('<body','<body data-local-review="demo"').replace('</head>',styles+'</head>');
+ return /class="[^"]*worker-app/.test(html)?html.replace(/(<body\b[^>]*>)/,'$1'+badge):html.replace('</body>',badge+'</body>');
+}}]});
+});

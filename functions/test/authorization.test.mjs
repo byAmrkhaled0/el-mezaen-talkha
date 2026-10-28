@@ -21,7 +21,8 @@ test("refund authorization is an explicit cashier grant, with no management or f
   assert.equal(granted.has("refundTransactions"), true);
   assert.equal(granted.has("revenue"), false);
   assert.equal(granted.has("customers"), false);
-  assert.equal(effectivePermissions("manager", ["refundTransactions"]).has("refundTransactions"), false);
+  assert.equal(effectivePermissions("manager", ["refundTransactions"]).has("refundTransactions"), true);
+  assert.equal(effectivePermissions("media", ["refundTransactions", "pos"]).has("refundTransactions"), false);
   assert.equal(effectivePermissions("admin").has("refundTransactions"), true);
 });
 

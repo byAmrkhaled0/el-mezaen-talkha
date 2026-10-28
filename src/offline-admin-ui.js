@@ -12,7 +12,7 @@ export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector
   const help=document.createElement('p');help.textContent='التجهيز والتحويل للبيع بدون نت والمزامنة بيتموا تلقائيًا على الجهاز بعد الدخول بالإنترنت وفتح وردية. بدون نت: شيكات نقدية جديدة فقط. احتفظ بنفس حسابك وبيانات المتصفح لحد تأكيد الشيكات. الخصومات والاسترجاع وإغلاق الخزنة تحتاج اتصال.';
   const sync=document.createElement('button');sync.type='button';sync.className='small-button';sync.textContent='مزامنة الآن';
   const rows=document.createElement('div');rows.className='offline-sales-list';
-  body.append(close,heading,status,readiness,help,sync,rows);panel.append(summary,body);document.querySelector('#adminApp .admin-main')?.prepend(panel);
+  body.append(close,heading,status,readiness,help,sync,rows);panel.append(summary,body);const header=document.documentElement.dataset.adminLayout==='cashier'?document.querySelector('#cashierHeader .cashier-header-tools'):document.querySelector('.admin-header .header-actions');if(header)header.append(panel);else document.querySelector('#adminApp .admin-main')?.prepend(panel);
   let revision=0,renderTimer,limit=100;
   const more=document.createElement('button');more.type='button';more.className='small-button';more.textContent='عرض شيكات أقدم';more.hidden=true;more.onclick=()=>{limit+=100;void update();};body.append(more);
   const schedule=()=>{clearTimeout(renderTimer);renderTimer=setTimeout(()=>void update(),200);};

@@ -4,7 +4,7 @@ import { validateAttendanceLocation } from './core.js';
 export function staffSelfAttendanceHandlers({db,requireLiveStaff,requireRole,requireBranchAccess,branchesFor,rateLimit,businessDateParts,FieldValue,HttpsError,hash,engine}) {
   const fail=(code,message)=>{throw new HttpsError(code,message);};
   async function context(request) {
-    requireRole(request,engine?['worker','cashier','manager']:['cashier','manager']);
+    requireRole(request,engine?['worker','cashier','manager','media']:['cashier','manager']);
     await requireLiveStaff(request);
     const profile=await db.doc(`users/${request.auth.uid}`).get();
     const account=profile.data();
@@ -29,7 +29,7 @@ export function staffSelfAttendanceHandlers({db,requireLiveStaff,requireRole,req
     const attendance=session||(record.exists?record.data():null);
     if(attendance && attendance.userId!==request.auth.uid)fail('permission-denied','ربط سجل الحضور غير صحيح');
     let policy=null;if(engine){try{policy=await engine.plan(request.auth.uid);}catch(error){if(error.code!=='failed-precondition')throw error;}}
-    return {dateKey:c.dateKey,durationMinutes:policy?.durationMinutes??null,attendance:attendance?{...(engine?engine.project(attendance):{}),status:attendance.status,branchId:attendance.branchId,checkInTime:attendance.checkInTime||'',checkOutTime:attendance.checkOutTime||'',distanceMeters:attendance.checkOutEvidence?.distanceMeters??attendance.locationEvidence?.distanceMeters}:null,
+    return {dateKey:c.dateKey,durationMinutes:policy?.durationMinutes??null,attendance:attendance?{...(engine?engine.project({id:session?.id||record.id,...attendance}):{}),status:attendance.status,branchId:attendance.branchId,checkInTime:attendance.checkInTime||'',checkOutTime:attendance.checkOutTime||'',distanceMeters:attendance.checkOutEvidence?.distanceMeters??attendance.locationEvidence?.distanceMeters}:null,
       branches:branches.flatMap((branch,i)=>branch.exists&&branch.data().active!==false?[{id:c.ids[i],nameAr:branch.data().nameAr||c.ids[i]}]:[])};
   }
   async function record(request) {

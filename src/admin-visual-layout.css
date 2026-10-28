@@ -142,3 +142,5 @@ html[data-theme=light] #adminApp{--muted:#526879;--admin-muted:#526879;--admin-t
  #adminApp .cashier-header-tools{flex:1 1 100%;width:100%;margin:0;gap:8px;justify-content:end;flex-wrap:nowrap}
  #adminApp #cashierHeaderBranchSlot{margin-inline-end:auto;max-width:none;white-space:nowrap;font-size:12px}
 }
+
+#adminApp .collection-pager-label{display:inline-block;padding:10px;color:var(--muted);font-size:13px}

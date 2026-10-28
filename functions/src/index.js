@@ -1,3 +1,15 @@
+import {workerHistoryPage} from './worker-history.js';
+import {manualAttendanceHandler} from './manual-attendance.js';
+import {readDetailedDay,rollupDetails} from './report-details.js';
+import {transferredBookingMetadata} from './booking-assignment.js';
+import {busyAtTime} from './timed-availability.js';
+import {parsePosCustomerIntake} from './pos-customer-intake.js';
+import {orderAdditionHandlers} from './order-additions.js';
+import {posCatalogPages} from './pos-catalog-pages.js';
+import {adminSearchPages} from './admin-search-pages.js';
+import {bookingPages} from './booking-pages.js';
+import {parsePage,publicCatalogPaging} from './cursor-pagination.js';
+import {bookingPresence,checkBookingPresence,presentForBooking,workerDecisionAllowed,workerBookingVisible,appointmentDuration} from './booking-readiness.js';
 import {offlinePosProtocol} from './offline-pos-protocol.js';
 import {monthLedgerPages} from './month-ledger-pages.js';
 import {staffSelfAttendanceHandlers} from './staff-self-attendance.js';
@@ -42,7 +54,7 @@ import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/fire
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
-import { ALL_PERMISSIONS, ROLE_CAPABILITY_CEILINGS, ROLE_DEFAULT_PERMISSIONS, effectivePermissions, branchAllowed, allResourceBranchesAllowed } from "./authorization.js";
+import { ALL_PERMISSIONS, ROLE_CAPABILITY_CEILINGS, ROLE_DEFAULT_PERMISSIONS, effectivePermissions, branchAllowed, allResourceBranchesAllowed, canManageSharedCatalog } from "./authorization.js";
 import { branchMonthlyTargetSummary, buildAvailableSlots, calculateCoupon, calculateExpectedCash, calculatePayroll, calculateRevenueBreakdown, calculateRewards, calculateServiceTargetProgress, createSlotKeys, isDrinkAvailableAtBranch, isRecentAuthentication, isValidDateKey, minutes, nextMonthKey, normalizeExpenseInput, normalizeLineWorkers, normalizePhone, paymentTransition, priceItems, serviceTargetDocumentId, serviceTargetEntries, staffCanServeInterval, sumBranchMonthlyTargets, validateAppointment, validateAttendanceLocation } from "./core.js";
 import { addDays, cairoDateKey, periodDays, reportId, reportPeriod, rollupDaily, weekStart } from "./reporting.js";
 import { CAMPAIGN_STATES, campaignBranchAllowed, campaignComponents, campaignTemplate, eligibleRecipient, offerAtBranch, shouldApplyDeliveryStatus, verifyMetaSignature } from "./marketing.js";
@@ -70,7 +82,7 @@ const whatsappOptions = { ...adminOptions, secrets: [whatsappAccessToken, whatsa
 const whatsappWebhookOptions = { region, cors: false, memory: "256MiB", maxInstances: 20, timeoutSeconds: 15, secrets: [whatsappWebhookVerifyToken, whatsappAppSecret] };
 const PUBLIC_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "offers", "content", "faqs", "translations", "reviews"];
 const ADMIN_COLLECTIONS = ["branches", "categories", "services", "packages", "staff", "workerLeaves", "offers", "coupons", "content", "faqs", "holidays", "translations", "settings", "inventoryItems", "drinks", "reviews"];
-const ADMIN_ROLES = ["admin", "manager", "cashier", "worker"];
+const ADMIN_ROLES = ["admin", "manager", "cashier", "worker", "media"];
 const COLLECTION_PERMISSIONS = { branches: "settings", categories: "services", services: "services", packages: "packages", staff: "staff", workerLeaves: "schedule", offers: "offers", coupons: "coupons", content: "posts", faqs: "faqs", holidays: "schedule", translations: "settings", settings: "settings", inventoryItems: "inventory", drinks: "drinks", reviews: "reviews", customers: "customers", walletTransactions: "rewards", campaigns: "campaigns", activityLogs: "activity", users: "users", revenueLedger: "revenue", expenses: "expenses", payrollPayments: "payroll", cashShifts: "pos", cashMovements: "pos", dailyClosings: "revenue" };
 const EXPENSE_CATEGORIES = ["inventory", "electricity", "water", "rent", "salary", "maintenance", "tools", "marketing", "other"];
 const INVENTORY_CATEGORIES = ["product", "supply"];
@@ -263,7 +275,7 @@ async function requireMarketingGrant(request, capability) {
 }
 export const getOwnMarketingGrants = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
-  const role = requireRole(request, ["manager", "cashier"]);
+  const role = requireRole(request, ["manager", "cashier", "media"]);
   const account = await db.doc(`users/${request.auth.uid}`).get();
   if (!account.exists || account.data()?.role !== role || !Array.isArray(account.data()?.branchIds)
       || !branchesFor(request).every(id => account.data().branchIds.includes(id))) return { grants: [] };
@@ -356,7 +368,7 @@ async function sendWorkerPush(staffId, { title, body, type, entityId, branchId }
   const snapshots=await Promise.all(users.docs.map(user=>db.collection('pushTokens').where('uid','==',user.id).limit(20).get()));
   const tokens=[...new Set(snapshots.flatMap((snapshot,index)=>snapshot.docs.filter(doc=>workerPushAllowed(live.get(users.docs[index].id),users.docs[index].data(),staff.data(),doc.data(),branchId)).map(doc=>doc.data().token)))].filter(token=>!acceptedTokenHashes.includes(hash(token)));
   if(!tokens.length)return {attempted:0,sent:0};
-  const result=await getMessaging().sendEachForMulticast({tokens,notification:{title,body},webpush:{fcmOptions:{link:`/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId||"")}`},notification:{icon:"/assets/el-mezaen-logo.jpeg",badge:"/assets/el-mezaen-logo.jpeg",tag:`${type}_${entityId}`,renotify:true}},data:{type,entityId:String(entityId||""),staffId,branchId,link:`/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId||"")}`}});
+  const result=await getMessaging().sendEachForMulticast({tokens,notification:{title,body},webpush:{fcmOptions:{link:new URL(`/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId||"")}`,"https://el-mezaen-talkha.vercel.app").href},notification:{icon:"/assets/el-mezaen-logo.jpeg",badge:"/assets/el-mezaen-logo.jpeg",tag:`${type}_${entityId}`,renotify:true}},data:{type,entityId:String(entityId||""),staffId,branchId,link:`/worker/?workerEvent=${encodeURIComponent(type)}&entity=${encodeURIComponent(entityId||"")}`}});
   const permanent=new Set(['messaging/registration-token-not-registered','messaging/invalid-registration-token','messaging/invalid-argument','messaging/mismatched-credential']);
   await Promise.all(result.responses.map((row,index)=>!row.success&&['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(row.error?.code)?db.doc(`pushTokens/${hash(tokens[index])}`).delete():Promise.resolve()));
   return {attempted:tokens.length,sent:result.successCount,acceptedTokenHashes:result.responses.flatMap((row,index)=>row.success?[hash(tokens[index])]:[]),retryable:result.responses.some(row=>!row.success&&!permanent.has(row.error?.code))};
@@ -425,13 +437,14 @@ async function readBranch(value) {
   return cleanDoc(snapshot);
 }
 
+const publicPages=publicCatalogPaging({db,HttpsError,projectStaff:publicStaff});
 async function loadCatalog() {
   const [results, drinksSnapshot, publicSettings] = await Promise.all([
     Promise.all(PUBLIC_COLLECTIONS.map(name => name === "reviews" ? db.collection(name).where("active", "==", true).orderBy("createdAt", "desc").limit(3).get() : db.collection(name).where("active", "==", true).limit(500).get())),
     db.collection("drinks").limit(200).get(),
     readSettings()
   ]);
-  const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.map(name === "staff" ? publicStaff : cleanDoc).filter(item => item.catalogVisible !== false).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
+  const payload = Object.fromEntries(PUBLIC_COLLECTIONS.map((name, index) => [name, results[index].docs.filter(doc=>!['services','packages','offers','content','staff'].includes(name)||publicPages.visible(doc.data())).map(name === 'staff'?publicStaff:['services','packages','offers','content'].includes(name)?publicPages.project:cleanDoc).filter(item => item.catalogVisible !== false).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))]));
   payload.branches = (payload.branches || []).map(withoutPublicTargetFields);
   payload.reviews = (payload.reviews || []).map(item => ({ id: item.id, name: sanitizeText(item.name, 60), rating: Math.max(1, Math.min(5, Number(item.rating || 5))), comment: sanitizeText(item.comment, 500), featured: item.featured === true, verified: item.verified === true, adminReply: sanitizeText(item.adminReply, 500), createdAt: item.createdAt }));
   payload.drinks = drinksSnapshot.docs.flatMap(snapshot => {
@@ -448,7 +461,14 @@ async function loadCatalog() {
   return payload;
 }
 
-export const getCatalog = onCall(catalogOptions, async () => {
+export const getCatalog = onCall(catalogOptions, async (request={}) => {
+  if(request.data?.mode==='page'){await enforceRateLimit(request,'catalog-pages',120,10*60*1000);return {...await publicPages.page(request.data),_meta:{apiVersion:API_VERSION,minimumFrontendVersion:MIN_FRONTEND_VERSION}};}
+  if(request.data?.mode==='metadata'){
+    const [branches,categories,settings]=await Promise.all([db.collection('branches').where('active','==',true).limit(10).get(),db.collection('categories').where('active','==',true).limit(100).get(),readSettings()]);
+    return {branches:branches.docs.map(cleanDoc).map(withoutPublicTargetFields),categories:categories.docs.map(cleanDoc),settings:Object.fromEntries(PUBLIC_SETTING_KEYS.filter(key=>settings[key]!=null).map(key=>[key,settings[key]])),_meta:{apiVersion:API_VERSION,minimumFrontendVersion:MIN_FRONTEND_VERSION}};
+  }
+  if(request.data?.mode==='hydrate'){await enforceRateLimit(request,'catalog-hydrate',60,10*60*1000);return {...await publicPages.hydrate(request.data.ids||[]),_meta:{apiVersion:API_VERSION,minimumFrontendVersion:MIN_FRONTEND_VERSION}};}
+
   const revision = await readCatalogRevision();
   if (catalogCache && catalogCacheRevision === revision && Date.now() < catalogCacheExpiresAt) return catalogCache;
   catalogLoadPromise ||= loadCatalog().then(payload => {
@@ -497,12 +517,14 @@ function bookingCatalogErrorMessage(error) {
   return messages[code] || "تعذر التحقق من الخدمات والباقات المختارة";
 }
 
-async function fetchPricedItems(lines, branchId = "") {
+async function fetchPricedItems(lines, branchId = "", {publicOnly=false,transaction=null} = {}) {
   const refs = lines.map(line => {
     const collection = line.kind === "package" ? "packages" : line.kind === "offer" ? "offers" : "services";
     return db.collection(collection).doc(String(line.id));
   });
-  const snapshots = await db.getAll(...refs);
+  const snapshots = await (transaction||db).getAll(...refs);
+  if(publicOnly&&snapshots.some(doc=>!doc.exists||!publicPages.visible(doc.data())||doc.data().available===false))throw new Error('ITEM_UNAVAILABLE');
+
   const map = new Map(snapshots.flatMap((item, index) => {
     if (!item.exists) return [];
     const requestedKind = lines[index].kind;
@@ -516,7 +538,7 @@ async function fetchPricedItems(lines, branchId = "") {
   const linkedSnapshots = [];
   for (let index = 0; index < linkedServiceIds.length; index += 100) {
     const chunk = linkedServiceIds.slice(index, index + 100);
-    linkedSnapshots.push(...await db.getAll(...chunk.map(id => db.doc(`services/${id}`))));
+    linkedSnapshots.push(...await (transaction||db).getAll(...chunk.map(id => db.doc(`services/${id}`))));
   }
   const unavailable = linkedSnapshots.filter(snapshot => {
     if (!snapshot.exists || snapshot.data()?.active === false || snapshot.data()?.catalogVisible === false) return true;
@@ -554,16 +576,19 @@ async function loadBookingCandidates(branchId, requestedStaffId, duration) {
   const member = cleanDoc(snapshot);
   return Array.isArray(member.branchIds) && member.branchIds.includes(branchId) ? [member] : [];
 }
-async function loadActiveLeaves(dateKey, branchId) {
-  const snapshots = await Promise.all([branchId, "all"].map(id => db.collection("workerLeaves").where("branchId", "==", id).where("dateKey", "==", dateKey).where("active", "==", true).limit(101).get()));
-  if (snapshots.some(snapshot => snapshot.size > 100)) throw new HttpsError("failed-precondition", "نتائج الإجازات تجاوزت حد الفحص الآمن", { code: "SCHEDULE_QUERY_OVERFLOW" });
-  return snapshots.flatMap(snapshot => snapshot.docs.map(cleanDoc));
+async function loadActiveLeaves(dateKey, branchId, staffIds) {
+  const ids=[...new Set(staffIds||[])];if(!ids.length||ids.length>21)throw new HttpsError('failed-precondition','حدد العمال المرشحين للحجز');
+  const chunks=[];for(let i=0;i<ids.length;i+=10)chunks.push(ids.slice(i,i+10));
+  const snapshots=await Promise.all(chunks.flatMap(chunk=>[branchId,'all'].map(id=>db.collection('workerLeaves').where('staffId','in',chunk).where('branchId','==',id).where('dateKey','==',dateKey).where('active','==',true).limit(1001).get())));
+  if(snapshots.some(snapshot=>snapshot.size>1000))throw new HttpsError('failed-precondition','نتائج جدول العامل تجاوزت حد الفحص الآمن',{code:'SCHEDULE_QUERY_OVERFLOW'});
+  return snapshots.flatMap(snapshot=>snapshot.docs.map(cleanDoc));
 }
 
 function activeBookingLockIds(snapshot, branchId) {
   const locks = new Set();
   snapshot.docs.forEach(document => {
     const booking = document.data() || {};
+    if(booking.serviceStatus==='READY_FOR_CHECKOUT')return;
     if (Array.isArray(booking.lockIds) && booking.lockIds.length) {
       booking.lockIds.forEach(id => locks.add(String(id)));
       return;
@@ -614,12 +639,12 @@ export const getAvailableSlots = onCall(publicOptions, async request => {
   if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
 
   let pricedItems = [];
-  try { pricedItems = await fetchPricedItems(rawLines, branchId); }
+  try { pricedItems = await fetchPricedItems(rawLines, branchId,{publicOnly:true}); }
   catch (error) { throw new HttpsError("failed-precondition", bookingCatalogErrorMessage(error)); }
   const appointmentItems = pricedItems.filter(item => item.staffRequired);
   if (!appointmentItems.length) return { slots: [], productOnly: true, duration: 0, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 
-  const duration = Math.max(5, appointmentItems.reduce((sum, item) => sum + Number(item.duration || 0), 0));
+  const duration = appointmentDuration(appointmentItems);
   const requestedStaffId = sanitizeText(data.staffId || "any", 80);
   const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
   const [settings, branchHoliday, globalHoliday] = await Promise.all([
@@ -630,32 +655,29 @@ export const getAvailableSlots = onCall(publicOptions, async request => {
   const combinedSettings = { ...settings, ...branch };
   if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) return { slots: [], reason: "branch_closed", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 
-  const candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
-  if (!candidates.length) return { slots: [], reason: "staff_unavailable", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+  let candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
+  candidates=await bookingPresence(db,candidates,branchId,bookingDate);
+  if (!candidates.length) return { slots: [], reason: bookingDate===today?"staff_not_present":"staff_unavailable", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 
   const [leaves, bookingSnapshot, serviceLeaves] = await Promise.all([
-    loadActiveLeaves(bookingDate, branchId),
+    loadActiveLeaves(bookingDate, branchId,candidates.map(member=>member.id)),
     db.collection("bookings").where("branchId", "==", branchId).where("bookingDate", "==", bookingDate).where("status", "in", ["pending", "confirmed", "arrived"]).limit(500).get(),
-    activeServiceLeaves(db,bookingDate,businessDateParts(),HttpsError)
+    activeServiceLeaves(db,bookingDate,businessDateParts(),HttpsError,candidates.map(member=>member.id))
   ]);
   leaves.push(...serviceLeaves);
   if (bookingSnapshot.size >= 500) throw new HttpsError("resource-exhausted", "تعذر حساب المواعيد المتاحة بأمان لهذا اليوم");
   const lockedIds = activeBookingLockIds({ docs: bookingSnapshot.docs.filter(item => item.id !== excludeBookingId) }, branchId);
-  const slots = buildAvailableSlots({
-    staff: candidates,
-    date: bookingDate,
-    duration,
-    openingTime: combinedSettings.openingTime,
-    closingTime: combinedSettings.closingTime,
-    slotMinutes: combinedSettings.slotMinutes,
-    branchId,
-    serviceIds: requestedServiceIds,
-    leaves,
-    lockedIds
-  });
-  const staffBySlot = excludeBookingId ? Object.fromEntries(slots.map(time => [time, []])) : undefined;
-  if (staffBySlot) for (const member of candidates) for (const time of buildAvailableSlots({ staff: [member], date: bookingDate, duration, openingTime: combinedSettings.openingTime, closingTime: combinedSettings.closingTime, slotMinutes: combinedSettings.slotMinutes, branchId, serviceIds: requestedServiceIds, leaves, lockedIds })) if (staffBySlot[time]) staffBySlot[time].push({ id: member.id, nameAr: member.nameAr || member.id });
-  return { slots, ...(staffBySlot ? { staffBySlot } : {}), reason: slots.length ? null : "no_slots", productOnly: false, duration, candidateCount: candidates.length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
+  const nowMs=Date.now(),memberSlots=new Map();
+  for(const member of candidates){
+    const times=buildAvailableSlots({staff:[member],date:bookingDate,duration,openingTime:combinedSettings.openingTime,closingTime:combinedSettings.closingTime,slotMinutes:combinedSettings.slotMinutes,branchId,serviceIds:requestedServiceIds,leaves,lockedIds});
+    memberSlots.set(member.id,times.filter(time=>{const end=minutes(time)+duration;return presentForBooking(member.bookingAttendance,member,branchId,bookingDate,nowMs,`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`);}));
+  }
+  const slots=[...new Set([...memberSlots.values()].flat())].sort();
+  const nextTime=slots[0]||null;
+  const busyNow=bookingDate===today&&busyAtTime({staffId:requestedStaffId,time:businessDateParts().time,leaves,bookings:bookingSnapshot.docs.map(doc=>doc.data())});
+  const availability=requestedStaffId!=='any'?{state:busyNow?'busy':'available',nextTime,waitMinutes:nextTime?Math.max(0,Math.ceil((cairoAppointmentMillis(bookingDate,nextTime)-nowMs)/60000)):null,estimated:true}:null;
+  const staffBySlot=excludeBookingId?Object.fromEntries(slots.map(time=>[time,candidates.filter(member=>memberSlots.get(member.id).includes(time)).map(member=>({id:member.id,nameAr:member.nameAr||member.id}))])):undefined;
+  return { slots, availability,serverNowMs:nowMs, ...(staffBySlot ? { staffBySlot } : {}), reason: slots.length ? null : "no_slots", productOnly: false, duration, candidateCount: candidates.length, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 });
 
 export const validateCoupon = onCall(publicOptions, async request => {
@@ -678,8 +700,11 @@ export const validateCoupon = onCall(publicOptions, async request => {
 
 export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, async request => {
   const data = request.data || {};
+  const branchOperator = data.bookingOrigin === "branch";
+  if(branchOperator){await requireLiveStaff(request);requireRole(request,["admin","manager","cashier"]);requirePermission(request,"bookings");}
   const branch = await readBranch(data.branchId);
   const branchId = branch.id;
+  if(branchOperator)requireBranchAccess(request,branchId);
   const identity = request.auth && !request.auth.token.role ? authenticatedCustomer(request) : null;
   let suppliedPhone;
   try { suppliedPhone = data.customer?.phone ? normalizePhone(data.customer.phone) : null; }
@@ -692,10 +717,11 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
     note: sanitizeText(data.customer?.note, 500)
   };
   if (!customer.phone) throw new HttpsError("invalid-argument", "رقم الهاتف مطلوب");
-  await enforceBookingRateLimits(request, customer.phone);
-  if (!customer.firstName || !customer.lastName) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
+  if(branchOperator)await enforceRateLimit(request,"branch_booking_create",120,15*60*1000,request.auth.uid);else await enforceBookingRateLimits(request, customer.phone);
+  if (!customer.firstName || (!branchOperator && !customer.lastName)) throw new HttpsError("invalid-argument", "بيانات العميل غير مكتملة");
   const clientRequestId = sanitizeText(data.clientRequestId, 80);
   if (!clientRequestId) throw new HttpsError("invalid-argument", "معرف الطلب مفقود");
+  const branchFingerprint=branchOperator?hash(JSON.stringify({branchId,customer,staffId:data.staffId||"any",date:data.bookingDate,time:data.bookingTime,items:data.items})):null;
   const rawLines = normalizeBookingLines(data.items);
   if (!rawLines.length || rawLines.some(line => !line.id || !["service", "package", "offer", "product", "inventory", "drink"].includes(line.kind))) throw new HttpsError("invalid-argument", "عناصر الحجز غير صحيحة");
   if (new Set(rawLines.map(line => `${line.kind}:${line.id}`)).size !== rawLines.length) throw new HttpsError("invalid-argument", "لا تكرر نفس العنصر في الحجز");
@@ -704,12 +730,13 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const drinkLines = rawLines.filter(line => line.kind === "drink");
   let pricedItems = [];
   if (catalogLines.length) {
-    try { pricedItems = await fetchPricedItems(catalogLines, branchId); }
+    try { pricedItems = await fetchPricedItems(catalogLines, branchId,{publicOnly:true}); }
     catch (error) { throw new HttpsError("failed-precondition", bookingCatalogErrorMessage(error)); }
   }
   const appointmentItems = pricedItems.filter(item => item.staffRequired);
   const productOnly = appointmentItems.length === 0;
-  const duration = productOnly ? 0 : Math.max(5, appointmentItems.reduce((sum, item) => sum + Number(item.duration || 0), 0));
+  if(branchOperator&&productOnly)throw new HttpsError("invalid-argument","الحجز يحتاج خدمة أو باقة؛ المنتجات من الفاتورة الجديدة");
+  const duration = productOnly ? 0 : appointmentDuration(appointmentItems);
   const settings = { ...await readSettings(), ...branch };
   if (!productOnly) {
     try { validateAppointment({ date: data.bookingDate, time: data.bookingTime, duration, openingTime: settings.openingTime, closingTime: settings.closingTime }); }
@@ -748,6 +775,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         const existing = existingId ? await transaction.get(db.doc(`bookings/${existingId}`)) : null;
         if (existing?.exists) {
           const value = existing.data();
+          if(branchOperator&&(value.branchId!==branchId||value.createdBy!==request.auth.uid||value.branchRequestFingerprint!==branchFingerprint))throw new HttpsError("already-exists","يوجد طلب سابق مختلف؛ راجع الحجز الموجود قبل المتابعة");
           return { ok: true, idempotent: true, bookingId: existing.id, bookingCode: value.code || existing.id, branchId: value.branchId, branchNameAr: value.branchNameAr, total: Number(value.total || 0), date: value.bookingDate || null, time: value.bookingTime || null, workerId: value.staffId || null, workerNameAr: value.staffNameAr || null, status: value.status };
         }
         throw new Error("DUPLICATE_REQUEST");
@@ -757,6 +785,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         const existing = existingId ? await transaction.get(db.doc(`bookings/${existingId}`)) : null;
         if (existing?.exists) {
           const value = existing.data();
+          if(branchOperator&&(value.branchId!==branchId||value.createdBy!==request.auth.uid||value.branchRequestFingerprint!==branchFingerprint))throw new HttpsError("already-exists","يوجد طلب سابق مختلف؛ راجع الحجز الموجود قبل المتابعة");
           return { ok: true, existing: true, errorCode: "BOOKING_ALREADY_EXISTS", bookingId: existing.id, bookingCode: value.code || existing.id, branchId: value.branchId, branchNameAr: value.branchNameAr, total: Number(value.total || 0), date: value.bookingDate || null, time: value.bookingTime || null, workerId: value.staffId || null, workerNameAr: value.staffNameAr || null, status: value.status };
         }
         throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: existingId || null });
@@ -774,6 +803,8 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
           const snapshot = await transaction.get(db.doc(`staff/${candidate.id}`));
           if (!snapshot?.exists) continue;
           const member = { ...snapshot.data(), id: snapshot.id };
+          const end=minutes(data.bookingTime)+duration;
+          if(!await checkBookingPresence(transaction,db,member,branchId,data.bookingDate,`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`))continue;
           const leaves = await schedule.activeLeaves(transaction, { staffId: member.id, branchId, dateKey: data.bookingDate });
           const serviceLeave=await liveServiceLeave(transaction,db,member.id,data.bookingDate,businessDateParts());if(serviceLeave)leaves.push(serviceLeave);
           const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
@@ -812,10 +843,10 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       const record = {
         code,
         branchId,
-        branchNameAr: branch.nameAr,
-        branchNameEn: branch.nameEn,
-        branchPhone: branch.phone,
-        branchWhatsapp: branch.whatsapp,
+        branchNameAr: branch.nameAr || branchId,
+        branchNameEn: branch.nameEn || branch.nameAr || branchId,
+        branchPhone: branch.phone || "",
+        branchWhatsapp: branch.whatsapp || "",
         customer,
         customerName: `${customer.firstName} ${customer.lastName}`,
         partySize: Math.max(1, Math.min(10, Number(data.partySize || 1))),
@@ -825,8 +856,9 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         itemIds: publicItems.map(item => item.id),
         serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`),
         staffId: assigned?.id || "none",
-        staffNameAr: assigned?.nameAr || "لا يحتاج عضو فريق",
-        staffNameEn: assigned?.nameEn || "No staff required",
+        staffPreference: data.staffId&&data.staffId!=="any"?"specific":"any",
+        staffNameAr: assigned?.nameAr || assigned?.id || "لا يحتاج عضو فريق",
+        staffNameEn: assigned?.nameEn || assigned?.nameAr || assigned?.id || "No staff required",
         bookingDate: productOnly ? null : data.bookingDate,
         bookingTime: productOnly ? null : data.bookingTime,
         duration,
@@ -836,10 +868,11 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         discountPercent: couponResult.valid ? couponResult.discountPercent : 0,
         discountAmount: discount,
         total,
-        status: "pending",
+        status: branchOperator ? "confirmed" : "pending",
+        ...(branchOperator?{createdBy:request.auth.uid,createdByRole:request.auth.token.role,branchRequestFingerprint:branchFingerprint,decisionBy:request.auth.uid,decisionRole:request.auth.token.role,decisionAt:now}:{}),
         paymentStatus: "unpaid",
         paymentMethod: null,
-        source: "website",
+        source: branchOperator ? "branch" : "website",
         locale: data.locale === "en" ? "en" : "ar",
         duplicateGuardId: duplicateRef.id,
         lockIds: assignedLockRefs.map(ref => ref.id),
@@ -848,7 +881,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       };
       schedule.writeGuards(transaction, assignedSchedulingGuards);
       transaction.create(bookingRef, record);
-      transaction.set(db.collection("activityLogs").doc(), { action: "booking-created", actorUid: request.auth?.uid || null, actorRole: "customer", branchId, entityType: "booking", entityId: code, requestId: clientRequestId || null, createdAt: now });
+      transaction.set(db.collection("activityLogs").doc(), { action: "booking-created", actorUid: request.auth?.uid || null, actorRole: branchOperator ? request.auth.token.role : "customer", branchId, entityType: "booking", entityId: code, requestId: clientRequestId || null, createdAt: now });
       transaction.create(requestGuardRef, { bookingId: code, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
       transaction.create(duplicateRef, { bookingId: code, createdAt: now, expiresAt: productOnly ? Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) : businessDateExpiry(data.bookingDate, 2) });
       transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, ...(identity ? { authUid: identity.uid } : {}), qrToken: baseReads[4].data()?.qrToken || customerQrToken(), lastBranchId: branchId, lastBookingAt: now, bookingCount: FieldValue.increment(1), ...(baseReads[4].exists ? {} : { firstVisitAt: now, firstVisitDateKey: businessDateParts().dateKey, createdAt: now }) }, { merge: true });
@@ -856,13 +889,13 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
       assignedLockRefs.forEach(ref => transaction.create(ref, { bookingId: code, branchId, staffId: assigned.id, date: data.bookingDate, time: data.bookingTime, createdAt: now, expiresAt: businessDateExpiry(data.bookingDate, 7) }));
       inventoryItems.forEach(item => {
         transaction.update(item.ref, { stockQty: FieldValue.increment(-item.qty), updatedAt: now });
-        transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId, bookingId: code, quantity: -item.qty, type: "booking-sale", dateKey: businessDateParts().dateKey, createdAt: now, source: "website" });
+        transaction.create(db.doc(`stockMovements/${code}_${item.id}`), { inventoryItemId: item.id, branchId, bookingId: code, quantity: -item.qty, type: "booking-sale", dateKey: businessDateParts().dateKey, createdAt: now, source: branchOperator ? "branch" : "website" });
       });
       if (couponResult.valid) {
         transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now });
         transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(discount), updatedAt: now }, { merge: true });
       }
-      return { ok: true, bookingId: code, bookingCode: code, branchId, branchNameAr: branch.nameAr, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, date: record.bookingDate, time: record.bookingTime, staffId: assigned?.id || null, workerId: assigned?.id || null, staffNameAr: assigned?.nameAr || null, workerNameAr: assigned?.nameAr || null, status: record.status };
+      return { ok: true, bookingId: code, bookingCode: code, branchId, branchNameAr: branch.nameAr || branchId, subtotal, discountAmount: discount, discountPercent: couponResult.discountPercent || 0, total, date: record.bookingDate, time: record.bookingTime, staffId: assigned?.id || null, workerId: assigned?.id || null, staffNameAr: assigned?.nameAr || null, workerNameAr: assigned?.nameAr || null, status: record.status };
     });
   } catch (error) {
     if (error instanceof HttpsError) throw error;
@@ -890,6 +923,7 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
     if (current.phoneHash !== customerIdentity.customerId) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك");
   } else requireBranchAccess(request, current.branchId);
   if (!['pending', 'confirmed'].includes(current.status) || current.productOnly) throw new HttpsError("failed-precondition", "هذا الحجز لا يقبل إعادة الجدولة");
+  if(staffId!==current.staffId&&(current.paymentStatus==='paid'||current.financialPosted))throw new HttpsError('failed-precondition','لا يمكن تحويل شيك تم تحصيله');
   const [branch, staffSnapshot, settings, branchHoliday, globalHoliday] = await Promise.all([
     readBranch(current.branchId),
     db.doc(`staff/${staffId}`).get(),
@@ -921,7 +955,7 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
   return db.runTransaction(async transaction => {
     const [guard, latest, duplicate] = await transaction.getAll(guardRef, bookingRef, duplicateRef);
     if (!latest.exists || (customerIdentity && latest.data().phoneHash !== customerIdentity.customerId)) throw new HttpsError("not-found", "الحجز غير موجود لحسابك");
-    if (guard.exists) return { ok: true, idempotent: true, bookingId: id, bookingCode: latest.data()?.code || id, date: latest.data()?.bookingDate, time: latest.data()?.bookingTime, workerId: latest.data()?.staffId, workerNameAr: latest.data()?.staffNameAr };
+    if (guard.exists) return { ok: true, idempotent: true, bookingId: id, bookingCode: latest.data()?.code || id, date: latest.data()?.bookingDate, time: latest.data()?.bookingTime, workerId: latest.data()?.staffId, workerNameAr: latest.data()?.staffNameAr, items:latest.data()?.items||[], workerIds:latest.data()?.workerIds||[], orderRevision:Number(latest.data()?.orderRevision||0) };
     if (!['pending', 'confirmed'].includes(latest.data().status) || latest.data().bookingDate !== current.bookingDate || latest.data().bookingTime !== current.bookingTime || latest.data().staffId !== current.staffId) throw new HttpsError("failed-precondition", "تغير الحجز أثناء إعادة الجدولة؛ حدّث الصفحة");
     if (duplicate.exists && duplicate.data()?.bookingId !== id) throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: duplicate.data()?.bookingId });
     const schedulingGuards = await schedule.readGuards(transaction, [
@@ -929,6 +963,7 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
       { staffId, branchId: latest.data().branchId, dateKey: date }
     ]);
     const liveStaff = await transaction.get(db.doc(`staff/${staffId}`));
+    if(!liveStaff.exists||!await checkBookingPresence(transaction,db,{...liveStaff.data(),id:staffId},current.branchId,date,`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`))throw new HttpsError('failed-precondition','العامل لم يسجل حضوره أو الموعد خارج مدة حضوره');
     const activeLeaves = await schedule.activeLeaves(transaction, { staffId, branchId: latest.data().branchId, dateKey: date });
     const serviceLeave=await liveServiceLeave(transaction,db,staffId,date,businessDateParts());if(serviceLeave)activeLeaves.push(serviceLeave);
     if (!liveStaff.exists || !staffCanServeInterval({ ...liveStaff.data(), id: staffId }, { branchId: latest.data().branchId, day, start, end, openingTime: combinedSettings.openingTime, closingTime: combinedSettings.closingTime, serviceIds: requestedServiceIds, leaves: activeLeaves }))
@@ -936,16 +971,17 @@ export const rescheduleBooking = onCall(adminOptions, async request => {
     const lockRefs = newKeys.map(key => db.doc(`appointmentLocks/${key}`));
     const locks = lockRefs.length ? await transaction.getAll(...lockRefs) : [];
     if (locks.some(lock => lock.exists && lock.data()?.bookingId !== id)) throw new HttpsError("failed-precondition", "الموعد غير متاح", { code: "SLOT_UNAVAILABLE" });
+    let assignment={};if(staffId!==latest.data().staffId){try{assignment=transferredBookingMetadata(latest.data(),staff);}catch(error){throw new HttpsError('failed-precondition',error.message);}}
     const now = FieldValue.serverTimestamp();
     schedule.writeGuards(transaction, schedulingGuards);
     lockRefs.forEach((lockRef, index) => { if (!locks[index].exists) transaction.create(lockRef, { bookingId: id, branchId: current.branchId, staffId, date, time, createdAt: now, expiresAt: businessDateExpiry(date, 7) }); });
     oldKeys.filter(key => !newKeys.includes(key)).forEach(key => transaction.delete(db.doc(`appointmentLocks/${key}`)));
     if (current.duplicateGuardId && current.duplicateGuardId !== duplicateRef.id) transaction.delete(db.doc(`bookingGuards/${current.duplicateGuardId}`));
     transaction.set(duplicateRef, { bookingId: id, createdAt: now, expiresAt: businessDateExpiry(date, 2) });
-    transaction.update(bookingRef, { bookingDate: date, bookingTime: time, staffId, staffNameAr: staff.nameAr || staffId, staffNameEn: staff.nameEn || staff.nameAr || staffId, lockIds: newKeys, duplicateGuardId: duplicateRef.id, rescheduledAt: now, rescheduledBy: request.auth.uid, updatedAt: now });
+    transaction.update(bookingRef, { ...assignment, bookingDate: date, bookingTime: time, staffId, staffNameAr: staff.nameAr || staffId, staffNameEn: staff.nameEn || staff.nameAr || staffId, lockIds: newKeys, duplicateGuardId: duplicateRef.id, rescheduledAt: now, rescheduledBy: request.auth.uid, updatedAt: now });
     transaction.create(guardRef, { bookingId: id, date, time, staffId, createdAt: now, expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000) });
     transaction.set(db.collection("activityLogs").doc(), { ...auditActor(request), action: "reschedule-booking", targetType: "booking", targetId: id, branchId: current.branchId, before: { date: current.bookingDate, time: current.bookingTime, staffId: current.staffId }, after: { date, time, staffId }, actorUid: request.auth.uid, requestId, createdAt: now });
-    return { ok: true, bookingId: id, bookingCode: current.code || id, date, time, workerId: staffId, workerNameAr: staff.nameAr || staffId };
+    return { ok: true, bookingId: id, bookingCode: current.code || id, date, time, workerId: staffId, workerNameAr: staff.nameAr || staffId, ...assignment };
   });
 });
 
@@ -1330,10 +1366,17 @@ function scopedPayrollPayment(item,request){
   return item;
 }
 
+const readPosCatalogPage=posCatalogPages({db,HttpsError,offerAtBranch});
+const readAdminSearchPage=adminSearchPages({db,HttpsError});
+const readBookingPage=bookingPages({db,HttpsError,Timestamp,cleanDoc,normalizePhone});
 export const getAdminCollection = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
   const role = requireRole(request);
   const collection = sanitizeText(request.data?.collection, 40);
+  if(collection==='posCustomers'){requireRole(request,['admin','manager','cashier']);requirePermission(request,'pos');const branchId=request.data?.branchId;if(!['talkha','mashaya'].includes(branchId))throw new HttpsError('invalid-argument','حدد الفرع');requireBranchAccess(request,branchId);const page=await readAdminSearchPage(request.data,{collection:'customers',branches:[branchId],globalRead:false,branchField:'lastBranchId'});const {docs,...meta}=page;return {...meta,items:docs.map(doc=>({id:doc.id,firstName:doc.data().firstName||'',lastName:doc.data().lastName||'',phone:doc.data().phone||'',fromRecent:true}))};}
+  if(collection==='posCatalog'){requireRole(request,['admin','manager','cashier']);requirePermission(request,'pos');const branchId=request.data?.branchId;if(!['talkha','mashaya'].includes(branchId))throw new HttpsError('invalid-argument','حدد الفرع');requireBranchAccess(request,branchId);return await readPosCatalogPage(request.data,branchId);}
+  if(collection==='bookings'){requireRole(request,['admin','manager','cashier']);requirePermission(request,'bookings');return await readBookingPage(request.data,selectedReadBranches(request));}
+
   const allowed = [...ADMIN_COLLECTIONS, "customers", "walletTransactions", "campaigns", "activityLogs", "users", "revenueLedger", "expenses", "payrollPayments"];
   if (!allowed.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
   const permission = COLLECTION_PERMISSIONS[collection];
@@ -1341,34 +1384,38 @@ export const getAdminCollection = onCall(adminOptions, async request => {
   const posReadable = hasPermission(request, "pos") && ["categories", "services", "packages", "staff", "drinks", "inventoryItems"].includes(collection);
   const operationsReadable = (hasPermission(request, "revenue") || hasPermission(request, "payroll")) && ["services", "staff"].includes(collection);
   const scheduleReadable = hasPermission(request, "schedule") && collection === "settings";
+  const siteMediaReadable=collection==='settings'&&role==='media'&&hasPermission(request,'siteMedia');
   const contentReadable = collection === "content" && ["gallery", "results", "hairMedia", "celebrities", "posts"].some(value => hasPermission(request, value));
   const cashierContentGrants = collection === "content" && role === "cashier"
     ? await db.doc(`users/${request.auth.uid}`).get().then(account => account.data()?.role === "cashier"
       && Array.isArray(account.data()?.branchIds) && branchesFor(request).every(id => account.data().branchIds.includes(id))
       ? account.data().permissions || [] : []) : null;
   if (collection === "content" && role === "cashier" && !["gallery", "results", "hairMedia", "celebrities", "posts"].some(permission => cashierContentGrants.includes(permission) && hasPermission(request, permission))) throw new HttpsError("permission-denied", "لا تملك صلاحية إدارة المحتوى");
-  if (role !== "admin" && permission && !hasPermission(request, permission) && !posReadable && !operationsReadable && !scheduleReadable && !contentReadable) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
+  if (role !== "admin" && permission && !hasPermission(request, permission) && !posReadable && !operationsReadable && !scheduleReadable && !contentReadable && !siteMediaReadable) throw new HttpsError("permission-denied", "لا تملك صلاحية هذا القسم");
   if (collection === "settings") {
     const snapshot = await db.doc("settings/public").get();
-    return { items: snapshot.exists ? [cleanDoc(snapshot)] : [] };
+    return { items: snapshot.exists ? [siteMediaReadable?{id:snapshot.id,...Object.fromEntries(Object.keys(SITE_MEDIA_FIELDS).map(key=>[key,snapshot.data()[key]||'']))}:cleanDoc(snapshot)] : [] };
   }
-  const pageSize = Math.max(1, Math.min(200, Number(request.data?.limit || 100)));
+  let parsedPage;try{parsedPage=parsePage({...request.data,limit:request.data?.limit??100},200);}catch{throw new HttpsError('invalid-argument','حجم الصفحة غير صحيح أو مؤشر الصفحة مفقود');}
+  const pageSize=parsedPage.take;
   const cursor = sanitizeText(request.data?.cursor, 200);
-  const allowedBranches = ["users", "branches", "settings", "categories", "translations"].includes(collection) ? branchesFor(request) : selectedReadBranches(request);
+  const sharedCatalogReadable=canManageSharedCatalog(role,permissionsFor(request),collection);
+  const allowedBranches = sharedCatalogReadable?[]:["users", "branches", "settings", "categories", "translations"].includes(collection) ? branchesFor(request) : selectedReadBranches(request);
   if (role !== "admin" && ["users", "activityLogs", "settings", "translations", "branches", "categories"].includes(collection) && !posReadable) throw new HttpsError("permission-denied", "هذا القسم يتطلب صلاحية الأدمن الرئيسي");
   // Query by the canonical branch field before returning rows; a page of global
   // documents followed by an in-memory filter can starve or expose a branch.
   const field = ["services", "packages", "offers", "staff", "content", "faqs", "coupons"].includes(collection) ? "branchIds" : collection === "customers" ? "lastBranchId" : "branchId";
   const allowedContentTypes = collection === "content" && role !== "admin" ? Object.keys(CONTENT_PERMISSIONS).filter(type => hasPermission(request, CONTENT_PERMISSIONS[type]) && (!cashierContentGrants || cashierContentGrants.includes(CONTENT_PERMISSIONS[type]))) : [];
   const queryBranches = collection === "drinks" && allowedBranches.length ? [...allowedBranches, "all"] : allowedBranches;
-  const queries = (role === "admin" && !allowedBranches.length) || collection === "categories"
+  const queries = sharedCatalogReadable || (role === "admin" && !allowedBranches.length) || collection === "categories"
     ? [db.collection(collection).orderBy("__name__").limit(pageSize)]
     : queryBranches.map(branchId => {
       let query = db.collection(collection).where(field, field === "branchIds" ? "array-contains" : "==", branchId);
       if (collection === "content" && role !== "admin") query = query.where("type", "in", allowedContentTypes);
       return query.orderBy("__name__").limit(pageSize);
     });
-  const snapshots = await Promise.all(queries.map(query => (cursor ? query.startAfter(cursor) : query).get()));
+  const searchPage=request.data?.pageMode==='search'?await readAdminSearchPage(request.data,{collection,branches:queryBranches,globalRead:sharedCatalogReadable||(role==='admin'&&!allowedBranches.length)||collection==='categories',branchField:field,contentTypes:allowedContentTypes}):null;
+  const snapshots = searchPage?[{docs:searchPage.docs,size:searchPage.docs.length}]:await Promise.all(queries.map(query => (cursor ? query.startAfter(cursor) : query).get()));
   let items = [...new Map(snapshots.flatMap(snapshot => snapshot.docs.map(document => [document.id, cleanDoc(document)]))) .values()].sort((a, b) => a.id.localeCompare(b.id)).slice(0, pageSize);
   if(collection === "payrollPayments")items=items.map(item=>scopedPayrollPayment(item,request));
   if (role !== "admin" && collection === "customers") items = items.map(item => ({ id: item.id, firstName: item.firstName, lastName: item.lastName, phone: item.phone, lastBranchId: item.lastBranchId, whatsappOptIn: item.whatsappOptIn }));
@@ -1377,7 +1424,8 @@ export const getAdminCollection = onCall(adminOptions, async request => {
     if (collection === "inventoryItems") items = items.map(({ costPrice, minStock, ...item }) => item);
   }
   if (role !== "admin" && collection === "content") items = items.filter(item => CONTENT_PERMISSIONS[item.type] && hasPermission(request, CONTENT_PERMISSIONS[item.type]) && (!cashierContentGrants || cashierContentGrants.includes(CONTENT_PERMISSIONS[item.type])));
-  return { items, nextCursor: snapshots.some(snapshot => snapshot.size === pageSize) ? items.at(-1)?.id || null : null };
+  const nextCursor=searchPage?searchPage.nextCursor:snapshots.some(snapshot=>snapshot.size===pageSize)?items.at(-1)?.id||null:null;
+  return {items,nextCursor,take:pageSize,skip:parsedPage.skip,hasMore:Boolean(nextCursor)};
 });
 
 function normalizeAdminPayload(collection, raw) {
@@ -1417,6 +1465,8 @@ function normalizeAdminPayload(collection, raw) {
     if ("drinkOptions" in payload) payload.drinkOptions = normalizeDrinkOptions(payload.drinkOptions);
     if (("nameAr" in payload && !payload.nameAr) || ("price" in payload && payload.price < 0) || ("branchId" in payload && !/^[a-z0-9-]{2,40}$/.test(payload.branchId))) throw new HttpsError("invalid-argument", "بيانات المشروب غير صحيحة");
   }
+  if(collection==='services'&&payload.type==='product')payload.duration=0;
+  if(['services','packages'].includes(collection)&&payload.type!=='product'&&'duration' in payload&&(!Number.isSafeInteger(payload.duration)||payload.duration<5||payload.duration>480||payload.duration%5!==0))throw new HttpsError('invalid-argument','مدة الخدمة من 5 إلى 480 دقيقة، بمضاعفات 5');
   if (collection === "offers") {
     if (!Number.isFinite(payload.newPrice) || payload.newPrice < 0 || !Number.isFinite(payload.oldPrice) || payload.oldPrice < payload.newPrice) throw new HttpsError("invalid-argument", "سعر العرض غير صحيح");
     if (payload.startAt && payload.endAt && payload.startAt.toMillis() >= payload.endAt.toMillis()) throw new HttpsError("invalid-argument", "نهاية العرض يجب أن تكون بعد بدايته");
@@ -1478,11 +1528,20 @@ export const adminUpsert = onCall(adminOptions, async request => {
   const raw = request.data?.data || {};
   try{rejectGenericTargetFields(collection,raw);}catch(e){throw new HttpsError(e.code,e.message);}
   validatePayloadSize(raw);
+  const mediaSettings=collection==='settings'&&request.auth.token.role==='media'&&hasPermission(request,'siteMedia');
+  if(mediaSettings&&(!Object.keys(raw).length||Object.keys(raw).some(key=>!Object.hasOwn(SITE_MEDIA_FIELDS,key))))throw new HttpsError('permission-denied','حساب الميديا يعدّل صور الموقع والهوية فقط، وليس إعدادات التشغيل');
   if (collection === "content") requireRole(request); // Type permission is checked against the existing document below.
-  else requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
+  else if(!mediaSettings)requirePermission(request, COLLECTION_PERMISSIONS[collection] || "settings");
   if (collection === "offers") await requireMarketingGrant(request, "offers");
   if (!ADMIN_COLLECTIONS.includes(collection)) throw new HttpsError("invalid-argument", "قسم غير صالح");
-  if (request.auth.token.role !== "admin") {
+  const sharedCatalog=canManageSharedCatalog(request.auth.token.role,permissionsFor(request),collection);
+  if(sharedCatalog){
+    if(raw.branchId||raw.branchIds&&(!Array.isArray(raw.branchIds)&&typeof raw.branchIds!=='string'))throw new HttpsError('invalid-argument','نطاق الكتالوج غير صحيح');
+    const requested=typeof raw.branchIds==='string'?raw.branchIds.split(',').map(s=>s.trim()):raw.branchIds;
+    if(requested?.some(id=>!['talkha','mashaya'].includes(id)))throw new HttpsError('invalid-argument','نطاق الكتالوج غير صحيح');
+    raw.branchIds=['talkha','mashaya'];
+  }
+  if (request.auth.token.role !== "admin"&&!sharedCatalog&&!mediaSettings) {
     const allowedBranches = branchesFor(request);
     if (raw.branchId) requireBranchAccess(request, raw.branchId);
     if (typeof raw.branchIds === "string") raw.branchIds = raw.branchIds.split(",").map(value => value.trim()).filter(Boolean);
@@ -1510,7 +1569,7 @@ export const adminUpsert = onCall(adminOptions, async request => {
   const before = await ref.get();
   if (collection === "content") requirePermission(request, contentPermission(raw.type || before.data()?.type));
   if (collection === "content" && request.auth.token.role === "cashier") await requireMarketingGrant(request, contentPermission(raw.type || before.data()?.type));
-  if (request.auth.token.role !== "admin" && before.exists && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), before.data())) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
+  if (request.auth.token.role !== "admin" && !sharedCatalog && !mediaSettings && before.exists && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), before.data())) throw new HttpsError("permission-denied", "هذا السجل تابع لفرع آخر");
   if (collection === "content" && before.exists) {
     requirePermission(request, contentPermission(before.data()?.type));
     if (request.auth.token.role === "cashier") await requireMarketingGrant(request, contentPermission(before.data()?.type));
@@ -1535,17 +1594,17 @@ export const adminUpsert = onCall(adminOptions, async request => {
     }
   }
   if (collection === 'settings') {
-    try { await validateSiteMediaSettings(payload, before.data(), {role:request.auth.token.role,bucket:getStorage().bucket().name,metadata:async path=>(await getStorage().bucket().file(path).getMetadata())[0]}); }
+    try { await validateSiteMediaSettings(payload, before.data(), {role:request.auth.token.role,canEditSiteMedia:mediaSettings,bucket:getStorage().bucket().name,metadata:async path=>(await getStorage().bucket().file(path).getMetadata())[0]}); }
     catch { throw new HttpsError('invalid-argument','اختر صورة معتمدة؛ أيقونة الموقع يجب أن تكون PNG، والصور أقل من 5MiB'); }
   }
   const mediaFields = collection === 'settings' ? Object.keys(SITE_MEDIA_FIELDS) : ['services','branches'].includes(collection) ? ['imageUrl'] : [];
   for (const field of mediaFields) {
     const value=payload[field];if(!value || value === before.data()?.[field])continue;
     const path=managedStoragePath(value),folder=collection === 'settings'?SITE_MEDIA_FIELDS[field]:collection;
-    if(request.auth.token.role !== 'admin' || !path.startsWith(`public/${folder}/`))throw new HttpsError('invalid-argument','ارفع الصورة من مساحة الوسائط المعتمدة');
+    if((!sharedCatalog&&!mediaSettings&&request.auth.token.role !== 'admin') || !path.startsWith(`public/${folder}/`))throw new HttpsError('invalid-argument','ارفع الصورة من مساحة الوسائط المعتمدة');
   }
   if (collection === "offers" && payload.imageUrl && payload.imageUrl !== before.data()?.imageUrl && !managedStoragePath(payload.imageUrl)) throw new HttpsError("invalid-argument", "ارفع صورة العرض عبر مساحة التخزين المعتمدة");
-  if (request.auth.token.role !== "admin" && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), { ...(before.exists ? before.data() : {}), ...payload })) throw new HttpsError("permission-denied", "حدد فرعًا مصرحًا له بالسجل");
+  if (request.auth.token.role !== "admin" && !sharedCatalog && !mediaSettings && !allResourceBranchesAllowed(request.auth.token.role, branchesFor(request), { ...(before.exists ? before.data() : {}), ...payload })) throw new HttpsError("permission-denied", "حدد فرعًا مصرحًا له بالسجل");
   if (collection === "packages") await validatePackageReferences({ ...(before.exists ? before.data() : {}), ...payload });
   if (collection === "offers") {
     const services = [...new Set(payload.includedServiceIds || before.data()?.includedServiceIds || [])];
@@ -1605,6 +1664,7 @@ export const adminDelete = onCall(adminOptions, async request => {
 
 export const getBusinessDashboard = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
+  if(request.auth.token.role==='media')throw new HttpsError('permission-denied','حساب الميديا لا يفتح بيانات التشغيل والحسابات');
   const access = permissionsFor(request);
   if (!["pos", "expenses", "inventory", "drinks", "payroll", "reviews"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية بيانات التشغيل");
   const currentMonth = businessDateParts().month;
@@ -1810,7 +1870,7 @@ export const getAttendanceDashboard = onCall(adminOptions, async request => {
   // Managers/cashiers have personal account records, not bookable service-worker profiles.
   for (const record of attendance.values()) {
     if (['cashier','manager'].includes(record.accountRole) && record.userId && !rows.some(row=>row.staffId===record.staffId)) {
-      const visibleAttendance={branchId:record.branchId,dateKey:record.dateKey,status:record.status,checkInTime:record.checkInTime||'',checkOutTime:record.checkOutTime||'',locationEvidence:{distanceMeters:record.locationEvidence?.distanceMeters}};
+      const visibleAttendance={branchId:record.branchId,dateKey:record.dateKey,status:record.status,checkInTime:record.checkInTime||'',checkOutTime:record.checkOutTime||'',locationEvidence:{distanceMeters:record.locationEvidence?.distanceMeters,...(record.locationEvidence?.method==='MANUAL'?{method:'MANUAL'}:{})}};
       rows.push({staffId:record.staffId,nameAr:record.staffNameAr||'فريق المزين',imageUrl:'',branchIds:[record.branchId],accountRole:record.accountRole,status:record.status,attendance:visibleAttendance});
     }
   }
@@ -1835,7 +1895,8 @@ export const getAttendancePolicies = onCall(adminOptions, attendanceEngine.polic
 export const setAttendancePolicy = onCall(adminOptions, attendanceEngine.setPolicy);
 export const finishAttendanceShifts = onSchedule({region,schedule:"* * * * *",timeZone:"Africa/Cairo",timeoutSeconds:120,maxInstances:1},()=>attendanceEngine.sweep());
 export const getOwnStaffAttendance = onCall(adminOptions, selfAttendance.read);
-export const recordOwnStaffAttendance = onCall(adminOptions, selfAttendance.record);
+const recordManualAttendance=manualAttendanceHandler({db,engine:attendanceEngine,hash,FieldValue,HttpsError,requireLiveStaff,requireRole,requirePermission,requireBranchAccess,businessDateParts,getUser:async uid=>(await import('firebase-admin/auth')).getAuth().getUser(uid)});
+export const recordOwnStaffAttendance = onCall(adminOptions, async request=>{if(request.data?.method==='manual'){await enforceRateLimit(request,'branch_manual_attendance',60,15*60*1000,request.auth?.uid||'anonymous');return recordManualAttendance(request);}return selfAttendance.record(request);});
 
 export const recordWorkerAttendance = onCall(adminOptions, async request => {
   requireRole(request, ["worker"]);
@@ -1855,26 +1916,35 @@ export const getWorkerWorkspace = onCall(adminOptions, async request => {
   let context;
   try { context = workerContext(branchesFor(request), staff.branchIds, request.data?.activeBranchId ?? ""); }
   catch { throw new HttpsError("permission-denied", "اختر فرعًا مصرحًا به لحسابك وسجل العامل"); }
+  if(request.data?.view==='history')return workerHistoryPage({db,FieldPath,branchId:context.activeBranchId,staffId,uid:request.auth.uid,data:request.data,HttpsError});
   const allowedBranches = [context.activeBranchId];
   const activeAttendance = await attendanceEngine.settle(request.auth.uid);
-  const [attendanceSnapshot, bookings, tasks, notifications, scopedLedger] = await Promise.all([
+  const [attendanceSnapshot, bookings, tasks, notifications, scopedLedger, activeServiceState] = await Promise.all([
     db.doc(`attendanceDays/${dateKey}_${staffId}`).get(),
-    scopedRows(scopedQueries("bookings", allowedBranches, query => query.where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60))),
+    scopedRows([...scopedQueries("bookings", allowedBranches, query => query.where("staffId", "==", staffId).where("bookingDate", ">=", dateKey).orderBy("bookingDate").limit(60)),...scopedQueries("bookings",allowedBranches,query=>query.where("workerIds","array-contains",staffId).where("bookingDate",">=",dateKey).orderBy("bookingDate").limit(60))]),
     scopedRows(scopedQueries("workerTasks", allowedBranches, query => query.where("assigneeStaffId", "==", staffId).orderBy("createdAt", "desc").limit(80))),
     scopedRows(scopedQueries("workerNotifications", allowedBranches, query => query.where("staffId", "==", staffId).orderBy("createdAt", "desc").limit(30))),
-    monthlyAttributedLedger(allowedBranches, month)
+    monthlyAttributedLedger(allowedBranches, month),
+    db.doc(`workerServiceState/${staffId}`).get()
   ]);
+  const activeId=activeServiceState.exists?activeServiceState.data().activeSessionId:null;
+  const activeService=activeId?await db.doc('workerServiceSessions/'+activeId).get():null;
+  const activeBookingId=activeService?.exists&&activeService.data().staffId===staffId&&activeService.data().branchId===context.activeBranchId&&activeService.data().active===true?activeService.data().bookingId||null:null;
+  if(activeBookingId&&!bookings.some(row=>row.id===activeBookingId)){const pinned=await db.doc('bookings/'+activeBookingId).get();if(pinned.exists&&pinned.data().branchId===context.activeBranchId&&(pinned.data().staffId===staffId||pinned.data().items?.some(line=>line.workerId===staffId)))bookings.push(cleanDoc(pinned));}
   const revenue = attributedWorkerRevenue(scopedLedger, staffId, allowedBranches);
   const target = Math.max(0, Number(staff.monthlyTargets?.[month]?.[context.activeBranchId]?.targetAmount || 0));
   return {
     staff,
     ...context,
     account: {username:request.workerAccount?.username || null},
+    serverNowMs:Date.now(),
     // One attendance record per worker/day remains authoritative across contexts.
     attendance: activeAttendance && itemInAllowedBranch(activeAttendance, context.authorizedBranchIds) ? attendanceEngine.project(activeAttendance) : attendanceSnapshot.exists && itemInAllowedBranch(attendanceSnapshot.data(), context.authorizedBranchIds) ? cleanDoc(attendanceSnapshot) : null,
-    bookings: bookings.filter(item => !["cancelled", "rejected"].includes(item.status)),
+    activeBookingId,
+    activeService:activeService?.exists&&activeService.data().active===true&&activeService.data().staffId===staffId&&activeService.data().branchId===context.activeBranchId?serviceOperations.project(activeService.id,activeService.data()):null,
+    bookings: bookings.filter(item => workerBookingVisible(item)&&!["cancelled", "rejected"].includes(item.status)),
     tasks,
-    notifications,
+    notifications:notifications.filter(note=>!(note.type==='booking'&&note.bookingStatus==='pending')),
     target: { month, target, achieved: revenue, remaining: Math.max(0, target - revenue), progressPercent: target ? Math.min(100, Math.round(revenue / target * 100)) : 0 },
     dateKey,
     _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION }
@@ -1882,6 +1952,7 @@ export const getWorkerWorkspace = onCall(adminOptions, async request => {
 });
 
 export const updateWorkerProfilePhoto = onCall(adminOptions, async request => {
+  await requireLiveStaff(request);
   requireRole(request, ["worker"]);
   const staffId = await linkedStaffId(request);
   const imageUrl = sanitizeText(request.data?.imageUrl, 1200);
@@ -1903,6 +1974,11 @@ export const createWorkerTask = onCall(adminOptions, async request => {
   const role = requireRole(request, ["admin", "manager", "cashier"]);
   requirePermission(request, role === "cashier" ? "teamOperations" : "tasks");
   await enforceRateLimit(request, "create_worker_task", 100, 15 * 60 * 1000, request.auth.uid);
+  if(request.data?.serviceId||request.data?.durationMinutes!=null||request.data?.queueBooking===true){
+    const result=await serviceOperations.queue(request);
+    await deliverWorkerNotification({db,ref:db.doc(`workerNotifications/task_${result.taskId}`),send:(note,accepted)=>sendWorkerPush(note.staffId,{...note,type:'worker_task'},accepted)});
+    return result;
+  }
   const branchId = sanitizeText(request.data?.branchId, 40).toLowerCase();
   const assigneeStaffId = sanitizeText(request.data?.staffId, 100);
   const title = sanitizeText(request.data?.title, 120);
@@ -1924,7 +2000,10 @@ export const createWorkerTask = onCall(adminOptions, async request => {
   await db.runTransaction(async transaction => {
     created = false;
     const current = await transaction.get(ref);
+    const linked=bookingId?await transaction.get(db.doc('bookings/'+bookingId)):null;
+    if(bookingId&&(!linked?.exists||linked.data().branchId!==branchId||!(linked.data().staffId===staffId||linked.data().items?.some(item=>item.workerId===staffId))))throw new HttpsError('failed-precondition','تغير إسناد الشيك؛ حدّث الصفحة');
     if (current.exists) return;
+    if(linked)transaction.update(linked.ref,{workerIds:FieldValue.arrayUnion(staffId)});
     created = true;
     transaction.create(ref, { branchId, assigneeStaffId, assigneeNameAr: sanitizeText(staffSnapshot.data()?.nameAr, 100), title, details, priority, bookingId: bookingId || null, dueAt: dueDate ? Timestamp.fromDate(dueDate) : null, status: "NEW", createdBy: request.auth.uid, createdByName: sanitizeText(request.auth.token.name || request.auth.token.email, 100), createdAt: now, updatedAt: now });
     transaction.create(db.doc(`workerNotifications/task_${taskId}`),{staffId:assigneeStaffId,branchId,type:'task',entityId:taskId,title:'مهمة جديدة',body:title,read:false,createdAt:now});
@@ -1945,6 +2024,10 @@ export const updateWorkerTask = onCall(adminOptions, async request => {
   const staffId = role === "worker" ? await linkedStaffId(request) : null;
   if (role !== "worker") requirePermission(request, role === "cashier" ? "teamOperations" : "tasks");
   const transitions = { NEW: ["SEEN", "IN_PROGRESS", "CANCELLED"], SEEN: ["IN_PROGRESS", "CANCELLED"], IN_PROGRESS: ["DONE", "CANCELLED"], DONE: [], CANCELLED: [] };
+  if(['IN_PROGRESS','DONE','CANCELLED'].includes(status)){
+    const timed=await ref.get();
+    if(timed.data()?.serviceSessionId)return serviceOperations.transitionTask(request,taskId,status);
+  }
   const transitionId=randomBytes(12).toString("hex");
   return db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
@@ -1976,7 +2059,7 @@ export const notifyWorker = onCall(adminOptions, async request => {
   requireBranchAccess(request, branchId);
   const [staffSnapshot, bookingSnapshot] = await Promise.all([db.doc(`staff/${staffId}`).get(), bookingId ? db.doc(`bookings/${bookingId}`).get() : Promise.resolve(null)]);
   if (!staffSnapshot.exists || staffSnapshot.data()?.active === false || !Array.isArray(staffSnapshot.data()?.branchIds) || !staffSnapshot.data().branchIds.includes(branchId)) throw new HttpsError("failed-precondition", "العامل غير متاح في هذا الفرع");
-  if (bookingId && (!bookingSnapshot?.exists || bookingSnapshot.data()?.branchId !== branchId || bookingSnapshot.data()?.staffId !== staffId)) throw new HttpsError("failed-precondition", "الحجز غير مرتبط بهذا العامل");
+  if (bookingId && (!bookingSnapshot?.exists || bookingSnapshot.data()?.branchId !== branchId || !(bookingSnapshot.data()?.staffId===staffId||bookingSnapshot.data()?.items?.some(item=>item.workerId===staffId)))) throw new HttpsError("failed-precondition", "الحجز غير مرتبط بهذا العامل");
   const notificationId = hash(`${request.auth.uid}|${idempotencyKey}`);
   const ref = db.doc(`workerNotifications/${notificationId}`);
   let created = false;
@@ -2378,7 +2461,9 @@ async function generateDailyReport(branchId, dateKey, actorUid = "scheduler", re
   const branch = await readBranch(branchId);
   const targetAmount = branch.monthlyRevenueTargets?.[dateKey.slice(0, 7)]?.targetAmount;
   const target = targetAmount == null ? null : { amount: Number(targetAmount), actual: monthToDate.amount, remaining: Math.max(0, Number(targetAmount) - monthToDate.amount), percent: Number(targetAmount) > 0 ? Math.round(monthToDate.amount / Number(targetAmount) * 100) : 0 };
-  const record = { type: "daily", branchId, branchName: branch.nameAr || branchId, periodKey: dateKey, periodStart: period.start, periodEnd: period.end, totals, attendance: { checkedIn: attendance.count }, target, sourceVersion: 1, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
+  const details=await readDetailedDay(db,branchId,dateKey);
+  if(details.available&&Math.abs(details.ledgerNet-totals.netRevenue)>.011){details.available=false;details.reason="source_changed";}
+  const record = { type: "daily", branchId, branchName: branch.nameAr || branchId, periodKey: dateKey, periodStart: period.start, periodEnd: period.end, totals, details, attendance: { checkedIn: attendance.count }, target, sourceVersion: 2, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
   await db.runTransaction(async transaction => {
     const before = await transaction.get(ref);
     if (before.exists && !rebuild) return;
@@ -2399,7 +2484,13 @@ async function generatePeriodReport(type, branchId, key, actorUid = "scheduler",
   if (missing.length) throw new HttpsError("failed-precondition", `أنشئ التقارير اليومية الناقصة أولًا: ${missing.slice(0, 5).join("، ")}`);
   const amount = type === "monthly" ? branch.monthlyRevenueTargets?.[key]?.targetAmount ?? null : null;
   const rollup = rollupDaily(daily.map(item => item.data()), period, amount);
-  const record = { type, branchId, branchName: branch.nameAr || branchId, periodKey: key, periodStart: period.start, periodEnd: period.end, ...rollup, sourceVersion: 1, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
+  const details=rollupDetails(daily.map(item=>item.data()));
+  if(type==="monthly"&&details.available&&details.workers.length){
+    const ids=details.workers.map(worker=>worker.id).filter(id=>typeof id==='string'&&!id.includes('/')&&id!=='.'&&id!=='..');
+    const people=new Map();for(let i=0;i<ids.length;i+=50)for(const doc of await db.getAll(...ids.slice(i,i+50).map(id=>db.doc('staff/'+id))))if(doc.exists)people.set(doc.id,doc.data());
+    for(const worker of details.workers){const amount=people.get(worker.id)?.monthlyTargets?.[key]?.[branchId]?.targetAmount;worker.targetAmount=typeof amount==='number'&&Number.isFinite(amount)&&amount>=0?amount:null;}
+  }
+  const record = { type, branchId, branchName: branch.nameAr || branchId, periodKey: key, periodStart: period.start, periodEnd: period.end, ...rollup, details, sourceVersion: 2, generatedBy: actorUid, generatedAt: FieldValue.serverTimestamp() };
   await db.runTransaction(async transaction => {
     const before = await transaction.get(ref);
     if (before.exists && !rebuild) return;
@@ -2686,6 +2777,9 @@ export const createPosOrder = onCall(adminOptions, async request => {
   try { customer.phone = normalizePhone(request.data?.customer?.phone); }
   catch { throw new HttpsError("invalid-argument", "رقم هاتف العميل غير صحيح"); }
   if (!customer.firstName) throw new HttpsError("invalid-argument", "اكتب اسم العميل");
+  let customerIntake;
+  try { customerIntake=parsePosCustomerIntake(request.data?.customer?.intake); }
+  catch(error) { throw new HttpsError("invalid-argument",error.message); }
   const rawLines = Array.isArray(request.data?.items) ? request.data.items.slice(0, 40) : [];
   if (!rawLines.length || rawLines.some(line => !sanitizeText(line?.id, 100) || !["service", "package", "offer", "product", "inventory", "drink"].includes(sanitizeText(line?.kind, 20)))) throw new HttpsError("invalid-argument", "عناصر الشيك غير صحيحة");
   const catalogLines = rawLines.filter(line => !["inventory", "drink"].includes(line.kind));
@@ -2783,14 +2877,17 @@ export const createPosOrder = onCall(adminOptions, async request => {
     if((requestedPoints||requestedCashback)&&(!paid||settings.walletRedemptionEnabled!==true))throw new HttpsError("failed-precondition","استبدال المحفظة يحتاج شيكًا مدفوعًا وتفعيل الميزة");
     if(requestedPoints>Number(customerSnapshot.data()?.pointsBalance||0)||requestedCashback>Number(customerSnapshot.data()?.cashbackBalance||0)||redemptionValue>maxRedemption||redemptionValue<Math.max(0,Number(settings.minimumRedemption||0)))throw new HttpsError("failed-precondition","قيمة استبدال المحفظة غير مسموحة");
     const total=Math.max(0,beforeWalletTotal-redemptionValue);const revenueBreakdown=calculateRevenueBreakdown(publicItems,total);
+    if(request.data?.expectedTotal!=null&&(!Number.isFinite(request.data.expectedTotal)||request.data.expectedTotal<0||Math.abs(request.data.expectedTotal-total)>0.005))throw new HttpsError("failed-precondition","السعر اتغير؛ راجع إجمالي الشيك قبل التحصيل");
+    if(request.data?.previewOnly===true){if(offlineOrder)throw new HttpsError("invalid-argument","معاينة السعر تحتاج اتصالًا");return {ok:true,previewOnly:true,items:publicItems,subtotal,manualDiscountAmount,couponDiscountAmount,walletRedemptionAmount:redemptionValue,total};}
+
     const redemption=(requestedPoints||requestedCashback)?{points:requestedPoints,cashback:requestedCashback,value:redemptionValue}:null;
     const targetEntries = serviceTargetEntries(publicItems);
-    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, manualDiscountAmount, couponDiscountAmount, couponCode: couponCode || null, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, updatedAt: now, paidAt: paid ? now : null };
+    const bookingRecord = { code, receiptNumber: code, branchId: branch.id, branchNameAr: branch.nameAr, branchNameEn: branch.nameEn, branchPhone: branch.phone, branchWhatsapp: branch.whatsapp, customer, customerName: `${customer.firstName} ${customer.lastName}`.trim(), phone: customer.phone, phoneHash: hash(customer.phone), items: publicItems, itemIds: publicItems.map(item => item.id), serviceNamesAr: publicItems.map(item => `${item.nameAr}${item.option ? ` (${item.option})` : ""}`), staffId: primaryWorkerId, workerIds:[...new Set(publicItems.map(item=>item.workerId).filter(id=>id&&id!=='none'))], staffNameAr: primaryWorker?.nameAr || "عدة عمال / بدون عامل", staffNameEn: primaryWorker?.nameEn || "Multiple / no staff", bookingDate: dateKey, bookingTime: time, duration: catalogItems.reduce((sum, item) => sum + Number(item.duration || 0), 0), productOnly: catalogItems.every(item => !item.staffRequired), subtotal, discountAmount, manualDiscountAmount, couponDiscountAmount, couponCode: couponCode || null, walletRedemptionAmount:redemptionValue, discountPercent: subtotal ? Math.round((discountAmount+redemptionValue) / subtotal * 10000) / 100 : 0, total, finalTotal: total, status: "completed", orderState: paid ? "PAID" : "UNPAID", paymentStatus: paid ? "paid" : "unpaid", paymentMethod: paid ? method : null, source: "pos", financialPosted: paid, stockPosted: inventoryItems.length > 0, rewardPosted: paid, cashPosted: Boolean(cashShiftRef), serviceTargetsPosted: paid && targetEntries.length > 0, serviceTargetsDateKey: paid && targetEntries.length ? dateKey : null, finalizedAt: now, updatedAt: now, paidAt: paid ? now : null };
     Object.assign(bookingRecord, receiptActor(request), {createdAt:now});
     if (offlineOrder) Object.assign(bookingRecord,{offlineOperationId:idempotencyKey,offlineShiftId:offlineOrder.shiftId,offlineSyncedAt:now});
     if (paid) await applyRewards(transaction, { booking: bookingRecord, customerRef, settings, now, redemption });
     transaction.create(bookingRef, bookingRecord);
-    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
+    transaction.set(customerRef, { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, qrToken: customerSnapshot.data()?.qrToken || customerQrToken(), lastBranchId: branch.id, lastBookingAt: now, lastVisitAt: now, bookingCount: FieldValue.increment(1), completedVisits: FieldValue.increment(1), ...(customerSnapshot.exists ? {} : { ...customerIntake, firstVisitAt: now, firstVisitDateKey: dateKey, createdAt: now }), ...(paid ? { totalSpent: FieldValue.increment(total) } : {}) }, { merge: true });
     if (couponCode) {
       transaction.update(couponRef, { usageCount: FieldValue.increment(1), discountTotal: FieldValue.increment(couponDiscountAmount), updatedAt: now });
       transaction.set(couponUsageRef, { code: couponCode, phoneHash: hash(customer.phone), count: FieldValue.increment(1), discountTotal: FieldValue.increment(couponDiscountAmount), updatedAt: now }, { merge: true });
@@ -3023,9 +3120,14 @@ export const adminSecureDelete = onCall(adminOptions, async request => {
 
 export const updateBooking = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
-  requireRole(request);
+  const workerDecision=request.auth.token.role==='worker';
+  if(workerDecision)throw new HttpsError('permission-denied','موافقة الحجز لمسؤول الفرع؛ العامل يستلم الحجز بعد اعتماده');
+  requireRole(request,workerDecision?['worker']:['admin','manager','cashier']);
+  const decisionStaffId=workerDecision?await linkedStaffId(request):null;
   const id = sanitizeText(request.data?.id, 100);
   const action = sanitizeText(request.data?.action, 30);
+  if(workerDecision&&!['confirmed','rejected'].includes(action))throw new HttpsError('permission-denied','العامل يقبل أو يرفض حجوزه فقط');
+  if(!/^[A-Za-z0-9_-]{1,100}$/.test(id))throw new HttpsError('invalid-argument','مرجع الحجز غير صحيح');
   await enforceRateLimit(request, `booking_mutation_${action || "unknown"}`, 120, 15 * 60 * 1000, request.auth.uid);
   const reason = sanitizeText(request.data?.reason, 300);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
@@ -3037,6 +3139,23 @@ export const updateBooking = onCall(adminOptions, async request => {
     if (!snapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
     const booking = snapshot.data();
     requireBranchAccess(request, booking.branchId);
+    if(workerDecision){
+      const member=await transaction.get(db.doc('staff/'+decisionStaffId));
+      if(!member.exists||!workerDecisionAllowed({booking,staff:member.data(),staffId:decisionStaffId,uid:request.auth.uid,action}))throw new HttpsError('permission-denied','الحجز لا يتبع حسابك أو ليس طلب موقع غير مدفوع');
+      if(booking.status===action&&booking.decisionBy===request.auth.uid)return {ok:true,idempotent:true,status:action};
+      if(booking.status!=='pending')throw new HttpsError('failed-precondition','الحجز اتاخد فيه قرار بالفعل؛ حدّث الصفحة');
+    }else if(['confirmed','rejected'].includes(action)&&booking.decisionBy&&booking.status!==action){
+      throw new HttpsError('failed-precondition','الحجز اتاخد فيه قرار بالفعل؛ استخدم الإلغاء المنفصل عند الحاجة');
+    }
+    if(booking.paymentStatus==='unpaid'&&Number(booking.orderRevision||0)>0&&['checkout','markPaid'].includes(action)){
+      if(request.data?.expectedOrderRevision!==booking.orderRevision||!Number.isFinite(request.data?.expectedTotal)||Math.round(request.data.expectedTotal*100)!==Math.round(Number(booking.total)*100))throw new HttpsError('failed-precondition','الشيك اتعدل بإضافات؛ حدّثه وراجع الإجمالي قبل التحصيل');
+    }
+    let reviewGuards=[];
+    if(action==='confirmed'&&booking.status==='pending'&&booking.source==='website'&&!booking.productOnly){
+      const [member,reviewBranch]=await transaction.getAll(db.doc('staff/'+booking.staffId),db.doc('branches/'+booking.branchId));const end=minutes(booking.bookingTime)+Number(booking.duration||0),endTime=`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`;
+      if(!member.exists||!reviewBranch.exists||reviewBranch.data().active===false||!await checkBookingPresence(transaction,db,{...member.data(),id:member.id},booking.branchId,booking.bookingDate,endTime))throw new HttpsError('failed-precondition','العامل لم يسجل حضوره أو الموعد خارج مدة حضوره؛ اختر عاملًا آخر');
+      reviewGuards=await schedule.readGuards(transaction,[{staffId:booking.staffId,branchId:booking.branchId,dateKey:booking.bookingDate}]);const leaves=await schedule.activeLeaves(transaction,{staffId:booking.staffId,branchId:booking.branchId,dateKey:booking.bookingDate}),live=await liveServiceLeave(transaction,db,booking.staffId,booking.bookingDate,businessDateParts());if(live)leaves.push(live);if(!staffCanServeInterval({...member.data(),id:member.id},{branchId:booking.branchId,day:new Date(booking.bookingDate+'T12:00:00Z').getUTCDay(),start:minutes(booking.bookingTime),end,openingTime:reviewBranch.data().openingTime||settings.openingTime,closingTime:reviewBranch.data().closingTime||settings.closingTime,serviceIds:(booking.items||[]).flatMap(item=>item.serviceIds||(item.kind==='service'?[item.id]:[])),leaves}))throw new HttpsError('failed-precondition','العامل غير متاح في موعد الحجز؛ حوّله لعامل متاح');
+    }
     const now = FieldValue.serverTimestamp();
     if (action === "checkout") {
       requirePermission(request, "bookings");
@@ -3109,7 +3228,7 @@ export const updateBooking = onCall(adminOptions, async request => {
       return { ok: true, status: "cancelled", orderState: "VOIDED" };
     }
     if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed"].includes(action)) {
-      requirePermission(request, "bookings");
+      if(!workerDecision)requirePermission(request, "bookings");
       if (booking.status === action) return { ok: true, idempotent: true, status: action };
       if (["rejected", "cancelled", "completed", "no_show"].includes(booking.status)) throw new HttpsError("failed-precondition", "لا يمكن إعادة فتح حجز منتهٍ؛ أنشئ حجزًا جديدًا أو استخدم إجراء التصحيح المالي المناسب");
       const soldInventory = booking.inventoryReleased ? [] : (booking.items || []).filter(item => item.kind === "inventory" && item.id);
@@ -3133,7 +3252,8 @@ export const updateBooking = onCall(adminOptions, async request => {
       const targetEntries = action === "completed" && booking.paymentStatus === "paid" && !booking.serviceTargetsPosted ? serviceTargetEntries(booking.items || []) : [];
       const targetDateKey = businessDateParts().dateKey;
       if (targetEntries.length) postServiceMonthlyTargets(transaction, { items: booking.items || [], branchId: booking.branchId || "talkha", dateKey: targetDateKey, now });
-      transaction.update(ref, { status: action, ...(["rejected", "cancelled", "no_show"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), ...(targetEntries.length ? { serviceTargetsPosted: true, serviceTargetsDateKey: targetDateKey } : {}), updatedAt: now });
+      if(reviewGuards.length)schedule.writeGuards(transaction,reviewGuards);
+    transaction.update(ref, { status: action, ...(['confirmed','rejected'].includes(action)&&booking.status==='pending'?{decisionBy:request.auth.uid,decisionRole:request.auth.token.role,decisionAt:now}:{}), ...(["rejected", "cancelled", "no_show"].includes(action) && soldInventory.length ? { inventoryReleased: true } : {}), ...(targetEntries.length ? { serviceTargetsPosted: true, serviceTargetsDateKey: targetDateKey } : {}), updatedAt: now });
       if (booking.phoneHash) transaction.set(db.doc(`customers/${booking.phoneHash}`), {
         ...(action === "completed" ? { completedVisits: FieldValue.increment(1), lastVisitAt: now } : {}),
         ...(action === "cancelled" ? { cancellationCount: FieldValue.increment(1) } : {}),
@@ -3753,7 +3873,7 @@ export const setUserRole = onCall(adminOptions, async request => {
   const branchIds = [...new Set((Array.isArray(request.data?.branchIds) ? request.data.branchIds : []).map(value => sanitizeText(value, 40).toLowerCase()).filter(value => /^[a-z0-9-]{2,40}$/.test(value)))].slice(0, 10);
   const rolePermissionValues = ROLE_CAPABILITY_CEILINGS[role] || [];
   const permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
-  if (!uid || !["manager", "cashier", "worker"].includes(role)) throw new HttpsError("invalid-argument", "نوع الحساب غير صالح");
+  if (!uid || !["manager", "cashier", "worker", "media"].includes(role)) throw new HttpsError("invalid-argument", "نوع الحساب غير صالح");
   if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "لا يمكنك تعديل صلاحيات حسابك الحالي");
   if (!branchIds.length || branchIds.some(id => !["talkha", "mashaya"].includes(id))) throw new HttpsError("invalid-argument", "حدد فرعًا صحيحًا على الأقل لهذا الحساب");
   const userRef = db.doc(`users/${uid}`);
@@ -3828,7 +3948,7 @@ export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concu
   }
   const rolePermissionValues = ROLE_CAPABILITY_CEILINGS[role] || [];
   let permissions = [...new Set((Array.isArray(request.data?.permissions) ? request.data.permissions : ROLE_DEFAULT_PERMISSIONS[role] || []).map(value => sanitizeText(value, 30)).filter(value => rolePermissionValues.includes(value) && value !== "users"))];
-  if (!name || !/^\S+@\S+\.\S+$/.test(email) || (password.length < 8 || password.length > 128) || !branchIds.length || branchIds.some(id => !["talkha", "mashaya"].includes(id)) || !["manager", "cashier", "worker"].includes(role) || (role === "worker" && !staffId)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد الفرع والعامل وباسورد 8 أحرف على الأقل");
+  if (!name || !/^\S+@\S+\.\S+$/.test(email) || (password.length < 8 || password.length > 128) || !branchIds.length || branchIds.some(id => !["talkha", "mashaya"].includes(id)) || !["manager", "cashier", "worker", "media"].includes(role) || (role === "worker" && !staffId)) throw new HttpsError("invalid-argument", "اكتب البيانات وحدد الفرع والعامل وباسورد 8 أحرف على الأقل");
   let staffSnapshot = null;
   if (role === "worker") {
     const [candidate, linkedUsers] = await Promise.all([db.doc(`staff/${staffId}`).get(), db.collection("users").where("staffId", "==", staffId).limit(1).get()]);
@@ -3879,6 +3999,7 @@ export const createAdminUser = onCall({ ...adminOptions, memory: "256MiB", concu
 async function sendOperationalPush(branchId, notification, data, acceptedTokenHashes=[]) {
   if(!['talkha','mashaya'].includes(branchId))return {attempted:0,sent:0,suppressed:true};
   const requestPush = data.type === 'worker_request';
+  const operationalLink=data.type==='service_completed'?'/admin/#admin=pos':data.type==='order_addition'?`/admin/#admin=orderAdditions&request=${encodeURIComponent(data.entityId||'')}&branch=${encodeURIComponent(branchId)}`:requestPush?'/admin/#admin=workerRequests':'/admin/';
   const snapshots = requestPush ? await Promise.all([
     db.collection('pushTokens').where('branchIds','array-contains',branchId).limit(200).get(),
     db.collection('pushTokens').where('role','==','admin').where('receiveAllBranches','==',true).limit(100).get()
@@ -3892,7 +4013,7 @@ async function sendOperationalPush(branchId, notification, data, acceptedTokenHa
   const tokens=[...new Set(devices.filter(device=>operationalPushAllowed(live.get(device.uid),device,branchId)
     && (!requestPush || requestReviewerAllowed(live.get(device.uid),profiles.get(device.uid),branchId))).map(device=>device.token))].filter(token=>!acceptedTokenHashes.includes(hash(token)));
   if(!tokens.length)return {attempted:0,sent:0};
-  const result=await getMessaging().sendEachForMulticast({tokens,notification,data:{...data,branchId},webpush:{fcmOptions:{link:requestPush?'/admin/#admin=workerRequests':'/admin/'},notification:{icon:'/assets/el-mezaen-logo.jpeg',badge:'/assets/el-mezaen-logo.jpeg',tag:data.entityId}}});
+  const result=await getMessaging().sendEachForMulticast({tokens,notification,data:{...data,branchId,link:operationalLink},webpush:{fcmOptions:{link:operationalLink},notification:{icon:'/assets/el-mezaen-logo.jpeg',badge:'/assets/el-mezaen-logo.jpeg',tag:data.entityId}}});
   await Promise.all(result.responses.map((row,index)=>!row.success&&['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(row.error?.code)?db.doc(`pushTokens/${hash(tokens[index])}`).delete():Promise.resolve()));
   return {attempted:tokens.length,sent:result.successCount,acceptedTokenHashes:result.responses.flatMap((row,index)=>row.success?[hash(tokens[index])]:[]),retryable:result.responses.some(row=>!row.success&&!['messaging/registration-token-not-registered','messaging/invalid-registration-token','messaging/invalid-argument','messaging/mismatched-credential'].includes(row.error?.code))};
 }
@@ -3925,9 +4046,9 @@ export const syncWorkerBookingNotifications = onDocumentWritten({ region, docume
     if(!booking||!isCurrentEvent(live,event.data.after)||reminderVersion(booking)!==version||booking.status!==after.status)return;
     const queueRef=db.doc(`workerBookingReminders/${id}`),previousQueue=await tx.get(queueRef);
     const oldAssignments=new Map();
-    for(const old of [before,previousQueue.data()])if(old?.staffId&&old.staffId!==booking.staffId&&!['any','none'].includes(old.staffId))oldAssignments.set(old.staffId,old.branchId);
+    for(const old of (before?.source==='website'&&before.status==='pending'?[]:[before,previousQueue.data()]))if(old?.staffId&&old.staffId!==booking.staffId&&!['any','none'].includes(old.staffId))oldAssignments.set(old.staffId,old.branchId);
     const candidates=[];
-    if(booking.staffId&&!['any','none'].includes(booking.staffId))candidates.push({ref:db.doc(`workerNotifications/booking_${eventKey}`),data:{staffId:booking.staffId,branchId:booking.branchId,type:'booking',entityId:id,title:['cancelled','rejected'].includes(booking.status)?'تم إلغاء الحجز':before?'تم تحديث الحجز':'حجز جديد',body:`${booking.bookingDate||''} • ${booking.bookingTime||''}`,bookingVersion:version,bookingStatus:booking.status}});
+    if(workerBookingVisible(booking)&&!(booking.source==='website'&&['rejected','cancelled'].includes(booking.status)&&before?.status==='pending')&&booking.staffId&&!['any','none'].includes(booking.staffId))candidates.push({ref:db.doc(`workerNotifications/booking_${eventKey}`),data:{staffId:booking.staffId,branchId:booking.branchId,type:'booking',entityId:id,title:['cancelled','rejected'].includes(booking.status)?'تم إلغاء الحجز':before?'تم تحديث الحجز':'حجز جديد',body:`${booking.bookingDate||''} • ${booking.bookingTime||''}`,bookingVersion:version,bookingStatus:booking.status}});
     for(const [staffId,branchId] of oldAssignments)candidates.push({ref:db.doc(`workerNotifications/reassigned_${eventKey}_${hash(staffId)}`),data:{staffId,branchId,type:'booking',entityId:id,title:'تم تغيير العامل المسؤول عن الحجز',body:'',bookingVersion:version,bookingStatus:booking.status,reassignment:true}});
     const existing=await Promise.all(candidates.map(note=>tx.get(note.ref)));
     if(reminderEligible(booking)){
@@ -4034,9 +4155,10 @@ const requestHandlers = workerRequestHandlers({ db, FieldValue, Timestamp, Https
 });
 export const getWorkerAdvancePolicy = onCall(adminOptions,requestHandlers.getWorkerAdvancePolicy);
 export const setWorkerAdvancePolicy = onCall(adminOptions,requestHandlers.setWorkerAdvancePolicy);
-export const submitWorkerRequest = onCall(adminOptions,requestHandlers.submitWorkerRequest);
-export const getWorkerRequests = onCall(adminOptions,requestHandlers.getWorkerRequests);
-export const updateWorkerRequest = onCall(adminOptions,requestHandlers.updateWorkerRequest);
+const additionHandlers=orderAdditionHandlers({db,FieldValue,HttpsError,requireLiveStaff,requireRole,requirePermission,requireBranchAccess,linkedStaffId,cleanDoc,rateLimit:enforceRateLimit,today:()=>businessDateParts().dateKey,catalog:(data,branchId)=>readPosCatalogPage(data,branchId),priceCatalog:(lines,branchId,transaction)=>fetchPricedItems(lines,branchId,{transaction}),notify:async(noteId,reviewer)=>{const ref=db.doc('workerNotifications/'+noteId);return deliverWorkerNotification({db,ref,channel:reviewer?'operationalPush':'workerPush',send:(note,accepted)=>reviewer?sendOperationalPush(note.branchId,{title:note.title,body:note.body},{type:'order_addition',entityId:note.entityId},accepted):sendWorkerPush(note.staffId,{...note,type:'order_addition'},accepted)});}});
+export const submitWorkerRequest = onCall(adminOptions,request=>request.data?.scope==='orderAdditions'?additionHandlers.submit(request).then(result=>({...result,contract:'orderAdditions.v1'})):requestHandlers.submitWorkerRequest(request));
+export const getWorkerRequests = onCall(adminOptions,request=>request.data?.scope==='orderAdditions'?additionHandlers.list(request).then(result=>({...result,contract:'orderAdditions.v1'})):requestHandlers.getWorkerRequests(request));
+export const updateWorkerRequest = onCall(adminOptions,request=>request.data?.scope==='orderAdditions'?additionHandlers.decide(request).then(result=>({...result,contract:'orderAdditions.v1'})):requestHandlers.updateWorkerRequest(request));
 
 const leaveHandlers = leaveIntegrationHandlers({ db, FieldValue, HttpsError, schedule, requireLiveAdmin, requireLiveStaff, requireRole, branchesFor, permissionsFor, today: () => businessDateParts().dateKey,
   notify: noteId => deliverWorkerNotification({ db, ref: db.doc(`workerNotifications/${noteId}`), channel: 'workerPush',
@@ -4091,16 +4213,16 @@ export const getCashHandover=onCall(adminOptions,handovers.read);
 export const getCashHandoverHistory=onCall(adminOptions,handovers.history);
 export const acceptCashHandover=onCall(adminOptions,handovers.accept);
 export const resolveCashHandover=onCall(adminOptions,handovers.resolve);
-const availability=workerAvailabilityHandlers({db,HttpsError,schedule,requireLiveStaff,requirePermission,requireBranchAccess,today:()=>businessDateParts().dateKey});
+const availability=workerAvailabilityHandlers({db,HttpsError,schedule,requireLiveStaff,requirePermission,requireBranchAccess,today:()=>businessDateParts().dateKey,now:()=>businessDateParts(),readSettings});
 export const getWorkerAvailability=onCall(adminOptions,availability.read);
 export const setWorkerAvailability=onCall(adminOptions,availability.save);
 export const cancelWorkerAvailability=onCall(adminOptions,availability.cancel);
 
-const serviceOperations=workerServiceHandlers({db,FieldValue,HttpsError,schedule,requireLiveStaff,requirePermission,requireBranchAccess,readSettings,now:()=>businessDateParts()});
+const serviceOperations=workerServiceHandlers({db,FieldValue,HttpsError,cleanDoc,schedule,requireLiveStaff,requirePermission,requireBranchAccess,readSettings,linkedStaffId,clockMillis:()=>Date.now(),now:()=>businessDateParts(),checkPresence:(tx,member,branchId,date,end)=>checkBookingPresence(tx,db,member,branchId,date,end),notifyOperator:async noteId=>deliverWorkerNotification({db,ref:db.doc('workerNotifications/'+noteId),channel:'operationalPush',send:(note,accepted)=>sendOperationalPush(note.branchId,{title:note.title,body:note.body},{type:'service_completed',entityId:note.bookingId},accepted)})});
 export const getWorkerServiceSessions=onCall(adminOptions,serviceOperations.board);
-export const startWorkerService=onCall(adminOptions,serviceOperations.start);
+export const startWorkerService=onCall(adminOptions,request=>request.auth?.token?.role==='worker'?serviceOperations.startBooking(request):serviceOperations.start(request));
 export const extendWorkerService=onCall(adminOptions,serviceOperations.extend);
-export const finishWorkerService=onCall(adminOptions,serviceOperations.finish);
+export const finishWorkerService=onCall(adminOptions,request=>request.auth?.token?.role==='worker'?serviceOperations.finishBooking(request):serviceOperations.finish(request));
 
 const branchRequests=branchRequestHandlers({db,FieldValue,HttpsError,requireLiveStaff,requirePermission,requireBranchAccess});
 export const getBranchWorkRequests=onCall(adminOptions,branchRequests.list);
@@ -4110,3 +4232,10 @@ export const updateBranchWorkRequest=onCall(adminOptions,branchRequests.update);
 const branchWorkerAccounts=branchWorkerAccountHandlers({db,requireLiveStaff,requireBranchAccess,rateLimit:enforceRateLimit});
 export const listBranchWorkerAccounts=onCall(adminOptions,branchWorkerAccounts.list);
 export const createBranchWorkerAccount=onCall({...adminOptions,concurrency:10,maxInstances:10},branchWorkerAccounts.create);
+
+export const notifyCashierOnServiceCompletion=onDocumentWritten({region,document:'workerServiceSessions/{sessionId}',retry:true},async event=>runBackgroundEvent('notifyCashierOnServiceCompletion',event,async()=>{
+ const before=event.data?.before?.data(),after=event.data?.after?.data();
+ if(!after||after.status!=='FINISHED'||before?.status==='FINISHED'||!after.bookingId)return;
+ const ref=db.doc('workerNotifications/service_finished_'+event.params.sessionId);
+ await deliverWorkerNotification({db,ref,channel:'operationalPush',send:(note,accepted)=>sendOperationalPush(note.branchId,{title:note.title,body:note.body},{type:'service_completed',entityId:note.bookingId},accepted)});
+}));

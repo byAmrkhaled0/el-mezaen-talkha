@@ -1,3 +1,7 @@
+import {BOOKING_BARCODE_OPTIONS} from './booking-barcode.js';
+import {cairoAppointmentMillis} from '../functions/src/cairo-time.js';
+import {createSelectionCatalogWindow} from './selection-catalog-window.js';
+import {mountPublicBookingCatalog} from './public-booking-catalog.js';
 import {bookingWorkerCandidates} from './booking-worker.js';
 import {sharedEditorial,editorialOrigin} from './public-editorial.js';
 import {updatePublicFooter} from './public-navigation.js';
@@ -57,6 +61,8 @@ const state = {
   manageCredentials: null
 };
 let catalogReady = !firebaseConfigured;
+let bookingCatalogPicker=null;
+const bookingCatalogWindow=createSelectionCatalogWindow(state.catalog);
 
 const money = value => new Intl.NumberFormat(state.lang === "ar" ? "ar-EG" : "en-US", { style: "currency", currency: "EGP", maximumFractionDigits: 0 }).format(Number(value || 0));
 const localized = (item, key = "name") => item?.[`${key}${state.lang === "ar" ? "Ar" : "En"}`] || item?.[`${key}Ar`] || "";
@@ -293,7 +299,7 @@ function renderTeam() {
   $("#teamGrid").innerHTML = publicSubset(state.catalog.staff, state.branchId).filter(item=>item.available !== false).slice(0, 4).map(item => `<article class="team-card reveal"><div class="team-portrait">
     ${safeMediaUrl(item.imageUrl) ? `<img class="team-photo" src="${escapeAttr(safeMediaUrl(item.imageUrl))}" alt="${escapeAttr(localized(item))} – ${escapeAttr(localized(item, "specialty"))}" loading="lazy" decoding="async" width="220" height="220">` : `<div class="team-photo team-photo-placeholder" role="img" aria-label="${state.lang === "ar" ? "لم تُضف صورة " : "No photo for "}${escapeAttr(localized(item))}"><img src="/assets/el-mezaen-mark-v2.webp" alt="" width="64" height="76" loading="lazy"><small>${state.lang === "ar" ? "تُضاف الصورة من الإدارة" : "Photo will be added by admin"}</small></div>`}
     </div><div class="team-copy"><h3>${escapeHtml(localized(item))}</h3><p>${escapeHtml(localized(item, "specialty"))}</p><small class="team-branch">${escapeHtml(currentBranch()?branchName(currentBranch()):'')}</small>
-    </div><div class="team-action"><span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : t("available", state.lang)}</span>
+    </div><div class="team-action"><span class="availability ${item.available === false ? "off" : ""}">${item.available === false ? t("unavailable", state.lang) : (state.lang === "ar" ? "المواعيد حسب الحضور" : "Times depend on attendance")}</span>
     ${item.available === false ? "" : `<button class="btn btn-ghost" type="button" data-book-staff="${escapeAttr(item.id)}" aria-label="${state.lang==='ar'?'احجز مع ':'Book with '}${escapeAttr(localized(item))}">${state.lang === "ar" ? "احجز" : "Book"}</button>`}
   </div></article>`).join("") || `<div class="empty-state">${currentBranch() ? (state.lang === "ar" ? "لا يوجد فريق متاح للحجز في هذا الفرع حاليًا" : "No team members currently available at this branch") : (state.lang === "ar" ? "اختر فرعًا لعرض الفريق" : "Choose a branch to see the team")}</div>`;
 }
@@ -503,7 +509,7 @@ function removeFromCart(id) {
 
 function renderCart() {
   const items = cartItems();
-  $("#bookingServiceChoices").innerHTML = publicSubset(state.catalog.services,state.branchId).map(item=>`<button class="booking-service-choice" type="button" data-add-id="${escapeAttr(item.id)}" data-kind="${item.type === "product" ? "product" : "service"}"><img src="${escapeAttr(serviceMedia(item))}" alt="" width="56" height="56" loading="lazy"><span>${escapeHtml(localized(item))}<small>${money(item.newPrice ?? item.price)} • ${item.duration} ${t("minute",state.lang)}</small></span><b>＋</b></button>`).join("");
+  if(typeof bookingCatalogPicker!=='undefined')bookingCatalogPicker?.refreshContext();
   $("#cartLines").innerHTML = items.length ? items.map(item => `<div class="cart-line ${item.kind === "package" ? "package-cart-line" : ""}"><div><b>${escapeHtml(localized(item))}</b><small>${item.kind === "drink" ? `${state.lang==='ar'?'مشروب':'Drink'} • ${item.qty}${item.option ? ` • ${escapeHtml(item.option)}` : ""}` : `${item.duration ?? 0} ${t("minute", state.lang)}`}</small></div>${item.kind === "drink" ? `<div class="cart-qty"><button type="button" data-cart-qty="-1" data-cart-id="${escapeAttr(item.id)}">−</button><b>${item.qty}</b><button type="button" data-cart-qty="1" data-cart-id="${escapeAttr(item.id)}">＋</button></div>` : ""}<strong class="line-price">${money(Number(item.newPrice ?? item.price ?? 0) * item.qty)}</strong><button class="remove-line" type="button" data-remove-id="${escapeAttr(item.id)}" aria-label="${t("remove", state.lang)}">×</button>${item.kind === "package" && (item.choiceGroups || []).length ? `<div class="package-choice-fields">${item.choiceGroups.map(group => `<label><span>${escapeHtml(state.lang === "ar" ? group.labelAr : group.labelEn || group.labelAr)} <b aria-hidden="true">*</b></span><select data-package-choice="${escapeAttr(item.id)}" data-choice-group="${escapeAttr(group.id)}" required><option value="">${state.lang === "ar" ? "اختر واحدًا" : "Choose one"}</option>${(group.options || []).map(option => `<option value="${escapeAttr(option.id)}" ${item.choices?.[group.id] === option.id ? "selected" : ""}>${escapeHtml(state.lang === "ar" ? option.labelAr : option.labelEn || option.labelAr)}</option>`).join("")}</select></label>`).join("")}</div>` : ""}</div>`).join("") : `<div class="empty-state"><strong>${t("emptyCart", state.lang)}</strong><p>${t("cartHint", state.lang)}</p></div>`;
   saveCart();
   renderDrinks();
@@ -555,6 +561,8 @@ async function loadFreshCatalog(silent = true) {
     const catalog = await getCatalog();
     if (!catalog.branches?.some(branch => activeBranch(catalog, branch.id))) throw Object.assign(new Error("No active branches in catalog"), { code: "NO_ACTIVE_BRANCHES" });
     state.catalog = { ...state.catalog, offline: false, cached: false, ...catalog };
+    if(typeof bookingCatalogWindow!=='undefined')bookingCatalogWindow.reset(state.catalog);
+    if(typeof bookingCatalogPicker!=='undefined')bookingCatalogPicker?.refresh();
     catalogReady = true;
     if (state.branchId && !state.catalog.branches.some(item => item.id === state.branchId && item.active !== false)) {
       state.branchId = "";
@@ -799,6 +807,7 @@ function setDateBounds() {
 }
 
 let availabilityRequestId = 0;
+let bookingAvailabilityRefresh;
 let availabilityLoading = false;
 
 function availabilityFingerprint() {
@@ -815,9 +824,28 @@ function slotLabel(value) {
   return new Intl.DateTimeFormat(state.lang === "ar" ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(candidate);
 }
 
+function renderBookingAvailability(result,select){
+ clearTimeout(bookingAvailabilityRefresh);
+ let notice=document.querySelector('#bookingAvailabilityNotice');
+ if(!notice){notice=document.createElement('aside');notice.id='bookingAvailabilityNotice';notice.className='booking-availability-notice';notice.setAttribute('aria-live','polite');select.closest('label').after(notice);}
+ notice.replaceChildren();notice.hidden=true;
+ if(!result)return;
+ const ar=state.lang==='ar',info=result.availability;
+ if(info?.state==='busy'&&info.nextTime&&result.serverNowMs){const date=document.querySelector('#bookingDate').value,delay=cairoAppointmentMillis(date,info.nextTime)-result.serverNowMs;if(delay>0&&delay<86400000)bookingAvailabilityRefresh=setTimeout(()=>{if(!document.hidden&&document.querySelector('#bookingDate').value===date)void renderTimes();},delay+1000);}
+ if(result.reason==='staff_not_present'){notice.hidden=false;notice.textContent=ar?'العامل لم يسجل حضوره في الفرع اليوم، أو انتهت وردية حضوره. جرّب عامل تاني أو يوم تاني.':'This barber has not checked in at this branch today, or their attendance shift has ended. Try another barber or date.';return;}
+ if(info?.state==='busy'&&!info.nextTime){notice.hidden=false;notice.textContent=ar?'العامل مشغول أو غير متاح حاليًا، ومفيش موعد متاح بعده في اليوم ده. جرّب يوم تاني أو عامل تاني.':'This barber is busy or unavailable, with no remaining slot today. Try another date or barber.';return;}
+ if(!info?.nextTime)return;
+ notice.hidden=false;
+ const title=document.createElement('strong');title.textContent=info.state==='busy'?(ar?'العامل مشغول حاليًا':'The barber is busy now'):(ar?'أقرب موعد متاح':'Next available appointment');
+ const copy=document.createElement('p');copy.textContent=(ar?'أقرب حجز: ':'Next appointment: ')+slotLabel(info.nextTime)+(info.state==='busy'&&Number.isFinite(info.waitMinutes)?(ar?`، بعد حوالي ${info.waitMinutes} دقيقة.`:` — in about ${info.waitMinutes} minutes.`):'');
+ const button=document.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent=ar?'تحب تحجز الموعد ده؟':'Book this time?';button.onclick=()=>{if(![...select.options].some(option=>option.value===info.nextTime))return;select.value=info.nextTime;select.dispatchEvent(new Event('change',{bubbles:true}));};
+ const help=document.createElement('small');help.textContent=ar?'الموعد تقديري وبيتراجع وقت الحفظ. الحجز يتأكد بعد موافقة مسؤول الفرع، وبعدها يوصل للعامل المحدد.':'The time is estimated and checked again on submission. The branch operator must approve the request before it reaches the assigned barber.';notice.append(title,copy,button,help);
+}
+
 async function renderTimes() {
   const select = $("#bookingTime");
   const selectedDate = $("#bookingDate").value;
+  renderBookingAvailability(null,select);
   state.date = selectedDate;
   state.time = "";
   updateSummary();
@@ -842,6 +870,7 @@ async function renderTimes() {
     });
     if (requestId !== availabilityRequestId || fingerprint !== availabilityFingerprint()) return;
     const slots = Array.isArray(result?.slots) ? result.slots : [];
+    renderBookingAvailability(result,select);
     const emptyMessage = result?.reason === "branch_closed"
       ? (state.lang === "ar" ? "الفرع مغلق في هذا اليوم" : "The branch is closed on this day")
       : result?.reason === "staff_unavailable"
@@ -931,7 +960,7 @@ async function submitBooking() {
     $("#successCode").textContent = result.bookingCode;
     try {
       const { default: JsBarcode } = await import("jsbarcode");
-      JsBarcode("#successBarcode", result.bookingCode, { format: "CODE128", displayValue: false, height: 58, margin: 4, background: "transparent", lineColor: "#19d4e6" });
+      JsBarcode("#successBarcode", result.bookingCode, {...BOOKING_BARCODE_OPTIONS});
     } catch (error) {
       console.debug("Booking barcode is unavailable", error?.message || error);
     }
@@ -1190,6 +1219,7 @@ async function init() {
 window.addEventListener("offline", () => updateNetworkStatus());
 window.addEventListener("online", () => updateNetworkStatus(true));
 
+bookingCatalogPicker=mountPublicBookingCatalog({target:$('#bookingServiceChoices'),getContext:()=>({branchId:state.branchId,lang:state.lang}),getPage:options=>firebaseClient().then(module=>module.getCatalogPage(options)),onPage:(collection,page)=>{Object.assign(state.catalog,bookingCatalogWindow.page(collection,page,state.cart.map(x=>x.id)));},markup:(item,collection,page)=>`<button class="booking-service-choice" type="button" data-add-id="${escapeAttr(item.id)}" data-kind="${collection==='packages'?'package':collection==='offers'?'offer':item.type==='product'?'product':'service'}" ${page.offline||page.cached?'disabled':''}><img src="${escapeAttr(collection==='packages'?packageMedia(item):serviceMedia(item))}" alt="" width="56" height="56" loading="lazy"><span>${escapeHtml(localized(item))}<small>${money(item.newPrice??item.price)} • ${Number(item.duration)||0} ${t('minute',state.lang)}</small></span><b>＋</b></button>`});
 init();
 
 $("#mobileQuickActions").addEventListener("click",event=>{if(!currentBranch() && event.target.closest("a")){event.preventDefault();openBranchDialog(false);}});

@@ -17,7 +17,7 @@ export function advanceHandlers({db,FieldValue,Timestamp,HttpsError,requireLiveS
   const role=async(request,roles)=>{await requireLiveStaff(request);return requireRole(request,roles);};
   return {
     async getReadyWorkerAdvances(request) {
-      await role(request,['cashier']);requirePermission(request,'pos');
+      await role(request,['cashier','manager']);requirePermission(request,'pos');
       const branchId=request.data?.branchId;requireBranchAccess(request,branchId);
       if(!['talkha','mashaya'].includes(branchId))fail('invalid-argument','اختر فرع العمل');
       let query=db.collection('workerRequests').where('branchId','==',branchId).where('requestType','==','SALARY_ADVANCE').where('status','==','APPROVED').where('integrationStatus','==','AWAITING_DISBURSEMENT').orderBy('__name__');
@@ -43,7 +43,7 @@ export function advanceHandlers({db,FieldValue,Timestamp,HttpsError,requireLiveS
       return {staffId,outstandingAdvance:value.outstandingCents/100,balanceVersion:value.version,lastPayrollMonth:value.lastPayrollMonth||null,legacyAdvancesIncluded:false};
     },
     async disburseWorkerAdvance(request) {
-      await role(request,['cashier']);requirePermission(request,'pos');
+      await role(request,['cashier','manager']);requirePermission(request,'pos');
       const data=request.data||{};
       if(Object.keys(data).some(k=>!['requestId','expectedVersion','expectedAmount','expectedShiftId'].includes(k)))fail('invalid-argument','بيانات الصرف غير صحيحة');
       const requestId=id(data.requestId),expectedShiftId=id(data.expectedShiftId);
@@ -80,7 +80,7 @@ export function advanceHandlers({db,FieldValue,Timestamp,HttpsError,requireLiveS
         tx.create(moveRef,{type:'CASH_OUT',category:'advance',amount,reason:'صرف سلفة معتمدة',staffId,staffNameAr:staff.data().nameAr||staffId,requestId,branchId,shiftId:shiftRef.id,businessDate:today,actorUid:request.auth.uid,advancePostingVersion:1,disbursementSequence:sequence,createdAt:now});
         tx.update(shiftRef,{cashOut:FieldValue.increment(amount),expectedCash:calculateExpectedCash({...drawer,cashOut:Number(drawer.cashOut||0)+amount}),updatedAt:now});
         tx.set(balanceRef,{schemaVersion:1,staffId,version:checkpoint.version+1,outstandingCents,sequence,attributionBranchIds:[...new Set([...(checkpoint.attributionBranchIds||[]),branchId])].sort(),lastPayrollMonth:checkpoint.lastPayrollMonth||null,lastDisbursementReference:moveRef.id,updatedAt:now});
-        tx.update(ref,{status:'DISBURSED',integrationStatus:'DISBURSED',version,disbursementReference:moveRef.id,disbursementDate:today,disbursedAt:now,disbursedBy:request.auth.uid,disbursementFingerprint:attempt,advancePostingVersion:1,disbursementSequence:sequence,advanceRemainingCents:cents,advanceDeductedCents:0,updatedAt:now,[`reviewHistory.v${version}`]:{actorUid:request.auth.uid,actorRole:'cashier',action:'DISBURSE',from:'APPROVED',to:'DISBURSED',version,at:now}});
+        tx.update(ref,{status:'DISBURSED',integrationStatus:'DISBURSED',version,disbursementReference:moveRef.id,disbursementDate:today,disbursedAt:now,disbursedBy:request.auth.uid,disbursementFingerprint:attempt,advancePostingVersion:1,disbursementSequence:sequence,advanceRemainingCents:cents,advanceDeductedCents:0,updatedAt:now,[`reviewHistory.v${version}`]:{actorUid:request.auth.uid,actorRole:request.auth.token.role,action:'DISBURSE',from:'APPROVED',to:'DISBURSED',version,at:now}});
         tx.create(auditRef,{action:'approved-advance-disbursement',requestId,staffId,branchId,shiftId:shiftRef.id,movementId:moveRef.id,amount,actorUid:request.auth.uid,createdAt:now});
         tx.create(noteRef,{staffId,branchId,type:'worker_request',requestId,entityId:requestId,title:'تم صرف السلفة',body:'تم صرف طلبك المعتمد؛ راجع مرجع الصرف في طلباتي',read:false,createdAt:now});
         return {ok:true,idempotent:false,requestId,movementId:moveRef.id,amount,businessDate:today,notificationId:noteRef.id};

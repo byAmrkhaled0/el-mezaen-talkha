@@ -1,3 +1,4 @@
+import {workerDayQueue} from '../src/worker-queue-model.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -47,7 +48,8 @@ test('actual workspace handler scopes all operational reads to the selected auth
   assert.equal(result.activeBranchId, 'mashaya');
   assert.deepEqual([...result.authorizedBranchIds], ['talkha', 'mashaya']);
   for (const [, scope] of f.scopes) assert.deepEqual(scope, ['mashaya']);
-  assert.equal(f.scopes.length, 4);
+  assert.equal(f.scopes.length, 5);
+  assert.equal(f.scopes.filter(([name])=>name==='bookings').length,2);
 });
 
 test('workspace includes the active attendance session from the previous calendar day', async () => {
@@ -102,7 +104,7 @@ test('in-flight duplicate photo submissions do not upload twice', async () => {
 test('actual profile-photo handler enforces canonical ownership and preserves catalog invalidation', async () => {
   let writes = 0, invalidations = 0, owner = 'worker-a';
   const callable = handler('updateWorkerProfilePhoto', 'createWorkerTask', {
-    requireRole: () => {}, linkedStaffId: async () => 'staff-a', sanitizeText: x => x,
+    requireLiveStaff:async()=>{}, requireRole: () => {}, linkedStaffId: async () => 'staff-a', sanitizeText: x => x,
     isOwnManagedStaffPhoto, getStorage: () => ({ bucket: () => ({ name: 'fixture-bucket' }) }),
     db: { doc: () => ({}), runTransaction: async callback => callback({ get: async () => ({ exists: true, data: () => ({ active: true, userUid: owner, branchIds: ['talkha'] }) }), set: () => { writes++; } }) },
     branchesFor: () => ['talkha'], FieldValue: { serverTimestamp: () => 'server-time' }, markCatalogChanged: async () => { invalidations++; }
@@ -149,8 +151,9 @@ async function portalFixture(branches, services = {}) {
     document: { querySelector: $, querySelectorAll: () => [], createElement: () => element() },
     watchAuth: callback => authCallback = callback, currentAccess: async () => ({ role: 'worker', staffId: 'staff-a', branchIds: branches }),
     getWorkerWorkspace: async () => workspace, staffRouteGuard: () => '', safeMediaUrl: value => value,
+    mountOrderAdditions:()=>({load(){},contextChanged(){}}), getOrderAdditions(){},submitOrderAddition(){},decideOrderAddition(){},
     createWorkerRequestCenter: () => ({ load() {}, contextChanged() {} }), getWorkerRequests() {}, submitWorkerRequest() {}, updateWorkerRequest() {},
-    renderWorkerProfile(staff){$('#profileDetails').textContent='الاسم: '+(staff.nameAr||'غير مسجل')}, mountMonthlyTargetPanel() {}, latestWorkerContext, validateWorkerPhoto: file => { if (!file) throw Error('file'); }, workerPhotoSave,
+    mountWorkerWorkflow:()=>({sync(){},dispose(){}}),startWorkerService(){},finishWorkerService(){},mountWorkerHome:()=>({sync(){},dispose(){}}),workerEncouragement:()=> 'رسالة تشجيع',getWorkerBookingHistory(){},workerDayQueue, syncServiceClock(){},taskServiceTiming(){return null;},renderWorkerProfile(staff){$('#profileDetails').textContent='الاسم: '+(staff.nameAr||'غير مسجل')}, mountMonthlyTargetPanel() {}, latestWorkerContext, validateWorkerPhoto: file => { if (!file) throw Error('file'); }, workerPhotoSave,
     uploadImage: async () => 'image-url', updateWorkerProfilePhoto: async () => {},
     recordWorkerAttendance() {}, updateWorkerTask() {}, markWorkerNotificationRead() {}, enablePush() {},
     watchWorkerPush: async () => () => {}, logout() {},
@@ -188,4 +191,11 @@ test('actual portal photo fixture previews before saving and updates both canoni
   assert.deepEqual(uploads, ['staff/staff-a']); assert.equal(links.length, 1);
   assert.equal(f.$('#avatar').src, links[0]); assert.equal(f.$('#profileAvatar').src, links[0]);
   assert.equal(f.$('#photoPreview').hidden, true); assert.match(f.$('#photoStatus').textContent, /تم حفظ صورتك/);
+});
+
+test('worker load failure offers explicit reauthentication and hides workspace and navigation',async()=>{
+ let signedOut=0,redirect='';const failure=new Error('الحساب غير فعال أو الجلسة انتهت؛ سجل الدخول مجددًا');
+ const f=await portalFixture(['talkha'],{getWorkerWorkspace:async()=>{throw failure;},logout:async()=>{signedOut++;},location:{search:'',hash:'',replace:target=>redirect=target}});
+ assert.equal(f.$('#workspace').hidden,true);assert.equal(f.$('.worker-nav').hidden,true);assert.equal(f.$('#workerReauthenticate').hidden,false);assert.equal(f.$('#workerLoadRetry').hidden,false);
+ await f.$('#workerReauthenticate').onclick();assert.equal(signedOut,1);assert.equal(redirect,'/login/?mode=worker');
 });

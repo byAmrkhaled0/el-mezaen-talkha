@@ -1,3 +1,4 @@
+import {extraWorkspaceEntries} from '../src/extra-workspaces.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,9 +9,9 @@ const css = fs.readFileSync(new URL('../src/admin.css', import.meta.url), 'utf8'
 const shell = source.slice(source.indexOf('function renderRoleShell()'), source.indexOf('const adminMobileViewport'));
 function render(role) {
   const nodes = new Map();
-  const element = () => ({ hidden: false, innerHTML: '', children: [], append() {}, replaceChildren(...items) { this.children = items; }, cloneNode() { return element(); }, querySelector() { return element(); } });
+  const element = () => ({ dataset:{}, hidden: false, innerHTML: '', children: [], append() {}, replaceChildren(...items) { this.children = items; }, cloneNode() { return element(); }, querySelector() { return element(); } });
   const $ = key => { if (!nodes.has(key)) nodes.set(key, element()); return nodes.get(key); };
-  vm.runInNewContext(shell + ';renderRoleShell();', { $, canOpenSection:()=>true, state: { role, permissions: new Set(['dashboard']) }, cashierHeaderHomes: { menu: element(), bell: element(), branch: element() } });
+  vm.runInNewContext(shell + ';renderRoleShell();', { $, extraWorkspaceEntries, mountOwnerExtraNavigation:()=>{}, decorateCashierMenu:()=>{}, document:{documentElement:{dataset:{}},createElement:()=>({...element(),append(...items){this.children.push(...items);}})}, canOpenSection:()=>true, state: { role, permissions: new Set(['dashboard']) }, cashierHeaderHomes: { menu: element(), bell: element(), branch: element() } });
   return nodes;
 }
 test('actual role-shell function builds five cashier operational destinations and preserves shift More route', () => {
@@ -20,7 +21,7 @@ test('actual role-shell function builds five cashier operational destinations an
   for (const attribute of ['data-section="pos"', 'data-section="bookings"', 'data-cashier-jump="team"', 'data-cashier-jump="tasks"', 'data-cashier-more']) assert.ok(html.includes(attribute));
   assert.equal(nodes.get('#ownerMobileNav').hidden, true);
   assert.equal(nodes.get('#cashierHeader').hidden, false);
-  assert.ok(source.includes('if (event.target.closest("[data-cashier-more]") && state.role === "cashier") { $("#cashierMoreSheet").showModal(); return; }'));
+  assert.ok(source.includes('if (event.target.closest("[data-cashier-more]") && ["manager","cashier"].includes(state.role)) { $("#cashierMoreSheet").showModal(); return; }'));
   const htmlSource = fs.readFileSync(new URL("../admin/index.html", import.meta.url), "utf8");
   const moreSheet = htmlSource.slice(htmlSource.indexOf('id="cashierMoreSheet"'));
   assert.match(moreSheet.slice(0, moreSheet.indexOf("</dialog>")), /data-go="cash"/);
@@ -30,9 +31,9 @@ test('manager runtime shell preserves five manager destinations without Admin ow
   const nodes = render('manager');
   const html = nodes.get('.cashier-mobile-nav').innerHTML;
   assert.equal((html.match(/<button /g) || []).length, 5);
-  for (const id of ['dashboard', 'bookings', 'attendance', 'mobileContent']) assert.ok(html.includes(`data-section="${id}"`));
+  for (const id of ['pos','bookings']) assert.ok(html.includes(`data-section="${id}"`));assert.ok(html.includes('data-cashier-jump="team"'));assert.ok(html.includes('data-cashier-jump="tasks"'));
   assert.equal(nodes.get('#ownerMobileNav').hidden, true);
-  assert.equal(nodes.get('#cashierHeader').hidden, true);
+  assert.equal(nodes.get('#cashierHeader').hidden, false);
 });
 test('Admin owner bar remains selected and Worker owner bar remains hidden', () => {
   assert.equal(render('admin').get('#ownerMobileNav').hidden, false);
@@ -43,8 +44,8 @@ test('Admin owner bar remains selected and Worker owner bar remains hidden', () 
 });
 test('role display overrides explicitly exclude hidden navigation and controls', () => {
   for (const role of ['cashier', 'manager']) {
-    assert.ok(css.includes(`html[data-admin-role="${role}"] .cashier-mobile-nav:not([hidden]){display:grid!important`));
-    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector, body]) => selector.includes(`html[data-admin-role="${role}"] .cashier-mobile-nav`) && /display:(grid|block)!important/.test(body));
+    assert.ok(css.includes(`html[${role==='cashier'?'data-admin-layout':'data-admin-role'}="${role}"] .cashier-mobile-nav:not([hidden]){display:grid!important`));
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector, body]) => selector.includes(`html[${role==='cashier'?'data-admin-layout':'data-admin-role'}="${role}"] .cashier-mobile-nav`) && /display:(grid|block)!important/.test(body));
     assert.ok(rules.length >= 2);
     for (const [, selector] of rules) assert.ok(selector.includes(':not([hidden])'), selector);
   }

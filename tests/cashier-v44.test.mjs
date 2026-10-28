@@ -10,7 +10,7 @@ test("cashier shell renders only five operational entries and moves the live bel
   assert.match(js, /const selectors = \['\[data-section="pos"\]', '\[data-section="calendar"\]', '\[data-section="bookings"\]', '\[data-go="cash"\]', '\[data-cashier-target\]'\]/);
   assert.match(js, /replaceChildren\(\.\.\.selectors\.map\(selector => primary\.querySelector\(selector\)\?\.cloneNode\(true\)\)/);
   assert.match(js, /\$\("#cashierHeaderBellSlot"\)\.append\(\$\("#pushButton"\)\)/);
-  assert.match(js, /renderRoleShell\(\);\s*\$\("#authLoading"\)\.hidden/);
+  assert.match(js, /renderRoleShell\(\);[\s\S]*?connectionHost\.append\(\$\('#offlineSalesDesk'\)\)[\s\S]*?\$\("#authLoading"\)\.hidden/);
   assert.match(html, /id="cashierHeader"[^>]*hidden[\s\S]*?id="cashierPageTitle"[\s\S]*?id="cashierHeaderBellSlot"/);
 });
 

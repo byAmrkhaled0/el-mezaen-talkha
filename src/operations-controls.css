@@ -5,6 +5,28 @@
 .worker-availability,.cash-handover-panel{scroll-margin-top:110px}html[data-theme="dark"] .cashier-header{background:var(--panel);color:var(--text);border-color:var(--line)}html[data-theme="dark"] .cashier-header-title h1{color:var(--text)}html[data-theme="dark"] .cashier-header #pushButton{background:var(--bg2);color:var(--text);border-color:var(--line)}
 .availability-period small{display:block;line-height:1.6;margin-block:6px}.availability-period button{margin-block-start:8px;min-height:44px}
 
-.worker-service-controls{margin-block:18px;padding-block:16px;border-block:1px solid var(--line);scroll-margin-top:110px}.service-session-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}.service-session{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);min-width:0}.service-session[data-overdue=true]{border-color:#c24b40}.service-session b{display:block;color:var(--text);line-height:1.6}.cash-handover-history{margin-block:16px}.cash-handover-history>summary,.handover-history-item>summary{cursor:pointer;min-height:44px;padding:12px;line-height:1.6}.handover-history-item{border:1px solid var(--line);border-radius:10px;margin-block:8px;overflow-wrap:anywhere}.handover-history-item dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px;padding:12px;margin:0}.handover-history-item dt{color:var(--muted)}.handover-history-item dd{margin:4px 0;overflow-wrap:anywhere}.worker-service-controls .operations-controls label:has([name=bookingId]){grid-column:auto}@media(max-width:480px){.worker-service-controls .operations-controls label,.worker-service-controls .operations-controls button{grid-column:1/-1}.worker-service-controls .operations-controls{grid-template-columns:1fr}}
+.worker-service-controls{margin-block:18px;padding-block:16px;border-block:1px solid var(--line);scroll-margin-top:110px}.service-session-list{display:grid;align-items:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px;margin-top:14px}.service-session{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}.service-session[data-overdue=true]{border-color:#c24b40}.service-session b{display:block;color:var(--text);line-height:1.6}.cash-handover-history{margin-block:16px}.cash-handover-history>summary,.handover-history-item>summary{cursor:pointer;min-height:44px;padding:12px;line-height:1.6}.handover-history-item{border:1px solid var(--line);border-radius:10px;margin-block:8px;overflow-wrap:anywhere}.handover-history-item dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px;padding:12px;margin:0}.handover-history-item dt{color:var(--muted)}.handover-history-item dd{margin:4px 0;overflow-wrap:anywhere}.worker-service-controls .operations-controls label:has([name=bookingId]){grid-column:auto}@media(max-width:480px){.worker-service-controls .operations-controls label,.worker-service-controls .operations-controls button{grid-column:1/-1}.worker-service-controls .operations-controls{grid-template-columns:1fr}}
 
 .manual-availability>summary{cursor:pointer;min-height:44px;padding-block:12px;font-weight:700}
+
+/* Timed work uses the existing operation cards and the shared side-sheet shell. */
+.service-session-list>h4{grid-column:1/-1;margin:6px 0}.service-session .operations-controls{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.service-session .operations-controls>label{grid-column:1/-1}.service-session p{margin:6px 0;color:var(--muted);font-size:13px}
+.service-session-queued{background:var(--bg2,var(--panel))}
+.service-countdown{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:5px 10px;border-radius:8px;background:var(--bg2,var(--panel));color:var(--text);font:700 15px/1.4 Tajawal,system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.service-countdown[data-overdue=true]{color:var(--danger,#b03e48)}
+.team-status-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px}
+.team-status-row>strong{margin-inline-end:auto}
+.team-status-row>small{flex-basis:100%;color:var(--muted)}
+#adminApp #workerTaskDrawer{padding:16px}
+#adminApp #workerTaskDrawer>article{border:0;padding:0;margin:0;background:transparent;box-shadow:none}
+#adminApp #workerTaskDrawer .settings-form{display:flex;flex-direction:column;gap:14px;min-height:calc(100dvh - 130px)}
+#adminApp #workerTaskDrawer .settings-form>footer{position:sticky;bottom:0;margin-top:auto;background:var(--panel);z-index:1}
+#adminApp #workerTaskDrawer .panel-head{align-items:flex-start;margin-bottom:18px}
+#adminApp #workerTaskDrawer .panel-head h2{font-size:18px}
+#adminApp #workerTaskDrawer .panel-head p{font-size:12px;line-height:1.7}
+#adminApp #workerTaskDrawer label{font-size:13px;display:grid;gap:6px}
+#adminApp #workerTaskDrawer [hidden]{display:none!important}
+#tasks .tasks-panels{grid-template-columns:1fr;margin-top:14px}
+@media(max-width:600px){.worker-service-controls>.operations-controls{grid-template-columns:1fr}.team-status-row .small-button{width:100%}}
+
+.worker-availability>h2{font-size:19px}.manual-availability{padding:14px;border:1px solid var(--line);border-radius:12px;margin-block:14px}.manual-availability>h3{margin:0 0 8px;font-size:14px}.worker-row-actions{display:flex;flex-wrap:wrap;gap:7px}.worker-row-actions>button{width:auto;min-height:36px;padding:7px 11px}.request-card>section>button{min-height:36px;margin-block:8px}.request-actions{gap:8px}@media(pointer:coarse){.worker-row-actions>button,.request-card>section>button{min-height:44px}}

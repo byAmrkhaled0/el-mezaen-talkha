@@ -1,0 +1,10 @@
+// Two ownership queries share one stable boundary; merged pages do not skip shared-worker checks.
+export async function workerHistoryPage({db,FieldPath,branchId,staffId,uid,data,HttpsError}){
+ const fail=()=>{throw new HttpsError('invalid-argument','صفحة سجل الحجوزات غير صحيحة؛ حدّث السجل');};
+ const take=data.take??20;if(!Number.isInteger(take)||take<1||take>25)fail();let cursor=null;
+ if(data.cursor){try{if(typeof data.cursor!=='string'||data.cursor.length>1000)fail();cursor=JSON.parse(Buffer.from(data.cursor,'base64url').toString('utf8'));if(cursor.uid!==uid||cursor.staffId!==staffId||cursor.branchId!==branchId||!/^\d{4}-\d{2}-\d{2}$/.test(cursor.date)||typeof cursor.id!=='string'||!cursor.id||cursor.id.length>150||cursor.id.includes('/'))fail();}catch{fail();}}
+ const queries=[['staffId','=='],['workerIds','array-contains']].map(([field,op])=>{let q=db.collection('bookings').where('branchId','==',branchId).where(field,op,staffId).where('status','==','completed').where('paymentStatus','==','paid').orderBy('bookingDate','desc').orderBy(FieldPath.documentId(),'desc');if(cursor)q=q.startAfter(cursor.date,cursor.id);return q.limit(take+1);});
+ const snapshots=await Promise.all(queries.map(q=>q.get())),rows=[...new Map(snapshots.flatMap(s=>s.docs).map(doc=>[doc.id,{id:doc.id,...doc.data()}])).values()].sort((a,b)=>String(b.bookingDate||'').localeCompare(String(a.bookingDate||''))||Buffer.compare(Buffer.from(b.id),Buffer.from(a.id)));
+ const page=rows.slice(0,take),more=rows.length>take,last=page.at(-1);
+ return {items:page.map(row=>({id:row.id,code:row.code||row.id,customerName:String(row.customerName||'عميل').slice(0,100),bookingDate:row.bookingDate,bookingTime:row.bookingTime||'',serviceNamesAr:(Array.isArray(row.serviceNamesAr)?row.serviceNamesAr:[]).slice(0,30).map(name=>String(name).slice(0,120)),status:'completed',paymentStatus:'paid',branchId})),nextCursor:more&&last?Buffer.from(JSON.stringify({uid,staffId,branchId,date:last.bookingDate,id:last.id})).toString('base64url'):null};
+}

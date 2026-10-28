@@ -37,7 +37,7 @@ export function rollupDaily(daily, period, targetAmount = null) {
   const days = periodDays(period).map(key => {
     const row = daily.find(item => item.periodKey === key);
     if (row) fields.forEach(field => { totals[field] += Number(row.totals?.[field] || 0); });
-    return { key, available: Boolean(row), netRevenue: row?.totals?.netRevenue ?? null, bookings: row?.totals?.bookings ?? null };
+    return { key, available: Boolean(row), totals:row?.totals??null, netRevenue: row?.totals?.netRevenue ?? null, bookings: row?.totals?.bookings ?? null };
   });
   totals.averageTicket = totals.transactions ? totals.grossRevenue / totals.transactions : 0;
   const target = targetAmount == null ? null : { amount: Number(targetAmount), actual: totals.netRevenue, remaining: Math.max(0, Number(targetAmount) - totals.netRevenue), percent: Number(targetAmount) > 0 ? Math.round(totals.netRevenue / Number(targetAmount) * 100) : 0 };

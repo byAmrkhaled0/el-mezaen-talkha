@@ -1,3 +1,6 @@
+import {workerPushNotification} from './worker-push.js';
+import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
+import {legacyCollectionError,legacyCollectionPage} from './legacy-admin-compat.js';
 import {isOfflineMode,setDeviceOffline} from './offline-connectivity.js';
 import {createOfflineStore} from './offline-pos-store.js';
 import {createOfflinePos,OFFLINE_TTL,transientFailure} from './offline-pos.js';
@@ -6,9 +9,9 @@ import { configureLocalAppCheck } from './local-environment.js';
 import { initializeApp } from "firebase/app";
 import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { isAppCheckFailure, retryAuthenticatedCall } from "./admin-session.js";
-import { browserPopupRedirectResolver, browserSessionPersistence, EmailAuthProvider, initializeAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
+import { connectAuthEmulator, browserPopupRedirectResolver, browserSessionPersistence, EmailAuthProvider, initializeAuth, onAuthStateChanged, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
-import { getDownloadURL, getStorage, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
+import { connectStorageEmulator, getDownloadURL, getStorage, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const configured = Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
@@ -37,6 +40,7 @@ function assertBackendCompatibility(data) {
 }
 
 if (configured) {
+  if(globalThis.__USE_EMULATORS__)assertDemoEmulator(config);
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
     configureLocalAppCheck();
@@ -45,9 +49,11 @@ if (configured) {
   // Staff identity belongs to this tab. Customer auth is initialized separately
   // in account.js and keeps its existing local persistence.
   auth = initializeAuth(app, { persistence: browserSessionPersistence });
+  if(globalThis.__USE_EMULATORS__)connectLocalAuth(auth,connectAuthEmulator);
   functions = getFunctions(app, "europe-west1");
   storage = getStorage(app);
-  if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  if(globalThis.__USE_EMULATORS__)connectLocalStorage(storage,connectStorageEmulator);
+  if (globalThis.__USE_EMULATORS__) connectLocalFunctions(functions,connectFunctionsEmulator);
 }
 
 const isLocalPreview = () => ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname);
@@ -102,12 +108,12 @@ export async function currentAccess(user) {
   const role = token.claims.role || null;
   let permissions = Array.isArray(token.claims.permissions) ? token.claims.permissions : [];
   const branchIds = Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [];
-  if (role === "cashier" || role === "manager") {
+  if (role === "cashier" || role === "manager" || role === "media") {
     let grants = [];
     try {
       grants = (await httpsCallable(functions, "getOwnMarketingGrants", { timeout: 15000 })({})).data.grants || [];
     } catch { /* Optional marketing access fails closed; normal operations retain their claims. */ }
-    permissions = permissions.filter(value => (role === "cashier" && ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].includes(value)) || (role === "manager" && value === "campaigns") ? grants.includes(value) : true);
+    permissions = permissions.filter(value => (role === "cashier" && ["offers", "campaigns", "gallery", "results", "hairMedia", "celebrities", "posts"].includes(value)) || (["manager","media"].includes(role) && ["offers","campaigns","gallery","results","hairMedia","celebrities","posts"].includes(value)) ? grants.includes(value) : true);
   }
   const access = { role, staffId: token.claims.staffId || null, permissions, branchIds, mustChangePassword: token.claims.mustChangePassword === true };
   const previousAccess=await offlineStore.get(`${config.projectId}:${user.uid}`,'access','current').catch(()=>null);
@@ -181,7 +187,7 @@ const offlineReads=new Set(['getAdminDashboard','getCashierSnapshot','getBusines
 const offlineCollections=new Set(['categories','services','packages','staff','inventoryItems','drinks','branches']);
 async function readCall(name, data = {}) {
   const owner=auth?.currentUser?`${config.projectId}:${auth.currentUser.uid}`:null;
-  const eligible=owner&&offlineReads.has(name)&&(name!=='getAdminCollection'||offlineCollections.has(data.collection));
+  const eligible=owner&&offlineReads.has(name)&&(name!=='getAdminCollection'||offlineCollections.has(data.collection)&&data.pageMode!=='search');
   const key=JSON.stringify([name,Object.fromEntries(Object.entries(data).sort(([a],[b])=>a.localeCompare(b)))]);
   if(isOfflineMode()&&eligible){
     const cached=await offlineStore.get(owner,'read',key);
@@ -208,11 +214,11 @@ export const getPosOffers = branchId => readCall("getPosOffers", { branchId });
 export const getBusinessDashboard = (month, branchId = "all") => readCall("getBusinessDashboard", { month, branchId });
 export const getServiceTargetsDashboard = (month, branchId = "all") => readCall("getServiceTargetsDashboard", { month, branchId });
 export const upsertServiceTarget = payload => call("upsertServiceTarget", payload);
-export const getCollection = (collection, limit = 100, cursor = "", branchId = "all") => readCall("getAdminCollection", { collection, limit, cursor, branchId });
+export const getCollection = (collection, limit = 100, cursor = "", branchId = "all", filters = {}) => collectionReadCompatible({ ...filters, collection, limit, cursor, branchId });
 export const saveEntity = (collection, id, data) => call("adminUpsert", { collection, id, data });
 export const deleteEntity = (collection, id) => call("adminDelete", { collection, id });
 export const secureDeleteRecord = (kind, id, reason = "") => call("adminSecureDelete", { kind, id, reason });
-export const changeBooking = (id, action, paymentMethod, reason = "", idempotencyKey = "") => call("updateBooking", { id, action, paymentMethod, reason, idempotencyKey });
+export const changeBooking = (id, action, paymentMethod, reason = "", idempotencyKey = "", expected = {}) => call("updateBooking", { id, action, paymentMethod, reason, idempotencyKey, ...(Number.isFinite(expected.expectedTotal)?{expectedTotal:expected.expectedTotal,expectedOrderRevision:expected.expectedOrderRevision||0}:{}) });
 export const rescheduleBooking = payload => call("rescheduleBooking", payload);
 export const createPosOrder = payload => call("createPosOrder", payload);
 export const previewPosCoupon = payload => readCall("validateCoupon", payload);
@@ -424,7 +430,7 @@ export async function watchWorkerPush(callback) {
   try {
     const { getMessaging, onMessage, isSupported } = await loadMessaging();
     if (!await isSupported()) return () => {};
-    return onMessage(getMessaging(app), callback);
+    return onMessage(getMessaging(app),payload=>{try{Promise.resolve(callback(payload)).catch(()=>{});}catch{}if(globalThis.Notification?.permission==='granted'&&!document.hidden){const notice=workerPushNotification(payload,location.origin);void getActiveServiceWorker().then(registration=>registration.showNotification(notice.title,notice.options)).catch(()=>{});}});
   } catch { return () => {}; /* Optional push availability never blocks the worker account. */ }
 }
 
@@ -492,3 +498,26 @@ export const updateBranchWorkRequest=payload=>call('updateBranchWorkRequest',pay
 
 export const listBranchWorkerAccounts=data=>readCall('listBranchWorkerAccounts',data);
 export const createBranchWorkerAccount=data=>call('createBranchWorkerAccount',data);
+
+export const getBookingPage=options=>collectionReadCompatible({...options,collection:'bookings'});
+
+let legacyBackendUntil=0;
+async function collectionReadCompatible(data){
+ const newMode=['bookings','posCatalog','posCustomers'].includes(data.collection);
+ const fallback=()=>legacyCollectionPage(data,{collection:(collection,limit,cursor,branchId)=>readCall('getAdminCollection',{collection,limit,cursor,branchId}),offers:branchId=>readCall('getPosOffers',{branchId}),snapshot:branchId=>readCall('getCashierSnapshot',{branchId})});
+ if(newMode&&Date.now()<legacyBackendUntil)return fallback();
+ try{const result=await readCall('getAdminCollection',data);if(data.pageMode==='search'&&!Number.isFinite(result.take))return fallback();return result;}catch(error){if(!newMode||!legacyCollectionError(error))throw error;legacyBackendUntil=Date.now()+60000;return fallback();}
+}
+
+async function additionCall(endpoint,payload){const result=await call(endpoint,{...payload,scope:'orderAdditions'});if(result.contract!=='orderAdditions.v1')throw Error('حدّث وظائف طلبات الإضافات على Firebase أولًا');return result;}
+export const getOrderAdditions=payload=>additionCall('getWorkerRequests',payload);
+export const submitOrderAddition=payload=>additionCall('submitWorkerRequest',payload);
+export const decideOrderAddition=payload=>additionCall('updateWorkerRequest',payload);
+
+export const getBranchBookingCatalog = options => readCall('getCatalog',{...options,mode:'page',take:25});
+export const getBranchBookingSlots = options => readCall('getAvailableSlots',options);
+export const createBranchBooking = options => call('createBooking',{...options,bookingOrigin:'branch'});
+
+export const previewPosOrder = options => call('createPosOrder',{...options,previewOnly:true,idempotencyKey:crypto.randomUUID()});
+
+export const getWorkerBookingHistory = data=>readCall('getWorkerWorkspace',{...data,view:'history'});

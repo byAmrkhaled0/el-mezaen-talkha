@@ -4,22 +4,23 @@ assert.equal(process.env.GCLOUD_PROJECT,'demo-el-mezaen-gate');assert.equal(proc
 const require=createRequire(new URL('../functions/package.json',import.meta.url)),h=await import('../functions/src/index.js');const {getAuth}=require('firebase-admin/auth'),{getFirestore,Timestamp}=require('firebase-admin/firestore'),db=getFirestore(),auth=getAuth();
 const hash=s=>createHash('sha256').update(s).digest('hex'),actors={},rawRequest={ip:'127.0.0.1',headers:{}},gps={branchId:'talkha',latitude:31.05,longitude:31.38,accuracy:10};
 const call=(name,role,data={})=>h[name].run({auth:actors[role],data,rawRequest});
-test('isolated linked identities for all three employee roles and live admin',async()=>{
+test('isolated linked identities for all employee roles including media and live admin',async()=>{
  await db.doc('branches/talkha').set({active:true,nameAr:'فرع اختبار',latitude:31.05,longitude:31.38,attendanceRadiusMeters:100});
- for(const role of ['admin','worker','cashier','manager']){const uid='lifecycle-'+role,claims={role,branchIds:['talkha'],permissions:role==='worker'?['attendance','tasks']:role==='manager'?['attendance']:[],...(role==='worker'?{staffId:'lifecycle-worker-profile'}:{})};await auth.createUser({uid,email:uid+'@qa.example.test',password:'Local-only-2026!'});await auth.setCustomUserClaims(uid,claims);await db.doc('users/'+uid).set({...claims,name:'حساب '+role,active:true});actors[role]={uid,token:{...claims,auth_time:Math.ceil(Date.now()/1000)}};}
+ for(const role of ['admin','worker','cashier','manager','media']){const uid='lifecycle-'+role,claims={role,branchIds:['talkha'],permissions:role==='worker'?['attendance','tasks']:role==='manager'?['attendance']:[],...(role==='worker'?{staffId:'lifecycle-worker-profile'}:{})};await auth.createUser({uid,email:uid+'@qa.example.test',password:'Local-only-2026!'});await auth.setCustomUserClaims(uid,claims);await db.doc('users/'+uid).set({...claims,name:'حساب '+role,active:true});actors[role]={uid,token:{...claims,auth_time:Math.ceil(Date.now()/1000)}};}
  await db.doc('staff/lifecycle-worker-profile').set({userUid:actors.worker.uid,nameAr:'عامل اختبار',active:true,branchIds:['talkha']});
 });
 test('only live admin sets a bounded duration, with optimistic version checks',async()=>{
- for(const role of ['worker','cashier','manager'])await assert.rejects(call('setAttendancePolicy',role,{uid:actors[role].uid,durationMinutes:480,expectedVersion:0}));
+ for(const role of ['worker','cashier','manager','media'])await assert.rejects(call('setAttendancePolicy',role,{uid:actors[role].uid,durationMinutes:480,expectedVersion:0}));
  for(const value of [0,1441,8.5,NaN])await assert.rejects(call('setAttendancePolicy','admin',{uid:actors.worker.uid,durationMinutes:value,expectedVersion:0}));
- await assert.rejects(call('recordOwnStaffAttendance','cashier',{...gps,action:'checkIn'}));
- for(const role of ['worker','cashier','manager'])await call('setAttendancePolicy','admin',{uid:actors[role].uid,durationMinutes:480,expectedVersion:0});
- await assert.rejects(call('setAttendancePolicy','admin',{uid:actors.worker.uid,durationMinutes:360,expectedVersion:0}));
+ for(const role of ['worker','cashier','manager','media']){const own=await call('getOwnStaffAttendance',role);assert.equal(own.durationMinutes,480);const list=await call('getAttendancePolicies','admin',{role});assert.equal(list.items[0].durationMinutes,480);assert.equal(list.items[0].version,0);}
+ // Keep worker and cashier without a policy: their first check-in must use the default.
+ for(const role of ['manager','media'])await call('setAttendancePolicy','admin',{uid:actors[role].uid,durationMinutes:480,expectedVersion:0});
+ await assert.rejects(call('setAttendancePolicy','admin',{uid:actors.worker.uid,durationMinutes:360,expectedVersion:1}));
  const list=await call('getAttendancePolicies','admin',{role:'worker'});assert.equal(list.items[0].durationMinutes,480);
 });
 test('all employee roles start server-timed sessions; duplicates do not create extra records',async()=>{
- for(const role of ['worker','cashier','manager']){const endpoint=role==='worker'?'recordWorkerAttendance':'recordOwnStaffAttendance';const results=await Promise.all(Array.from({length:3},()=>call(endpoint,role,{...gps,action:'checkIn'})));assert.equal(results.filter(x=>!x.idempotent).length,1);const own=await call('getOwnStaffAttendance',role);assert.equal(own.attendance.plannedMinutes,480);assert.equal(Date.parse(own.attendance.scheduledEndAt)-Date.parse(own.attendance.startedAt),8*3600000);}
- await call('setAttendancePolicy','admin',{uid:actors.worker.uid,durationMinutes:360,expectedVersion:1});const worker=await call('getOwnStaffAttendance','worker');assert.equal(worker.durationMinutes,360);assert.equal(worker.attendance.plannedMinutes,480);
+ for(const role of ['worker','cashier','manager','media']){const endpoint=role==='worker'?'recordWorkerAttendance':'recordOwnStaffAttendance';const results=await Promise.all(Array.from({length:3},()=>call(endpoint,role,{...gps,action:'checkIn'})));assert.equal(results.filter(x=>!x.idempotent).length,1);const own=await call('getOwnStaffAttendance',role);assert.equal(own.attendance.plannedMinutes,480);assert.equal(Date.parse(own.attendance.scheduledEndAt)-Date.parse(own.attendance.startedAt),8*3600000);}
+ await call('setAttendancePolicy','admin',{uid:actors.worker.uid,durationMinutes:360,expectedVersion:0});const worker=await call('getOwnStaffAttendance','worker');assert.equal(worker.durationMinutes,360);assert.equal(worker.attendance.plannedMinutes,480);
 });
 test('manual checkout is independent of cash shifts and records elapsed server seconds',async()=>{
  await call('recordOwnStaffAttendance','manager',{...gps,action:'checkOut'});const own=await call('getOwnStaffAttendance','manager');assert.equal(own.attendance.endReason,'MANUAL');assert.ok(own.attendance.workedSeconds>=0);assert.equal((await db.collection('cashShifts').get()).size,0);
@@ -62,3 +63,5 @@ test('inactive accounts and GPS/identity tampering are denied after the new life
  await assert.rejects(call('recordOwnStaffAttendance','cashier',{...gps,action:'checkOut',uid:actors.worker.uid}));await assert.rejects(call('recordOwnStaffAttendance','cashier',{...gps,latitude:30,action:'checkOut'}));
  await auth.updateUser(actors.cashier.uid,{disabled:true});await assert.rejects(call('getAttendanceMonth','cashier',{month:'2026-10'}));await assert.rejects(call('recordOwnStaffAttendance','cashier',{...gps,action:'checkOut'}));
 });
+
+test('invalid explicit policy fails closed instead of silently using the default',async()=>{const ref=db.doc('attendancePolicies/'+hash(actors.media.uid).slice(0,32));await ref.update({durationMinutes:0});await assert.rejects(call('recordOwnStaffAttendance','media',{...gps,action:'checkIn'}),/مدة ورديتك/);});

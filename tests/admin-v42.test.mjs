@@ -40,7 +40,7 @@ test("cashier primary reference menu is ordered and admin sections remain gated"
   const positions = ['data-section="pos"', 'data-section="calendar"', 'data-section="bookings"', 'data-go="cash"', 'data-cashier-target'].map(token => primary.indexOf(token));
   assert.ok(positions.every((position, index) => position >= 0 && (!index || position > positions[index - 1])), `menu order ${positions}`);
   for (const restricted of ["users", "settings", "campaigns", "activity"]) assert.doesNotMatch(primary, new RegExp(`data-section="${restricted}"`));
-  assert.match(css, /html\[data-admin-role="cashier"\] \.sidebar-workspaces\{display:none\}/);
+  assert.match(css, /html\[data-admin-layout="cashier"\] \.sidebar-workspaces\{display:none\}/);
   assert.match(admin, /button\.hidden = !canOpenSection\(id\)/);
 });
 
@@ -75,7 +75,7 @@ test("public booking is one Firestore record shared by cashier, admin list and c
   const calendar = backend.slice(backend.indexOf("export const getBookingCalendar ="), backend.indexOf("export const getCustomer360 ="));
   assert.match(site, /createBooking\(\{ \.\.\.bookingPayload, clientRequestId \}\)/);
   assert.match(publicCreate, /const bookingRef = db\.doc\(`bookings\/\$\{code\}`\)/);
-  assert.match(publicCreate, /source: "website"/);
+  assert.match(publicCreate, /source: branchOperator \? "branch" : "website"/);
   assert.match(publicCreate, /transaction\.create\(bookingRef, record\)/);
   assert.match(cashier, /scopedQueries\("bookings", allowedBranches/);
   assert.match(backend, /recentScoped\("bookings", allowedBranches, 140\)/);

@@ -1,8 +1,10 @@
+import {parsePage} from '../functions/src/cursor-pagination.js';
+import {SITE_MEDIA_FIELDS} from '../functions/src/site-media-settings.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {effectivePermissions,branchAllowed} from '../functions/src/authorization.js';
+import {effectivePermissions,branchAllowed,canManageSharedCatalog} from '../functions/src/authorization.js';
 import {publicStaff} from '../functions/src/public-staff.js';
 import {bookingWorkerCandidates} from '../src/booking-worker.js';
 import {publicSubset} from '../src/public-branch.js';
@@ -11,7 +13,7 @@ const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'
 function contextFor(code=source){
  const calls=[];const rows=[{id:'a',branchIds:['talkha'],type:'gallery'},{id:'b',branchIds:['mashaya'],type:'news'},{id:'c',branchIds:['talkha'],type:'news'}];
  class HttpsError extends Error{constructor(code,msg){super(msg);this.code=code;}}
- const context={calls,effectivePermissions,branchAllowed,HttpsError,adminOptions:{},onCall:(_o,f)=>f,requireLiveStaff:async r=>{if(!r.auth)throw new HttpsError('unauthenticated','login');},sanitizeText:(x,n)=>String(x??'').trim().slice(0,n),cleanDoc:s=>({id:s.id,...s.data()}),requireMarketingGrant:async()=>{throw Error('unexpected marketing');}};
+ const context={calls,effectivePermissions,branchAllowed,parsePage,canManageSharedCatalog,SITE_MEDIA_FIELDS,HttpsError,adminOptions:{},onCall:(_o,f)=>f,requireLiveStaff:async r=>{if(!r.auth)throw new HttpsError('unauthenticated','login');},sanitizeText:(x,n)=>String(x??'').trim().slice(0,n),cleanDoc:s=>({id:s.id,...s.data()}),requireMarketingGrant:async()=>{throw Error('unexpected marketing');}};
  context.db={doc:()=>({get:async()=>({data:()=>({role:'cashier',branchIds:['talkha'],permissions:['gallery']})})}),collection:name=>{const filters=[];let max=100,after='';const q={where:(...f)=>{assert(!(f[1]==='in'&&!f[2].length),'empty Firestore in operand');filters.push(f);return q;},orderBy:field=>{assert.equal(field,'__name__');return q;},limit:n=>{max=n;return q;},startAfter:id=>{after=id;return q;},get:async()=>{calls.push({name,filters,after,max});const found=rows.filter(x=>x.id>after&&filters.every(([field,op,value])=>op==='array-contains'?x[field]?.includes(value):op==='in'?value.includes(x[field]):x[field]===value)).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,max);return {size:found.length,docs:found.map(x=>({id:x.id,data:()=>x}))};}};return q;}};
  vm.createContext(context);
  for(const n of ['ADMIN_ROLES','ADMIN_COLLECTIONS','COLLECTION_PERMISSIONS'])vm.runInContext(code.match(new RegExp('const '+n+' = [^\\r\\n]+'))[0],context);

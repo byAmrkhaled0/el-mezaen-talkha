@@ -93,7 +93,7 @@ self.addEventListener("push", event => {
     body: notification.body || payload.data?.body || "وصل حجز جديد",
     icon: notification.icon || "/assets/icon-192.png",
     badge: notification.badge || "/assets/icon-192.png",
-    tag: notification.tag || payload.data?.bookingId || "el-mezaen-booking",
+    tag: notification.tag || (payload.data?.entityId ? `${payload.data?.type||"notice"}_${payload.data.entityId}` : payload.data?.bookingId || "el-mezaen-booking"),
     requireInteraction: notification.requireInteraction !== false,
     data: { url: payload.fcmOptions?.link || payload.data?.link || "/admin/" }
   }));
@@ -101,9 +101,11 @@ self.addEventListener("push", event => {
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const targetUrl = new URL(event.notification.data?.url || "/admin/", self.location.origin).href;
+  let destination;try{destination=new URL(event.notification.data?.url || "/admin/",self.location.origin);}catch{destination=new URL('/admin/',self.location.origin);}
+  if(destination.origin!==self.location.origin)destination=new URL('/admin/',self.location.origin);
+  const targetUrl=destination.href,portal=destination.pathname.startsWith('/worker/')?'/worker/':destination.pathname.startsWith('/admin/')?'/admin/':destination.pathname;
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
-    const existing = list.find(client => client.url.startsWith(self.location.origin));
+    const existing = list.find(client => {try{const url=new URL(client.url);return url.origin===self.location.origin&&url.pathname.startsWith(portal);}catch{return false;}});
     return existing ? existing.focus().then(() => existing.navigate(targetUrl)) : self.clients.openWindow(targetUrl);
   }));
 });

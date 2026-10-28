@@ -9,7 +9,7 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
   async function identity(request) {
     await requireLiveStaff(request);
     const role=request.auth?.token?.role;
-    if(!['worker','cashier','manager'].includes(role))fail('permission-denied','الحضور خاص بفريق العمل');
+    if(!['worker','cashier','manager','media'].includes(role))fail('permission-denied','الحضور خاص بفريق العمل');
     const p=await db.doc(`users/${request.auth.uid}`).get(),a=p.data();
     if(!p.exists||a.active!==true||a.role!==role||a.roleChangePending||a.accessOperation)fail('permission-denied','الحساب غير فعال');
     let staffId=`account_${hash(request.auth.uid).slice(0,32)}`;
@@ -22,8 +22,9 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
   }
   async function plan(uid) {
     const p=await db.doc(`attendancePolicies/${key(uid)}`).get();
+    if(!p.exists)return {durationMinutes:480,policyVersion:0};
     const minutes=p.data()?.durationMinutes;
-    if(!p.exists||!Number.isInteger(minutes)||minutes<15||minutes>1440)fail('failed-precondition','الإدارة لازم تحدد مدة ورديتك الأول من قسم مدد وسجل الحضور');
+    if(!Number.isInteger(minutes)||minutes<15||minutes>1440)fail('failed-precondition','الإدارة لازم تحدد مدة ورديتك الأول من قسم مدد وسجل الحضور');
     return {durationMinutes:minutes,policyVersion:p.data().version||1};
   }
   async function sessionReads(tx,uid){const ref=queueRef(uid);return {ref,snapshot:await tx.get(ref)};}
@@ -66,7 +67,7 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
   function project(snapshot){
     const r=typeof snapshot.data==='function'?snapshot.data():snapshot;
     const start=ms(r.startedAt||r.checkInAt),end=ms(r.endedAt||r.checkOutAt);
-    return {id:snapshot.id||r.id,dateKey:r.dateKey,branchId:r.branchId,status:r.status,checkInTime:r.checkInTime||clock(start),checkOutTime:r.checkOutTime||'',startedAt:Number.isFinite(start)?new Date(start).toISOString():null,endedAt:Number.isFinite(end)?new Date(end).toISOString():null,scheduledEndAt:Number.isFinite(ms(r.scheduledEndAt))?new Date(ms(r.scheduledEndAt)).toISOString():null,plannedMinutes:r.plannedMinutes??null,workedSeconds:r.workedSeconds??null,endReason:r.endReason||null,legacy:!r.recordVersion};
+    return {id:snapshot.id||r.id,dateKey:r.dateKey,branchId:r.branchId,status:r.status,checkInTime:r.checkInTime||clock(start),checkOutTime:r.checkOutTime||'',startedAt:Number.isFinite(start)?new Date(start).toISOString():null,endedAt:Number.isFinite(end)?new Date(end).toISOString():null,scheduledEndAt:Number.isFinite(ms(r.scheduledEndAt))?new Date(ms(r.scheduledEndAt)).toISOString():null,plannedMinutes:r.plannedMinutes??null,workedSeconds:r.workedSeconds??null,endReason:r.endReason||null,recordingMethod:r.locationEvidence?.method==='MANUAL'?'MANUAL':Number.isFinite(r.locationEvidence?.distanceMeters)?'GPS':null,checkOutMethod:r.checkOutEvidence?.method==='MANUAL'?'MANUAL':null,legacy:!r.recordVersion};
   }
   async function month(request){
     let uid=request.auth?.uid;
@@ -84,11 +85,11 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
   async function policies(request){
     await requireLiveAdmin(request);
     const role=request.data?.role||'worker',cursor=request.data?.cursor||'';
-    if(!['worker','cashier','manager'].includes(role)||typeof cursor!=='string'||cursor.includes('/'))fail('invalid-argument','حدد الدور');
+    if(!['worker','cashier','manager','media'].includes(role)||typeof cursor!=='string'||cursor.includes('/'))fail('invalid-argument','حدد الدور');
     let q=db.collection('users').where('role','==',role).orderBy('__name__').limit(101);if(cursor)q=q.startAfter(cursor);
     const result=await q.get(),docs=result.docs.slice(0,100);
     const settings=await Promise.all(docs.map(d=>db.doc(`attendancePolicies/${key(d.id)}`).get()));
-    return {items:docs.map((d,i)=>({uid:d.id,name:d.data().name||d.data().username||'حساب موظف',role,active:d.data().active===true,branchIds:d.data().branchIds||[],durationMinutes:settings[i].data()?.durationMinutes??null,version:settings[i].data()?.version||0})),nextCursor:result.docs.length>100?docs.at(-1).id:null};
+    return {items:docs.map((d,i)=>({uid:d.id,staffId:d.data().staffId||null,name:d.data().name||d.data().username||'حساب موظف',role,active:d.data().active===true,branchIds:d.data().branchIds||[],durationMinutes:settings[i].exists?settings[i].data()?.durationMinutes:480,version:settings[i].data()?.version||0})),nextCursor:result.docs.length>100?docs.at(-1).id:null};
   }
   async function setPolicy(request){
     await requireLiveAdmin(request);
@@ -97,7 +98,7 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
     const ref=db.doc(`attendancePolicies/${key(uid)}`);
     return db.runTransaction(async tx=>{
       const [profile,before]=await Promise.all([tx.get(db.doc(`users/${uid}`)),tx.get(ref)]);
-      if(!profile.exists||!['worker','cashier','manager'].includes(profile.data().role)||profile.data().active!==true||profile.data().roleChangePending)fail('failed-precondition','حدد حساب موظف فعال');
+      if(!profile.exists||!['worker','cashier','manager','media'].includes(profile.data().role)||profile.data().active!==true||profile.data().roleChangePending)fail('failed-precondition','حدد حساب موظف فعال');
       const version=before.data()?.version||0;
       if(version!==expectedVersion)fail('aborted','المدة تغيرت؛ حدّث القائمة');
       tx.set(ref,{uid,durationMinutes,version:version+1,updatedBy:request.auth.uid,updatedAt:FieldValue.serverTimestamp()});

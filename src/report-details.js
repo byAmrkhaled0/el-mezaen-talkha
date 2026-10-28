@@ -1,0 +1,27 @@
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=v=>v==null?'غير متاح':Number(v).toLocaleString('ar-EG',{maximumFractionDigits:2})+' ج.م';
+const count=v=>Number(v||0).toLocaleString('ar-EG');
+const methods={cash:'نقدي',card:'بطاقة',vodafone_cash:'فودافون كاش',instapay:'إنستاباي',other:'أخرى',unknown:'غير محدد في السجل'};
+const categories={inventory:'مشتريات مخزون',salary:'رواتب',payroll:'رواتب',rent:'إيجار',utilities:'مرافق',maintenance:'صيانة',supplies:'مستلزمات',other:'أخرى',uncategorized:'غير مصنف'};
+const kinds={service:'خدمة',package:'باقة',offer:'عرض',product:'منتج',inventory:'منتج مخزون',drink:'مشروب'};
+const table=(title,headers,rows,note='')=>`<section class="report-detail-section"><h3>${esc(title)}</h3>${note?`<p>${esc(note)}</p>`:''}<div class="report-detail-scroll"><table><thead><tr>${headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${headers.length}">لا توجد سجلات في الفترة.</td></tr>`}</tbody></table></div></section>`;
+export function renderReportDetails(report){
+ if(report.branchId==='all')return '<p class="report-detail-note">التفاصيل موزعة حسب الفرع في التقارير التالية؛ إجمالي الفروع لا يُجمع مرة ثانية.</p>';
+ const d=report.details;
+ if(!d?.available){const reason=d?.reason==='detail_limit'?'حجم تفاصيل الفترة تجاوز حد العرض الآمن؛ راجع تقارير الأيام أو سجل المعاملات.':d?.reason==='source_changed'?'تغيرت البيانات أثناء إنشاء التفاصيل؛ أعد بناء التقرير.':'التقرير محفوظ بالإجماليات فقط. الأدمن يقدر يعيد بناء تقارير الأيام، وبعدها الأسبوع أو الشهر، لإظهار التفاصيل.';return `<p class="report-detail-note">${esc(reason)}</p>`;}
+ const partial=Object.values(d.coverage||{}).some(value=>Number(value)>0);
+ const warning=partial?`<p class="v7-report-warning">بعض السجلات القديمة تفاصيلها ناقصة: ${count(d.coverage?.missingOrders)} شيك غير متاح، ${count(d.coverage?.missingLineOrders)} بدون بنود، ${count(d.coverage?.legacyDiscountOrders)} بدون قيمة خصم محفوظة، ${count(d.coverage?.legacyWalletOrders)} بدون قيمة استبدال محفظة محفوظة. تفاصيل الأصناف والخصومات تخص السجلات المتاحة فقط؛ إجمالي التحصيل مصدره دفتر الإيراد.</p>`:'';
+ const monthly=report.type==='monthly';
+ return `<div class="report-details">${warning}<div class="report-detail-summary"><div><small>خصومات الشيكات المحصلة${partial?' المتاحة':''}</small><b>${money(d.discounts)}</b></div><div><small>استبدال المحفظة${partial?' في الشيكات المتاحة':''}</small><b>${money(d.walletRedemptions)}</b></div></div><p class="report-detail-note">الخصومات والمحفظة وقت التحصيل، قبل أي استرداد لاحق، وليست مصروفًا أو خصمًا إضافيًا من الصافي.</p>`+
+ table('تفصيل طرق الدفع',['طريقة الدفع','عمليات التحصيل','التحصيل قبل الاسترداد','عدد الاستردادات','الاسترداد','الصافي'],(d.methods||[]).map(row=>[esc(methods[row.id]||row.id),count(row.paymentCount),money(row.payments),count(row.refundCount),money(row.refunds),money(row.net)]))+
+ table('أداء العمال حسب الإيراد المنسوب',['العامل','شيكات شارك فيها','الإيراد قبل الاسترداد','الاسترداد المنسوب','صافي الإيراد',...(monthly?['التارجت الشهري','المتبقي','الإنجاز']:[])],(d.workers||[]).map(row=>[esc(row.nameAr),count(row.paymentCount),money(row.payments),money(row.refunds),money(row.net),...(monthly?[row.targetAmount==null?'غير محدد':money(row.targetAmount),row.targetAmount==null?'—':money(Math.max(0,row.targetAmount-row.net)),row.targetAmount>0?count(Math.round(row.net/row.targetAmount*100))+'%':'—']:[])]),'ترتيب بالصافي. الشيك المشترك يظهر لكل عامل شارك فيه؛ أعداد المشاركة لا تمثل عدد شيكات الفرع. الإيراد بنفس توزيع التارجت المسجل، من غير احتساب منتجات للعامل تلقائيًا.')+
+ table('الخدمات والباقات والأصناف المحصلة',['الصنف','النوع','الكمية المحصلة','القيمة قبل الخصم'],(d.items||[]).map(row=>[esc(row.nameAr),esc(kinds[row.kind]||row.kind),count(row.qty),money(row.beforeDiscount)]),'الكميات والقيمة من بنود الشيكات المحصلة خلال الفترة، قبل الخصومات والمرتجعات. لا تُستخدم قيمة هذا الجدول كصافي تحصيل؛ الاستردادات موضحة في دفتر الإيراد وطرق الدفع.')+
+ table('تصنيفات مصروفات الفرع',['التصنيف','عدد السجلات','المبلغ'],(d.expenseCategories||[]).map(row=>[esc(categories[row.id]||row.id),count(row.count),money(row.amount)]),'مصروفات الفرع فقط؛ المصروفات المشتركة تظل ضمن الإقفال المجمع، والسلف والخارج من الدرج لا تُخصم مرة ثانية.')+'</div>';
+}
+export function renderReportDays(days=[]){
+ if(!days.length)return '';
+ return table('تفاصيل الأيام',['اليوم','التحصيل','الاسترداد','الصافي','المصروفات','المعاملات','الحجوزات'],days.map(day=>day.available?[esc(day.key),money(day.totals?.grossRevenue),money(day.totals?.refunds),money(day.netRevenue),money(day.totals?.expenses),day.totals?.transactions==null?'غير متاح':count(day.totals.transactions),day.bookings==null?'غير متاح':count(day.bookings)]:[esc(day.key),'تقرير يومي ناقص','—','—','—','—','—']));
+}
+export function renderShiftReconciliation(report){
+ return table('مطابقة درج الكاش',['البند','المبلغ'],[['رصيد بداية الوردية',money(report.openingCash)],['صافي التحصيل النقدي',money(report.cash)],['إضافة كاش',money(report.cashIn)],['الخارج من الدرج (شامل السلف والمصروفات النقدية)',money(report.cashOut)],['الرصيد المتوقع حسب سجل الوردية',money(report.expectedCash)],['الجرد الفعلي',money(report.actualCash)],['العجز / الزيادة',money(report.variance)]],'التحصيل بالبطاقة والتحويلات لا يدخل في النقد الموجود بالدرج. السلف والمصروفات النقدية ضمن الخارج؛ لا تُخصم مرتين.');
+}

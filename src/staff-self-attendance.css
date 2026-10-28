@@ -101,3 +101,5 @@
  .attendance-workspace .attendance-table-wrap td:last-child,.attendance-workspace .attendance-table-wrap td[colspan]{grid-column:1/-1}
 }
 @media(prefers-reduced-motion:reduce){.attendance-fingerprint,.attendance-fingerprint::before{animation:none!important;transition:none!important}}
+
+.attendance-report-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-block:14px}.attendance-report-actions :is(button,select){min-height:38px;border:1px solid var(--line,#dbe5ed);border-radius:9px;padding:7px 12px;background:var(--panel,#fff);color:var(--text);font:700 12px Tajawal,sans-serif}.attendance-month-report>p{font-size:12px;line-height:1.7;color:var(--muted)}.attendance-month-report table{width:100%;border-collapse:collapse}.attendance-month-report :is(th,td){padding:10px;text-align:start;border-bottom:1px solid var(--line,#dbe5ed)}@media(pointer:coarse){.attendance-report-actions :is(button,select){min-height:44px}}

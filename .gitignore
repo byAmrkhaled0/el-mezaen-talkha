@@ -33,3 +33,21 @@ functions/read-production-staff.mjs
 scripts/staff-branch-audit.mjs
 scripts/staff-branch-merge-plan-safe.mjs
 scripts/staff-branch-merge-plan.mjs
+
+# Generated local QA and release backups (never deploy or commit).
+/qa/
+/deliverables/
+/offline-patch-backup-*/
+/*-backup-*/
+
+# Internal account-specific setup tools: do not publish to the public repository.
+/MANAGER_RELEASE_AR.md
+/functions/scripts/configure-shop-access.mjs
+/functions/scripts/promote-wagih.mjs
+/functions/scripts/verify-shop-accounts.mjs
+/functions/src/owner-promotion.js
+/functions/src/shop-access-setup.js
+/functions/src/shop-booking-accounts.js
+/functions/test/branch-shop-access.test.mjs
+/functions/test/owner-promotion.test.mjs
+/functions/test/shop-booking-accounts.test.mjs

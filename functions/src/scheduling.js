@@ -50,16 +50,16 @@ export function scheduling({ db, FieldValue, HttpsError }) {
       .where('dateKey', '==', row.dateKey).where('active', '==', true), 'activeLeaves')));
     return [...new Map(groups.flat().map(leave => [leave.id, leave])).values()];
   }
-  async function bookingConflicts(tx, row, excludedBookingId = '') {
+  async function bookingConflicts(tx, row, excludedBookingId = '', includeDuration = false) {
     const contexts = context(row.staffId, row.branchId, row.dateKey);
     const snapshots = await Promise.all(contexts.map(value => bounded(tx, db.collection('bookings')
       .where('staffId', '==', value.staffId).where('branchId', '==', value.branchId)
       .where('bookingDate', '==', value.dateKey).where('status', 'in', ['pending', 'confirmed', 'arrived']), 'bookingConflicts')));
     const start = minutes(row.startTime || '00:00'), end = minutes(row.endTime || '23:59');
-    return snapshots.flat().filter(booking => booking.id !== excludedBookingId &&
+    return snapshots.flat().filter(booking => booking.id !== excludedBookingId && booking.serviceProgress?.[row.staffId]?.status!=='DONE' &&
       minutes(booking.bookingTime) < end && minutes(booking.bookingTime) + Math.max(5, Number(booking.duration || 0)) > start)
       .map(booking => ({ bookingId: booking.id, bookingDate: booking.bookingDate, bookingTime: booking.bookingTime,
-        staffId: booking.staffId, branchId: booking.branchId, status: booking.status }));
+        staffId: booking.staffId, branchId: booking.branchId, status: booking.status, ...(includeDuration?{duration:Math.max(5,Number(booking.duration||0))}:{}) }));
   }
   function validateLeave(row) {
     context(row.staffId, row.branchId, row.dateKey);
@@ -74,7 +74,7 @@ export function scheduling({ db, FieldValue, HttpsError }) {
       const previous = await tx.get(ref), before = previous.exists ? previous.data() : null;
       if(before?.sourceServiceSessionId)fail(HttpsError,'الفترة مرتبطة بخدمة جارية؛ استخدم إنهاء الخدمة أو تمديدها');
       if (before?.sourceRequestId) fail(HttpsError, 'الإجازة مرتبطة بطلب معتمد؛ لا يمكن تعديل سجل التفعيل يدويًا');
-      const next = payload === null ? null : normalize({ ...(before || {}), ...payload });
+      const next = payload === null ? null : normalize({ ...(before || {}), ...payload }, before);
       if (before) { validateLeave(before); authorize(before); }
       if (next) { validateLeave(next); authorize(next); }
       const guards = await readGuards(tx, [before, next].filter(Boolean));

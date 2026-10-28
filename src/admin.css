@@ -47,7 +47,7 @@
 #customers [data-list="customers"],#rewards [data-list="customers"]{grid-template-columns:1fr;gap:6px}
 .cashier-quick-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.cashier-quick-actions button{min-height:38px;border:1px solid var(--line);border-radius:9px;padding:5px 16px;color:var(--text);background:var(--panel);font-weight:800}.cashier-quick-actions .primary{color:#00151b;border:0;background:var(--cyan)}.compact-operations{margin-top:10px}.compact-operations th,.compact-operations td{padding-block:8px}.cashier-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}.cashier-metrics .metric-card{min-height:86px;padding:12px 14px;border-radius:12px;box-shadow:none}.cashier-metrics .metric-card strong{margin-top:5px;font-size:21px}
 .operations-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.operations-strip article{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:46px;border:1px solid var(--line);border-radius:10px;padding:8px 11px;background:var(--panel)}.operations-strip span{color:var(--muted);font-size:12px}.operations-strip strong{font-size:14px}.operations-ready{color:var(--success)}.customer-segment-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:8px 0 12px}.customer-segment-summary span{padding:6px 9px;border-radius:999px;color:var(--muted);background:var(--bg2);font-size:11px}.customer-segment-summary b{color:var(--cyan);font-size:13px}
-html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:none}
+html[data-admin-layout="cashier"] .cashier-metrics .admin-extra-metric{display:none}
 .entity-media { position:relative; height:145px; margin:-13px -13px 12px; overflow:hidden; display:grid; place-items:center; border-radius:13px 13px 0 0; color:var(--cyan); background:linear-gradient(145deg,var(--panel),var(--bg)); font-size:38px; }.entity-media img { width:100%; height:100%; object-fit:cover; }.entity-media b { position:absolute; inset:auto 9px 9px auto; padding:4px 8px; border-radius:999px; color:#00151b; background:var(--cyan); font-size:12px; }.entity-branch { margin-bottom:7px!important; color:var(--warning)!important; font-weight:700; }
 .settings-form { display:grid; gap:11px; }.settings-form.cols { grid-template-columns:1fr 1fr; }.settings-form label { display:flex; flex-direction:column; gap:6px; font-weight:700; }.settings-form input,.settings-form select,.settings-form textarea { min-height:46px; border:1px solid var(--line); border-radius:11px; padding:9px 11px; background:var(--bg2); color:var(--text); }.settings-form textarea { min-height:100px; resize:vertical; }.settings-form .full { grid-column:1/-1; }
 .editor-dialog { width:100%; max-width:none; height:100%; max-height:none; padding:18px; border:0; background:rgba(0,0,0,.76); color:var(--text); backdrop-filter:blur(8px); }.editor-dialog:not([open]) { display:none; }.editor-dialog::backdrop { background:transparent; }
@@ -70,7 +70,7 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 
 /* v5 full shop operations */
 .profit-card strong,#businessNet{color:var(--success)}.income-card strong{color:var(--success)}.expense-card strong{color:var(--danger)}.inventory-metrics{margin-bottom:14px}.inventory-metrics .metric-card small{margin-top:5px;color:var(--muted)}.accounting-note{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.accounting-note b{font:700 17px "Alexandria"}.accounting-note p{margin:5px 0 0;color:var(--muted)}.pos-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,410px);gap:14px;align-items:start}.pos-layout>.admin-panel{margin-top:0}.pos-ticket-panel{position:sticky;top:94px}.pos-search{min-height:43px;width:min(330px,100%);border:1px solid var(--line);border-radius:11px;padding:8px 11px;color:var(--text);background:var(--bg2)}.pos-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;max-height:calc(100dvh - 190px);overflow:auto;padding:2px}.pos-item{min-height:125px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:start;color:var(--text);background:linear-gradient(145deg,var(--bg2),color-mix(in srgb,var(--cyan),transparent 94%))}.pos-item:hover{border-color:var(--cyan)}.pos-item>span,.pos-item>small{color:var(--muted);font-size:12px}.pos-item>b{font-size:15px;line-height:1.5}.pos-item>strong{margin-top:auto;color:var(--cyan);font-size:18px}.pos-item.out{opacity:.45}.pos-form{display:grid;gap:10px}.pos-form>label,.pos-customer-fields label,.pos-payment label,.payroll-actions label{display:grid;gap:5px;font-weight:700}.pos-form input,.pos-form select,.pos-customer-fields input,.pos-payment select,.payroll-actions input,.payroll-actions select{width:100%;min-height:43px;border:1px solid var(--line);border-radius:10px;padding:7px 9px;color:var(--text);background:var(--bg2)}.pos-customer-fields,.pos-payment{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pos-payment .check-label{display:flex;align-items:center;justify-content:center;flex-direction:row}.pos-payment .check-label input{width:20px;min-height:20px}.pos-cart{display:grid;gap:6px;max-height:260px;overflow:auto;border-block:1px solid var(--line);padding-block:9px}.pos-cart>p{margin:0;color:var(--muted)}.pos-cart-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(72px,110px) auto 34px;align-items:center;gap:6px;padding:8px;border-radius:10px;background:var(--bg2)}.pos-cart-line b,.pos-cart-line small{display:block}.pos-cart-line small{color:var(--muted)}.pos-line-controls{display:grid;gap:4px}.pos-line-controls input,.pos-line-controls select{width:100%;min-height:34px;border:1px solid var(--line);border-radius:8px;padding:4px;color:var(--text);background:var(--panel)}.pos-cart-line button{width:32px;height:32px;border:0;border-radius:8px;color:#fff;background:var(--danger)}.pos-total{display:flex;align-items:center;justify-content:space-between;padding:13px;border-radius:12px;background:color-mix(in srgb,var(--cyan),transparent 90%)}.pos-total strong{color:var(--cyan);font:700 23px "Alexandria"}.pos-submit{width:100%;min-height:50px}.business-panels{margin-top:14px}.payroll-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}.payroll-card{min-width:0;border:1px solid var(--line);border-radius:15px;padding:14px;background:var(--bg2)}.payroll-card header{display:flex;align-items:center;gap:9px}.payroll-card header h3{margin:0 0 4px}.payroll-card header span{color:var(--muted);font-size:12px}.payroll-card header>b{margin-inline-start:auto;color:var(--warning);font-size:12px}.payroll-card header>b.target-hit{color:var(--success)}.target-progress{height:7px;margin:12px 0;overflow:hidden;border-radius:99px;background:var(--panel)}.target-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--cyan),var(--success))}.payroll-card dl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0}.payroll-card dl div{padding:8px;border-radius:9px;background:var(--panel)}.payroll-card dt{color:var(--muted);font-size:11px}.payroll-card dd{margin:3px 0 0;font-weight:800}.payroll-total{display:flex;align-items:center;justify-content:space-between;margin-top:9px;padding:11px;border-top:1px solid var(--line)}.payroll-total strong{color:var(--cyan);font-size:20px}.payroll-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.payroll-actions button{grid-column:1/-1}.salary-paid{padding:9px;border-radius:9px;color:#042313;background:var(--success);font-weight:800}.stock-warning,.review-state{display:inline-flex;align-self:flex-start;margin-top:8px;padding:5px 8px;border-radius:999px;color:#2d1c00;background:var(--warning);font-size:11px}.review-state{color:#001d24;background:var(--cyan)}
-@media(min-width:1101px){html[data-admin-role="cashier"] .admin-main{padding-top:15px}html[data-admin-role="cashier"] .admin-header{margin-bottom:14px;padding-block:11px}html[data-admin-role="cashier"] .header-actions>a,html[data-admin-role="cashier"] #installAdmin{display:none}html[data-admin-role="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(330px,380px);gap:10px}html[data-admin-role="cashier"] .pos-layout>.admin-panel{padding:13px}html[data-admin-role="cashier"] .pos-catalog-panel .panel-head p,html[data-admin-role="cashier"] .pos-ticket-panel .panel-head p{display:none}html[data-admin-role="cashier"] .pos-item{min-height:96px;padding:9px}html[data-admin-role="cashier"] .pos-form{gap:7px}html[data-admin-role="cashier"] .pos-form input,html[data-admin-role="cashier"] .pos-form select{min-height:38px}html[data-admin-role="cashier"] .pos-ticket-panel{top:74px}}
+@media(min-width:1101px){html[data-admin-layout="cashier"] .admin-main{padding-top:15px}html[data-admin-layout="cashier"] .admin-header{margin-bottom:14px;padding-block:11px}html[data-admin-layout="cashier"] .header-actions>a,html[data-admin-layout="cashier"] #installAdmin{display:none}html[data-admin-layout="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(330px,380px);gap:10px}html[data-admin-layout="cashier"] .pos-layout>.admin-panel{padding:13px}html[data-admin-layout="cashier"] .pos-catalog-panel .panel-head p,html[data-admin-layout="cashier"] .pos-ticket-panel .panel-head p{display:none}html[data-admin-layout="cashier"] .pos-item{min-height:96px;padding:9px}html[data-admin-layout="cashier"] .pos-form{gap:7px}html[data-admin-layout="cashier"] .pos-form input,html[data-admin-layout="cashier"] .pos-form select{min-height:38px}html[data-admin-layout="cashier"] .pos-ticket-panel{top:74px}}
 @media(max-width:1100px){.pos-layout{grid-template-columns:1fr}.pos-ticket-panel{position:static}.pos-items{max-height:none}}
 @media(max-width:720px){#installAdmin{width:40px;padding:0;font-size:0}#installAdmin::after{content:"⇩";font-size:18px}.business-panels{grid-template-columns:1fr}.pos-items{grid-template-columns:repeat(2,minmax(0,1fr))}.payroll-grid{grid-template-columns:1fr}}
 @media(max-width:720px){.accounting-note{align-items:stretch;flex-direction:column}.accounting-note .small-button{width:100%}}
@@ -106,7 +106,7 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 @media(max-width:1100px){.admin-app.sidebar-collapsed{grid-template-columns:1fr}.desktop-sidebar-toggle{display:none}.admin-app.sidebar-collapsed .sidebar{opacity:1;pointer-events:auto}}
 @media(max-width:720px){.activity-card{grid-template-columns:1fr 1fr}.activity-card .activity-action{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}.access-editor-shell .editor-fields{display:grid}}
 @media(max-width:430px){.activity-card{grid-template-columns:1fr}.activity-card .activity-action{grid-column:auto}}
-@media(max-width:720px){html[data-admin-role="cashier"] .admin-main{padding-bottom:82px}html[data-admin-role="cashier"] .cashier-mobile-nav{position:fixed;z-index:60;inset:auto 8px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel),transparent 4%);box-shadow:var(--shadow);backdrop-filter:blur(12px)}.cashier-mobile-nav button{min-height:52px;display:grid;place-items:center;gap:2px;border:0;border-radius:10px;color:var(--muted);background:transparent;font-size:18px}.cashier-mobile-nav button.active{color:#00151b;background:var(--cyan)}.cashier-mobile-nav span{font-size:10px;font-weight:800}}
+@media(max-width:720px){html[data-admin-layout="cashier"] .admin-main{padding-bottom:82px}html[data-admin-layout="cashier"] .cashier-mobile-nav{position:fixed;z-index:60;inset:auto 8px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel),transparent 4%);box-shadow:var(--shadow);backdrop-filter:blur(12px)}.cashier-mobile-nav button{min-height:52px;display:grid;place-items:center;gap:2px;border:0;border-radius:10px;color:var(--muted);background:transparent;font-size:18px}.cashier-mobile-nav button.active{color:#00151b;background:var(--cyan)}.cashier-mobile-nav span{font-size:10px;font-weight:800}}
 @media(max-width:430px){.customer-drawer-shell{width:100vw}.customer-drawer-hero{grid-template-columns:auto 1fr}.customer-drawer-hero img{grid-column:1/-1;justify-self:center}.customer-drawer-actions{flex-direction:column}}
 @media(max-width:600px){.manual-offer-recipient{grid-template-columns:1fr auto}.manual-offer-recipient span{grid-column:1/-1}.manual-offer-recipient button{grid-column:2;grid-row:1}}
 
@@ -114,7 +114,7 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 .pos-workspace{align-items:start;grid-template-columns:120px minmax(0,1fr)}.pos-workspace-column{min-width:0}.pos-workspace-column>h3{margin:0 0 8px;color:var(--muted);font-size:12px}.pos-results-column{min-width:0}
 .pos-items{align-content:start;align-items:start;grid-auto-rows:112px}
 .pos-item{width:100%;height:112px;min-height:0}
-@media(min-width:1101px){html[data-admin-role="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(320px,350px)}html[data-admin-role="cashier"] .pos-item{height:102px;min-height:0}}
+@media(min-width:1101px){html[data-admin-layout="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(320px,350px)}html[data-admin-layout="cashier"] .pos-item{height:102px;min-height:0}}
 @media(max-width:1100px){.pos-workspace{grid-template-columns:1fr}.pos-items{grid-auto-rows:112px}}
 
 /* Cashier-first POS navigation */
@@ -155,13 +155,13 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 .pos-extra-details{grid-column:1/-1;border:1px solid var(--line);border-radius:11px;padding:0 10px;background:var(--bg2)}.pos-extra-details summary{min-height:42px;display:flex;align-items:center;cursor:pointer;color:var(--muted);font-weight:800}.pos-extra-details[open]{padding-bottom:10px}.pos-extra-details>.pos-customer-fields{margin-bottom:8px}.pos-extra-details>label{display:grid;gap:5px;font-weight:700}.pos-checkout-bar{position:sticky;z-index:4;bottom:-13px;display:grid;gap:8px;margin:0 -13px -13px;padding:10px 13px 13px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--panel),transparent 3%);backdrop-filter:blur(12px)}
 .section-loading>.admin-panel:first-child,.section-loading>.pos-layout{position:relative;min-height:240px}.section-loading>.admin-panel:first-child::after,.section-loading>.pos-layout::after{content:"";position:absolute;z-index:20;inset:0;border-radius:16px;background:linear-gradient(100deg,var(--panel) 25%,color-mix(in srgb,var(--cyan),var(--panel) 92%) 40%,var(--panel) 55%);background-size:220% 100%;animation:adminSkeleton 1s infinite linear}.section-loading>.pos-layout::after{grid-column:1/-1}@keyframes adminSkeleton{to{background-position:-220% 0}}
 @media(min-width:1101px){
-  html[data-admin-role="cashier"] .admin-main{padding-inline:12px}
-  html[data-admin-role="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(450px,500px);gap:12px}
-  html[data-admin-role="cashier"] .pos-ticket-panel{top:72px;max-height:calc(100dvh - 84px);overflow:auto}
-  html[data-admin-role="cashier"] .pos-form{grid-template-columns:1fr 1fr;align-items:end}
-  html[data-admin-role="cashier"] .pos-form>.pos-customer-fields,html[data-admin-role="cashier"] .pos-form>.pos-cart,html[data-admin-role="cashier"] .pos-form>.pos-payment,html[data-admin-role="cashier"] .pos-form>.pos-total,html[data-admin-role="cashier"] .pos-form>.pos-submit{grid-column:1/-1}
-  html[data-admin-role="cashier"] .pos-cart{max-height:310px}
-  html[data-admin-role="cashier"] .pos-items{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}
+  html[data-admin-layout="cashier"] .admin-main{padding-inline:12px}
+  html[data-admin-layout="cashier"] .pos-layout{grid-template-columns:minmax(0,1fr) minmax(450px,500px);gap:12px}
+  html[data-admin-layout="cashier"] .pos-ticket-panel{top:72px;max-height:calc(100dvh - 84px);overflow:auto}
+  html[data-admin-layout="cashier"] .pos-form{grid-template-columns:1fr 1fr;align-items:end}
+  html[data-admin-layout="cashier"] .pos-form>.pos-customer-fields,html[data-admin-layout="cashier"] .pos-form>.pos-cart,html[data-admin-layout="cashier"] .pos-form>.pos-payment,html[data-admin-layout="cashier"] .pos-form>.pos-total,html[data-admin-layout="cashier"] .pos-form>.pos-submit{grid-column:1/-1}
+  html[data-admin-layout="cashier"] .pos-cart{max-height:310px}
+  html[data-admin-layout="cashier"] .pos-items{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}
 }
 @media(min-width:1366px){.pos-layout{grid-template-columns:minmax(0,1fr) minmax(420px,470px)}.pos-catalog-panel{min-height:calc(100dvh - 145px)}.pos-items{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));max-height:calc(100dvh - 255px)}.pos-ticket-panel{top:76px;max-height:calc(100dvh - 92px);overflow:auto}}
 @media(max-width:1250px){.pos-filters{grid-template-columns:1fr 1fr}.pos-filters .pos-search-box{grid-column:1/-1}}
@@ -181,8 +181,8 @@ html[data-admin-role="cashier"] .cashier-metrics .admin-extra-metric{display:non
 .admin-panel{border-color:rgba(109,225,222,.18);background:linear-gradient(155deg,rgba(12,35,54,.98),rgba(8,26,42,.98));box-shadow:0 18px 42px rgba(0,0,0,.2)}
 .small-button.primary,.pos-submit{background:linear-gradient(135deg,#65e9df,#34c9d9)!important;box-shadow:0 8px 20px rgba(67,221,211,.16)}
 .booking-checkout{min-width:126px;border-color:#2cbf91!important;color:#06251c!important;background:#65e0b7!important;font-weight:900!important}.booking-checkout:hover{filter:brightness(.96)}
-html[data-admin-role="cashier"] .admin-header{background:color-mix(in srgb,var(--panel),#fff 10%)}
-html[data-admin-role="cashier"] .compact-operations table{font-size:13px}
+html[data-admin-layout="cashier"] .admin-header{background:color-mix(in srgb,var(--panel),#fff 10%)}
+html[data-admin-layout="cashier"] .compact-operations table{font-size:13px}
 #results [data-list="content-result"]{grid-template-columns:repeat(auto-fill,minmax(250px,320px));justify-content:center;align-items:start}
 #results [data-list="content-result"] .entity-card{width:100%;min-height:0}
 #results [data-list="content-result"] .entity-media{height:auto;aspect-ratio:1;margin-bottom:12px}
@@ -555,7 +555,7 @@ html[data-theme="dark"] body,html[data-theme="dark"] .admin-app,html[data-theme=
 }
 @media(min-width:721px) and (max-width:1250px){#dashboard .dashboard-summary-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-command-search{width:min(210px,19vw)}}
 @media(max-width:1100px){.admin-app,.admin-app.portal-mode,.admin-app.sidebar-collapsed{grid-template-columns:1fr}.sidebar,.admin-app.portal-mode .sidebar{position:fixed;display:flex;width:min(250px,85vw);box-shadow:-9px 0 32px rgba(25,45,62,.14)!important}.admin-app.portal-mode .mobile-menu{display:inline-flex}.admin-app.portal-mode .desktop-sidebar-toggle{display:none}.admin-main{padding:18px}.admin-header,html[data-theme="light"] .admin-header{margin:-18px -18px 18px;padding:11px 18px}}
-@media(max-width:720px){.admin-main{padding:12px 12px calc(80px + env(safe-area-inset-bottom))}.admin-header,html[data-theme="light"] .admin-header{min-height:59px;margin:-12px -12px 14px;padding:8px 12px}.header-title h1{font-size:15px}.header-branch-chip,.header-user,.admin-command-search{display:none}#dashboard .dashboard-summary-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}#dashboard .dashboard-summary-metrics .metric-card{min-height:102px;padding:13px}#dashboard .dashboard-summary-metrics .metric-card strong{font-size:19px}.workspace-gates{grid-template-columns:1fr}.editor-shell{width:100vw}.cashier-mobile-nav button.active,html[data-admin-role="cashier"] .cashier-mobile-nav button.active{color:#fff;background:#245b7b}.table-scroll{overflow-x:auto}}
+@media(max-width:720px){.admin-main{padding:12px 12px calc(80px + env(safe-area-inset-bottom))}.admin-header,html[data-theme="light"] .admin-header{min-height:59px;margin:-12px -12px 14px;padding:8px 12px}.header-title h1{font-size:15px}.header-branch-chip,.header-user,.admin-command-search{display:none}#dashboard .dashboard-summary-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}#dashboard .dashboard-summary-metrics .metric-card{min-height:102px;padding:13px}#dashboard .dashboard-summary-metrics .metric-card strong{font-size:19px}.workspace-gates{grid-template-columns:1fr}.editor-shell{width:100vw}.cashier-mobile-nav button.active,html[data-admin-layout="cashier"] .cashier-mobile-nav button.active{color:#fff;background:#245b7b}.table-scroll{overflow-x:auto}}
 @media(max-width:430px){#dashboard .dashboard-summary-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#dashboard .dashboard-summary-metrics .metric-card{min-height:100px}}
 .admin-app.portal-mode .admin-main{grid-column:2}
 #mobileThemeToggle{display:none!important}
@@ -565,19 +565,19 @@ html[data-theme="dark"] body,html[data-theme="dark"] .admin-app,html[data-theme=
 /* V4.2 shared cashier and admin reference controls. */
 :root{--admin-bg:#f5f8fb;--admin-surface:#fff;--admin-primary:#245b7b;--admin-primary-dark:#1e516f;--admin-primary-soft:#eaf3f8;--admin-text:#25313a;--admin-muted:#7d8992;--admin-border:#e3eaf0;--admin-success:#3aa879;--admin-danger:#e14c55;--admin-warning:#e49b34;--admin-shadow:0 3px 12px rgba(29,65,89,.055)}
 .cashier-only,.cashier-secondary{display:none!important}
-html[data-admin-role="cashier"] .sidebar-primary>[data-section="dashboard"],html[data-admin-role="cashier"] .sidebar-primary>[data-section="attendance"],html[data-admin-role="cashier"] .sidebar-primary>[data-section="tasks"],html[data-admin-role="cashier"] .sidebar-primary>[data-section="customers"]{display:none!important}
-html[data-admin-role="cashier"] .cashier-only:not([hidden]){display:flex!important}
-html[data-admin-role="cashier"] .cashier-secondary:not([hidden]){display:flex!important}
-html[data-admin-role="cashier"] .sidebar-workspaces{display:none}
-html[data-admin-role="cashier"] .sidebar-more .nav-group-title{display:none}
-html[data-admin-role="cashier"] .sidebar-more-list>[data-section]:not(.cashier-secondary){display:none!important}
-html[data-admin-role="cashier"] .sidebar-primary{gap:2px}
-html[data-admin-role="cashier"] .sidebar nav button{font-size:12px;min-height:39px}
-html[data-admin-role="cashier"] .sidebar-primary button.active{background:#245b7b;color:#fff}
-html[data-admin-role="cashier"] .desktop-monthly-target{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;gap:12px}
-html[data-admin-role="cashier"] .desktop-monthly-target header{grid-column:1/-1}
-html[data-admin-role="cashier"] .desktop-monthly-target button[data-go="payroll"]{display:none!important}
-html[data-admin-role="cashier"] .desktop-monthly-target progress{grid-column:1/-1}
+html[data-admin-layout="cashier"] .sidebar-primary>[data-section="dashboard"],html[data-admin-layout="cashier"] .sidebar-primary>[data-section="attendance"],html[data-admin-layout="cashier"] .sidebar-primary>[data-section="tasks"],html[data-admin-layout="cashier"] .sidebar-primary>[data-section="customers"]{display:none!important}
+html[data-admin-layout="cashier"] .cashier-only:not([hidden]){display:flex!important}
+html[data-admin-layout="cashier"] .cashier-secondary:not([hidden]){display:flex!important}
+html[data-admin-layout="cashier"] .sidebar-workspaces{display:none}
+html[data-admin-layout="cashier"] .sidebar-more .nav-group-title{display:none}
+html[data-admin-layout="cashier"] .sidebar-more-list>[data-section]:not(.cashier-secondary){display:none!important}
+html[data-admin-layout="cashier"] .sidebar-primary{gap:2px}
+html[data-admin-layout="cashier"] .sidebar nav button{font-size:12px;min-height:39px}
+html[data-admin-layout="cashier"] .sidebar-primary button.active{background:#245b7b;color:#fff}
+html[data-admin-layout="cashier"] .desktop-monthly-target{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;gap:12px}
+html[data-admin-layout="cashier"] .desktop-monthly-target header{grid-column:1/-1}
+html[data-admin-layout="cashier"] .desktop-monthly-target button[data-go="payroll"]{display:none!important}
+html[data-admin-layout="cashier"] .desktop-monthly-target progress{grid-column:1/-1}
 #dashboard .dashboard-summary-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
 .dashboard-financial-summary{margin:0 0 16px}.financial-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0}.financial-summary-grid .metric-card{min-height:72px;padding:10px 14px;border:0;border-inline-end:1px solid var(--admin-border);border-radius:0;box-shadow:none}.financial-summary-grid .metric-card:last-child{border:0}.financial-summary-grid .metric-card .metric-icon{display:none}.financial-summary-grid .metric-card span{font-size:11px;color:var(--admin-muted)}.financial-summary-grid .metric-card strong{display:block;margin-top:7px;font-size:16px}.financial-summary-grid .metric-card small{font-size:10px;color:var(--admin-muted)}
 #dashboard .dashboard-data-error{padding:9px 13px;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;margin-bottom:10px;font-size:12px}#dashboard .dashboard-data-error span{grid-column:2;grid-row:1}#dashboard .dashboard-data-error button{grid-column:3;grid-row:1;min-height:32px}
@@ -599,33 +599,33 @@ html[data-admin-role="cashier"] .desktop-monthly-target progress{grid-column:1/-
 @media(max-width:720px){.header-scope{padding:2px 5px;font-size:0}.header-scope select{max-width:95px;font-size:10px}.header-actions .connection-state{display:none}}
 
 /* V4.3: cashier reference lock; role-specific presentation on shared controls. */
-html[data-admin-role="cashier"] .sidebar-workspaces,
-html[data-admin-role="cashier"] .sidebar-more,
-html[data-admin-role="cashier"] .desktop-primary-nav,
-html[data-admin-role="cashier"] .cashier-mobile-nav,
-html[data-admin-role="cashier"] .desktop-sidebar-toggle,
-html[data-admin-role="cashier"] .admin-command-search,
-html[data-admin-role="cashier"] .header-scope,
-html[data-admin-role="cashier"] .header-branch-chip,
-html[data-admin-role="cashier"] .header-user,
-html[data-admin-role="cashier"] .header-actions .connection-state,
-html[data-admin-role="cashier"] .pos-view-tabs,
-html[data-admin-role="cashier"] .pos-receipts-panel{display:none!important}
-html[data-admin-role="cashier"] .admin-app,
-html[data-admin-role="cashier"] .admin-app.portal-mode{grid-template-columns:180px minmax(0,1fr)}
-html[data-admin-role="cashier"] .sidebar{background:#fff!important;padding-inline:9px;box-shadow:none!important}
-html[data-admin-role="cashier"] .admin-brand{min-height:64px;justify-content:center}
-html[data-admin-role="cashier"] .sidebar nav{padding-top:5px}
-html[data-admin-role="cashier"] .sidebar nav button{min-height:39px;border-radius:12px;font-size:11px;font-weight:700;padding:5px 9px}
-html[data-admin-role="cashier"] .sidebar-primary button.active{background:#245b7b;color:#fff;box-shadow:0 4px 12px rgba(36,91,123,.2)}
-html[data-admin-role="cashier"] .sidebar-end-shift{background:#f12e42;color:#fff}
-html[data-admin-role="cashier"] .sidebar-footer #logoutButton{background:#fff;color:#536675;border-color:#e3eaf0}
-html[data-admin-role="cashier"] .admin-header{min-height:48px;padding-block:7px;margin-bottom:16px}
-html[data-admin-role="cashier"] .header-title h1{font-size:15px}
+html[data-admin-layout="cashier"] .sidebar-workspaces,
+html[data-admin-layout="cashier"] .sidebar-more,
+html[data-admin-layout="cashier"] .desktop-primary-nav,
+html[data-admin-layout="cashier"] .cashier-mobile-nav,
+html[data-admin-layout="cashier"] .desktop-sidebar-toggle,
+html[data-admin-layout="cashier"] .admin-command-search,
+html[data-admin-layout="cashier"] .header-scope,
+html[data-admin-layout="cashier"] .header-branch-chip,
+html[data-admin-layout="cashier"] .header-user,
+html[data-admin-layout="cashier"] .header-actions .connection-state,
+html[data-admin-layout="cashier"] .pos-view-tabs,
+html[data-admin-layout="cashier"] .pos-receipts-panel{display:none!important}
+html[data-admin-layout="cashier"] .admin-app,
+html[data-admin-layout="cashier"] .admin-app.portal-mode{grid-template-columns:180px minmax(0,1fr)}
+html[data-admin-layout="cashier"] .sidebar{background:#fff!important;padding-inline:9px;box-shadow:none!important}
+html[data-admin-layout="cashier"] .admin-brand{min-height:64px;justify-content:center}
+html[data-admin-layout="cashier"] .sidebar nav{padding-top:5px}
+html[data-admin-layout="cashier"] .sidebar nav button{min-height:39px;border-radius:12px;font-size:11px;font-weight:700;padding:5px 9px}
+html[data-admin-layout="cashier"] .sidebar-primary button.active{background:#245b7b;color:#fff;box-shadow:0 4px 12px rgba(36,91,123,.2)}
+html[data-admin-layout="cashier"] .sidebar-end-shift{background:#f12e42;color:#fff}
+html[data-admin-layout="cashier"] .sidebar-footer #logoutButton{background:#fff;color:#536675;border-color:#e3eaf0}
+html[data-admin-layout="cashier"] .admin-header{min-height:48px;padding-block:7px;margin-bottom:16px}
+html[data-admin-layout="cashier"] .header-title h1{font-size:15px}
 .cashier-branch-label{margin-inline-start:auto;color:#8b99a6;font-size:11px;white-space:nowrap}
-html[data-admin-role="cashier"] .header-actions #pushButton{display:grid!important;place-items:center;width:35px;min-height:35px;padding:0;border:1px solid #e3eaf0;border-radius:50%;background:#fff}
-html[data-admin-role="cashier"] .header-actions{flex:0 0 auto}
-html[data-admin-role="cashier"] #pos{min-width:0}
+html[data-admin-layout="cashier"] .header-actions #pushButton{display:grid!important;place-items:center;width:35px;min-height:35px;padding:0;border:1px solid #e3eaf0;border-radius:50%;background:#fff}
+html[data-admin-layout="cashier"] .header-actions{flex:0 0 auto}
+html[data-admin-layout="cashier"] #pos{min-width:0}
 .cashier-transaction-kpis{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .cashier-transaction-kpis .metric-card{min-height:78px;padding:12px;border-radius:16px}
 .cashier-transaction-kpis .metric-card strong{font-size:17px}
@@ -640,26 +640,26 @@ html[data-admin-role="cashier"] #pos{min-width:0}
 .cashier-transactions-table td{font-size:11px}
 .cashier-table-pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px;border-top:1px solid #e3eaf0;font-size:11px;color:#7d8992}
 .cashier-table-pagination button{min-height:30px}
-html[data-admin-role="cashier"] .booking-list-summary{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
-html[data-admin-role="cashier"] .booking-list-summary .metric-card{min-height:78px;padding:12px;border-radius:16px}
-html[data-admin-role="cashier"] .booking-calendar{grid-template-columns:repeat(5,minmax(175px,1fr));min-height:0;align-items:start}
-html[data-admin-role="cashier"] .booking-board-items{min-height:0}
+html[data-admin-layout="cashier"] .booking-list-summary{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+html[data-admin-layout="cashier"] .booking-list-summary .metric-card{min-height:78px;padding:12px;border-radius:16px}
+html[data-admin-layout="cashier"] .booking-calendar{grid-template-columns:repeat(5,minmax(175px,1fr));min-height:0;align-items:start}
+html[data-admin-layout="cashier"] .booking-board-items{min-height:0}
 .booking-board-card-main{display:grid;gap:5px;width:100%;padding:0;border:0;background:none;color:inherit;text-align:start;cursor:pointer}.booking-board-card>.small-button{justify-self:start;margin-top:5px;min-height:32px}
-html[data-admin-role="cashier"] .booking-board-empty{min-height:46px}
-html[data-admin-role="cashier"] #calendar>.admin-panel{background:transparent;border:0;box-shadow:none;padding:0}
-html[data-admin-role="cashier"] #calendar .panel-head{padding:11px;border:1px solid #e3eaf0;border-radius:14px;background:#fff}
-html[data-admin-role="cashier"] #calendar .toolbar input,html[data-admin-role="cashier"] #calendar .toolbar select{background:#fff;border-color:#e3eaf0;border-radius:10px;min-height:35px}
-html[data-admin-role="cashier"] #cash .metric-grid.compact{grid-template-columns:repeat(4,minmax(0,1fr))}
-html[data-admin-role="cashier"] #cash .metric-card{min-height:78px;border-radius:16px}
+html[data-admin-layout="cashier"] .booking-board-empty{min-height:46px}
+html[data-admin-layout="cashier"] #calendar>.admin-panel{background:transparent;border:0;box-shadow:none;padding:0}
+html[data-admin-layout="cashier"] #calendar .panel-head{padding:11px;border:1px solid #e3eaf0;border-radius:14px;background:#fff}
+html[data-admin-layout="cashier"] #calendar .toolbar input,html[data-admin-layout="cashier"] #calendar .toolbar select{background:#fff;border-color:#e3eaf0;border-radius:10px;min-height:35px}
+html[data-admin-layout="cashier"] #cash .metric-grid.compact{grid-template-columns:repeat(4,minmax(0,1fr))}
+html[data-admin-layout="cashier"] #cash .metric-card{min-height:78px;border-radius:16px}
 .cashier-target-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:15px}
 .cashier-target-summary .metric-card{min-height:78px;border-radius:15px;padding:13px}
 .cashier-target-summary strong{display:block;margin-top:9px;font-size:19px}
-html[data-admin-role="cashier"] #adminAlertsDialog .push-health,html[data-admin-role="cashier"] #testLocalNotification{display:none!important}
-html[data-admin-role="cashier"] #adminAlertsDialog .admin-alerts-shell{width:min(350px,100vw)}
-html[data-admin-role="cashier"] #adminAlertsDialog .customer-drawer-body{min-height:0}
-@media(max-width:1300px){.cashier-transaction-kpis,html[data-admin-role="cashier"] .booking-list-summary{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:1100px){html[data-admin-role="cashier"] .admin-app,html[data-admin-role="cashier"] .admin-app.portal-mode{grid-template-columns:minmax(0,1fr)}html[data-admin-role="cashier"] .sidebar{position:fixed;width:min(250px,85vw)}html[data-admin-role="cashier"] .mobile-menu{display:inline-flex!important}}
-@media(max-width:720px){.cashier-transaction-kpis,html[data-admin-role="cashier"] .booking-list-summary,html[data-admin-role="cashier"] #cash .metric-grid.compact{grid-template-columns:repeat(2,minmax(0,1fr))}.cashier-target-summary{grid-template-columns:repeat(3,minmax(0,1fr))}html[data-admin-role="cashier"] .admin-header{min-height:55px}html[data-admin-role="cashier"] .admin-main{padding-bottom:24px}.cashier-branch-label{max-width:100px;overflow:hidden;text-overflow:ellipsis}.cashier-transactions-filter input,.cashier-transactions-filter select{min-width:calc(50% - 5px)}html[data-admin-role="cashier"] .booking-calendar{grid-template-columns:repeat(5,minmax(190px,1fr));overflow-x:auto}}
+html[data-admin-layout="cashier"] #adminAlertsDialog .push-health,html[data-admin-layout="cashier"] #testLocalNotification{display:none!important}
+html[data-admin-layout="cashier"] #adminAlertsDialog .admin-alerts-shell{width:min(350px,100vw)}
+html[data-admin-layout="cashier"] #adminAlertsDialog .customer-drawer-body{min-height:0}
+@media(max-width:1300px){.cashier-transaction-kpis,html[data-admin-layout="cashier"] .booking-list-summary{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1100px){html[data-admin-layout="cashier"] .admin-app,html[data-admin-layout="cashier"] .admin-app.portal-mode{grid-template-columns:minmax(0,1fr)}html[data-admin-layout="cashier"] .sidebar{position:fixed;width:min(250px,85vw)}html[data-admin-layout="cashier"] .mobile-menu{display:inline-flex!important}}
+@media(max-width:720px){.cashier-transaction-kpis,html[data-admin-layout="cashier"] .booking-list-summary,html[data-admin-layout="cashier"] #cash .metric-grid.compact{grid-template-columns:repeat(2,minmax(0,1fr))}.cashier-target-summary{grid-template-columns:repeat(3,minmax(0,1fr))}html[data-admin-layout="cashier"] .admin-header{min-height:55px}html[data-admin-layout="cashier"] .admin-main{padding-bottom:24px}.cashier-branch-label{max-width:100px;overflow:hidden;text-overflow:ellipsis}.cashier-transactions-filter input,.cashier-transactions-filter select{min-width:calc(50% - 5px)}html[data-admin-layout="cashier"] .booking-calendar{grid-template-columns:repeat(5,minmax(190px,1fr));overflow-x:auto}}
 
 /* V4.4: shared transaction surface and dedicated cashier shell. */
 .cashier-header{display:flex;align-items:center;justify-content:space-between;min-height:48px;margin:-20px -22px 16px;padding:6px 22px;background:#fff;border-bottom:1px solid #e3eaf0;direction:rtl}
@@ -669,13 +669,13 @@ html[data-admin-role="cashier"] #adminAlertsDialog .customer-drawer-body{min-hei
 .cashier-header-tools{margin-inline-start:auto}
 .cashier-header #pushButton{display:grid;place-items:center;width:30px;height:30px;min-height:30px;padding:0;border:1px solid #e3eaf0;border-radius:50%;background:#fff;color:#657b89}
 .cashier-header .cashier-branch-label{font-size:10px}
-html[data-admin-role="cashier"] .admin-main{min-width:0}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav{padding-top:5px}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav .sidebar-primary{display:grid;gap:2px}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav button{min-height:39px;width:100%;text-align:right;font-size:11px}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav .nav-icon{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#f2f6f9;color:#658094;font-size:12px}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav .nav-icon svg{width:15px!important;height:15px!important}
-html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav button.active .nav-icon{background:rgba(255,255,255,.14);color:#fff}
+html[data-admin-layout="cashier"] .admin-main{min-width:0}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav{padding-top:5px}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav .sidebar-primary{display:grid;gap:2px}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav button{min-height:39px;width:100%;text-align:right;font-size:11px}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav .nav-icon{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#f2f6f9;color:#658094;font-size:12px}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav .nav-icon svg{width:15px!important;height:15px!important}
+html[data-admin-layout="cashier"] .sidebar .cashier-sidebar-nav button.active .nav-icon{background:rgba(255,255,255,.14);color:#fff}
 #pos[data-pos-view="receipts"] .pos-receipts-panel,#pos[data-pos-view="receipts"] .pos-view-tabs,#pos[data-pos-view="receipts"] .pos-mobile-summary,#pos[data-pos-view="receipts"] .pos-flow-heading{display:none!important}
 #pos[data-pos-view="new"] .cashier-transaction-overview,#pos[data-pos-view="new"] .cashier-transactions-filter,#pos[data-pos-view="new"] .cashier-transactions-table,#pos[data-pos-view="new"] .pos-view-tabs{display:none!important}
 .pos-flow-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -708,7 +708,7 @@ html[data-admin-role="cashier"] .sidebar .cashier-sidebar-nav button.active .nav
 .cashier-pagination-buttons{display:flex;align-items:center;gap:6px}
 .cashier-pagination-buttons button{min-height:24px;padding:3px 8px;border-radius:12px;font-size:10px}
 @media(max-width:720px){.transaction-view-button{width:44px;height:44px;min-height:44px;flex-shrink:0}.cashier-pagination-buttons button{min-width:44px;min-height:44px}.cashier-pagination-buttons{flex-wrap:wrap;gap:6px}}
-html[data-admin-role="cashier"] .booking-list-summary .metric-card{height:78px;min-height:78px}
+html[data-admin-layout="cashier"] .booking-list-summary .metric-card{height:78px;min-height:78px}
 @media(max-width:1350px){.transaction-kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:1100px){.cashier-header{margin:-18px -18px 14px;padding-inline:18px}.transaction-toolbar{grid-template-columns:minmax(200px,2fr) repeat(3,minmax(110px,1fr))}}
 @media(max-width:720px){.cashier-header{margin:-12px -12px 13px;padding-inline:12px}.transaction-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.transaction-actions{flex-wrap:wrap}.transaction-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.transaction-toolbar input{grid-column:1/-1}.transaction-table table{min-width:750px}}
@@ -759,13 +759,13 @@ html[data-admin-role="cashier"] .booking-list-summary .metric-card{height:78px;m
 @media(max-width:720px){.cashier-shift-notice{align-items:stretch;flex-direction:column}.cashier-report-tabs button{flex:1 1 40%}}
 /* V9.3: operational mobile surfaces, scoped to staff views. */
 .team-now-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:12px 0}.team-now-card{display:flex;align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.team-now-card img{width:42px;height:42px;object-fit:cover;border-radius:50%}.team-now-card div{min-width:0;flex:1}.team-now-card b,.team-now-card small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.team-task-composer{margin:14px 0;border:1px solid var(--line);border-radius:14px;padding:12px}.team-task-composer summary{cursor:pointer;font-weight:800;min-height:44px;display:flex;align-items:center}.owner-mobile-home,.owner-mobile-nav{display:none}.owner-branch-sheet{border:0;border-radius:24px 24px 0 0;padding:0;width:min(100%,520px);max-height:85dvh;overflow:auto;max-width:none;position:fixed;inset:auto 0 0;margin:0 auto;background:var(--panel);color:var(--text)}.owner-branch-sheet::backdrop{background:rgba(3,22,35,.6)}.owner-branch-body{padding:18px 18px calc(20px + env(safe-area-inset-bottom));display:grid;gap:10px}.owner-branch-body header{display:flex;align-items:center;justify-content:space-between}.owner-branch-body>button{min-height:62px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);text-align:right;padding:10px 16px;font-weight:800}.owner-branch-body small{display:block;color:var(--muted);font-weight:400}.owner-month-card{background:#245b7b;color:#fff;border-radius:22px;padding:20px}.owner-month-card h2{font-size:21px;margin:3px 0 18px}.owner-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.owner-kpis>div{padding:12px;border-radius:14px;background:rgba(255,255,255,.13);min-width:0}.owner-kpis span,.owner-kpis strong{display:block}.owner-kpis span{font-size:12px}.owner-kpis strong{font-size:19px;margin-top:7px;overflow-wrap:anywhere}.owner-target{display:grid;gap:7px;margin-top:18px}.owner-target progress{width:100%;accent-color:#eab77d}.owner-target .small-button{justify-self:start;background:#fff;color:#245b7b;border:0}.owner-branch-trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:50px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text)}
-@media(max-width:720px){html[data-admin-role="admin"] .owner-mobile-home:not([hidden]){display:grid;gap:12px;margin-bottom:15px}html[data-admin-role="admin"] .owner-mobile-nav:not([hidden]){display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;z-index:80;inset:auto 0 0;padding:6px 5px calc(6px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -7px 18px rgba(0,0,0,.09)}.owner-mobile-nav button{min-width:0;min-height:52px;border:0;border-radius:10px;background:transparent;color:var(--text);font-size:12px;font-weight:800}.owner-mobile-nav button.active{background:#245b7b;color:#fff}html[data-admin-role="admin"] .cashier-mobile-nav{display:none!important}html[data-admin-role="admin"] .admin-main,html[data-admin-role="cashier"] .admin-main,html[data-admin-role="worker"] .admin-main{padding-bottom:calc(94px + env(safe-area-inset-bottom))}.admin-section,.admin-panel,.panel-head,.toolbar,.pos-layout,.pos-ticket-panel{min-width:0;max-width:100%}.booking-actions,.booking-row-actions,.receipt-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.booking-actions button,.booking-row-actions button{min-width:0;white-space:normal}.admin-section select,.admin-section input{max-width:100%}.editor-dialog .editor-shell,.customer-drawer .customer-drawer-shell{width:min(100vw,100%);max-width:100vw;max-height:100dvh;overflow-y:auto}.cashier-mobile-nav svg,.line-icon{max-width:24px;max-height:24px}.team-now-grid{grid-template-columns:1fr}.team-task-composer .settings-form{display:grid;grid-template-columns:1fr}.table-scroll{max-width:100%;overflow-x:auto}body{overflow-x:clip}}
+@media(max-width:720px){html[data-admin-role="admin"] .owner-mobile-home:not([hidden]){display:grid;gap:12px;margin-bottom:15px}html[data-admin-role="admin"] .owner-mobile-nav:not([hidden]){display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;z-index:80;inset:auto 0 0;padding:6px 5px calc(6px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -7px 18px rgba(0,0,0,.09)}.owner-mobile-nav button{min-width:0;min-height:52px;border:0;border-radius:10px;background:transparent;color:var(--text);font-size:12px;font-weight:800}.owner-mobile-nav button.active{background:#245b7b;color:#fff}html[data-admin-role="admin"] .cashier-mobile-nav{display:none!important}html[data-admin-role="admin"] .admin-main,html[data-admin-layout="cashier"] .admin-main,html[data-admin-role="worker"] .admin-main{padding-bottom:calc(94px + env(safe-area-inset-bottom))}.admin-section,.admin-panel,.panel-head,.toolbar,.pos-layout,.pos-ticket-panel{min-width:0;max-width:100%}.booking-actions,.booking-row-actions,.receipt-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.booking-actions button,.booking-row-actions button{min-width:0;white-space:normal}.admin-section select,.admin-section input{max-width:100%}.editor-dialog .editor-shell,.customer-drawer .customer-drawer-shell{width:min(100vw,100%);max-width:100vw;max-height:100dvh;overflow-y:auto}.cashier-mobile-nav svg,.line-icon{max-width:24px;max-height:24px}.team-now-grid{grid-template-columns:1fr}.team-task-composer .settings-form{display:grid;grid-template-columns:1fr}.table-scroll{max-width:100%;overflow-x:auto}body{overflow-x:clip}}
 @media(max-width:390px){.owner-kpis strong{font-size:16px}.owner-mobile-nav button{font-size:10px}}
 @media(max-width:720px){.owner-mobile-list:not([hidden]){display:block;margin-bottom:14px}.owner-list-head{display:grid;gap:4px;padding:14px;background:#245b7b;color:#fff;border-radius:14px}.owner-list-head h2{margin:0;font-size:18px}.owner-list-head strong{font-size:23px}.owner-mobile-list>p{font-size:12px;color:var(--muted)}.owner-mobile-list label{display:grid;gap:6px;margin:12px 0}.owner-list-cards{display:grid;gap:9px}.owner-list-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:13px;border:1px solid var(--line);border-radius:13px;min-width:0}.owner-list-card b,.owner-list-card strong{overflow-wrap:anywhere}.owner-list-card small{grid-column:1/-1;color:var(--muted)}}
 #bookingMobileFilters[open]{display:contents}#bookingMobileFilters summary{display:none}#bookingMobileFilters .booking-mobile-filter-body{display:contents}
 @media(max-width:720px){#bookings .panel-head .toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}#bookingDateFilter,#bookingSearch{min-width:0;width:100%}#bookingMobileFilters,#bookingMobileFilters[open]{display:block;grid-column:1/-1;border:1px solid var(--line);border-radius:12px;padding:8px}#bookingMobileFilters summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:800}#bookingMobileFilters .booking-mobile-filter-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}#bookingMobileFilters .booking-mobile-filter-body>*{min-width:0;width:100%}#bookings .table-scroll,#pos .cashier-transactions-table .table-scroll{overflow:visible}#bookings .wide-table,#bookings .wide-table tbody,#pos .cashier-transactions-table table,#pos .cashier-transactions-table tbody{display:block;width:100%;min-width:0}#bookings .wide-table thead,#pos .cashier-transactions-table thead{display:none}#bookingsTable tr,#cashierTransactionsTable tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px;margin:0 0 10px;border:1px solid var(--line);border-radius:15px;background:var(--panel);min-width:0}#bookingsTable td,#cashierTransactionsTable td{display:block;min-width:0;border:0;padding:3px;font-size:13px;overflow-wrap:anywhere}#bookingsTable td:nth-child(1),#bookingsTable td:nth-child(4),#bookingsTable td:nth-child(5),#bookingsTable td:nth-child(8),#bookingsTable td:nth-child(9),#cashierTransactionsTable td:nth-child(1),#cashierTransactionsTable td:nth-child(4),#cashierTransactionsTable td:last-child{grid-column:1/-1}#bookingsTable td:nth-child(9) .row-actions,#bookingsTable .booking-worker-controls,#cashierTransactionsTable .row-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}#bookingsTable .row-actions button,#bookingsTable .booking-worker-controls>*,#cashierTransactionsTable .row-actions button{min-width:0;max-width:100%;white-space:normal;min-height:42px}#bookingsTable .payment-controls{min-width:0}#bookingMobileFilters #exportBookings{order:4}}
 @media(max-width:720px){html[data-admin-role="admin"] #expenses>.metric-grid{display:none}html[data-admin-role="admin"] #revenue>.metric-grid{display:none}}
-@media(max-width:720px){html[data-admin-role="cashier"] .cashier-mobile-nav:not([hidden]){display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));inset:auto 0 0;gap:2px;padding:6px 4px calc(6px + env(safe-area-inset-bottom));border-radius:0;background:var(--panel)}html[data-admin-role="cashier"] .cashier-mobile-nav>button:not([hidden]){display:block!important;min-width:0;min-height:52px;padding:4px 1px;font-size:10px;font-weight:800;white-space:normal}}
+@media(max-width:720px){html[data-admin-layout="cashier"] .cashier-mobile-nav:not([hidden]){display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));inset:auto 0 0;gap:2px;padding:6px 4px calc(6px + env(safe-area-inset-bottom));border-radius:0;background:var(--panel)}html[data-admin-layout="cashier"] .cashier-mobile-nav>button:not([hidden]){display:block!important;min-width:0;min-height:52px;padding:4px 1px;font-size:10px;font-weight:800;white-space:normal}}
 /* V9.4 mobile operational content and owner history. */
 .mobile-content-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px;margin-top:15px}
 .mobile-content-card{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:15px;background:var(--panel)}

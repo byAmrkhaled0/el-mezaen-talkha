@@ -10,7 +10,8 @@ import { deferredVideoMarkup, mountDeferredVideos } from "./deferred-video.js";
 import "./styles.css";
 import "./premium-components.css";
 import { getLang } from "./i18n.js";
-import { getCatalog } from "./firebase-client.js";
+import {getCatalogMetadata,getCatalogPage} from './firebase-client.js';
+import {createCursorPager} from './cursor-pager.js';
 import { bindSafeBack } from "./navigation.js";
 import { availableAtBranch as itemAvailableAtBranch, hasBranchScope } from "./branch-availability.js";
 import { activeBranch, publicSubset, reconcileBranchCart, packageEligible } from "./public-branch.js";
@@ -54,6 +55,7 @@ const themeIcon = theme => theme === "dark"
   : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z"/></svg>';
 bindSafeBack();
 
+function cartCatalogContext(){const result={...catalog};for(const key of ['services','packages','offers'])result[key]=[...new Map([...(catalog.cartSources?.[key]||[]),...(catalog[key]||[])].map(item=>[item.id,item])).values()];return result;}
 function addCart(id) {
   const item = [...(catalog.services || []), ...(catalog.packages || [])].find(value => value.id === id);
   if (catalog.cached || catalog.offline) return;
@@ -68,7 +70,7 @@ function addCart(id) {
       return;
     }
     let priorCart = []; try { priorCart = JSON.parse(localStorage.getItem('mz-cart') || '[]'); } catch {}
-    const correction = reconcileBranchCart(priorCart, catalog, autoSelectedBranch.id);
+    const correction = reconcileBranchCart(priorCart, cartCatalogContext(), autoSelectedBranch.id);
     if (correction.removed && !confirm(lang === 'ar' ? `اختيار الفرع سيحذف ${correction.removed} عناصر غير متاحة. نكمل؟` : `Selecting this branch removes ${correction.removed} incompatible items. Continue?`)) return;
     if (correction.removed) localStorage.setItem('mz-cart', JSON.stringify(correction.kept)); window.dispatchEvent(new CustomEvent("mz:cart"));
     branchId = autoSelectedBranch.id;
@@ -114,7 +116,7 @@ function renderServices() {
   const categories = new Map(catalog.categories.map(item => [item.id, localized(item)]));
   const branchItems = publicSubset(catalog.services, branchId);
   const items = dedupeCatalogCards(branchItems.filter(item => (category === "all" || item.categoryId === category) && (!query || `${item.nameAr} ${item.nameEn}`.toLowerCase().includes(query))));
-  $("#catalogFilters").innerHTML = `<button class="filter-chip ${category === "all" ? "active" : ""}" data-category="all">${lang === "ar" ? "الكل" : "All"}</button>` + catalog.categories.filter(cat => cat.active !== false && branchItems.some(item => item.categoryId === cat.id)).map(cat => `<button class="filter-chip ${category === cat.id ? "active" : ""}" data-category="${escapeHtml(cat.id)}">${escapeHtml(localized(cat))}</button>`).join("");
+  $("#catalogFilters").innerHTML = `<button class="filter-chip ${category === "all" ? "active" : ""}" data-category="all">${lang === "ar" ? "الكل" : "All"}</button>` + catalog.categories.filter(cat => cat.active !== false).map(cat => `<button class="filter-chip ${category === cat.id ? "active" : ""}" data-category="${escapeHtml(cat.id)}">${escapeHtml(localized(cat))}</button>`).join("");
   $("#catalogGrid").innerHTML = items.map(item => `<article class="service-card compact-service"><img class="service-image" src="${escapeHtml(serviceMedia(item))}" alt="${escapeHtml(localized(item))}" width="300" height="240" loading="lazy" decoding="async"><div class="service-meta"><span>${escapeHtml(categories.get(item.categoryId) || "")}</span>${Number(item.duration)>0?`<span>${clockIcon} ${Number(item.duration)} ${lang === "ar" ? "دقيقة" : "min"}</span>`:""}</div><h3>${escapeHtml(localized(item))}</h3><div class="price-row"><div>${item.startsFrom ? `<small>${lang === "ar" ? "يبدأ من" : "From"}</small>` : ""}<strong class="price">${money(item.newPrice ?? item.price)}</strong></div></div>${localized(item,"description")?`<p class="service-description">${escapeHtml(localized(item,"description"))}</p>`:""}<button class="btn btn-primary" data-add="${escapeHtml(item.id)}" ${(catalog.cached || catalog.offline)?'disabled aria-disabled="true"':''}>${lang === "ar" ? "احجز الآن" : "Book now"}</button></article>`).join("") || `<div class="empty-state">${lang === "ar" ? "لا توجد نتائج" : "No results"}</div>`;
   $("#resultCount").textContent = `${items.length} ${lang === "ar" ? "خدمة ومنتج" : "services and products"}`;
 }
@@ -197,7 +199,7 @@ function setBranch(id) {
   if (!activeBranch(catalog, id)) return;
   let cart = [];
   try { cart = JSON.parse(localStorage.getItem("mz-cart") || "[]"); } catch {}
-  const { kept, removed } = reconcileBranchCart(cart, catalog, id);
+  const { kept, removed } = reconcileBranchCart(cart, cartCatalogContext(), id);
   if (branchId !== id && removed && !confirm(lang === "ar" ? `تغيير الفرع سيحذف ${removed} من العناصر غير المتاحة هنا. هل تريد المتابعة؟` : `Changing branch removes ${removed} incompatible cart items. Continue?`)) return;
   sessionStorage.removeItem("mz-staff-booking");
   sessionStorage.removeItem("mz-entry-item");
@@ -207,13 +209,13 @@ function setBranch(id) {
   document.querySelector(".brand small").textContent = localized(activeBranch(catalog, id));
   category = "all";
   branchDialog.close();
-  render();
+  void loadPublicPage();
 }
 document.addEventListener("click", event => {
   if (event.target.closest("[data-retry-page]")) { void loadCatalogPage(); return; }
-  if(event.target.closest("[data-clear-catalog-search]")){ $("#catalogSearch").value=""; render(); $("#catalogSearch").focus(); return; }
+  if(event.target.closest("[data-clear-catalog-search]")){ $("#catalogSearch").value=""; void loadPublicPage(); $("#catalogSearch").focus(); return; }
   const filter = event.target.closest("[data-category]");
-  if (filter) { category = filter.dataset.category; render(); }
+  if (filter) { category = filter.dataset.category; void loadPublicPage(); }
   if (event.target.closest("[data-open-catalog-branch]")) openBranchDialog();
   if (event.target.closest("[data-close-catalog-branch]")) branchDialog.close();
   const branchButton = event.target.closest("[data-set-branch]");
@@ -226,7 +228,7 @@ document.addEventListener("click", event => {
   const add = event.target.closest("[data-add]");
   if (add) addCart(add.dataset.add);
 });
-$("#catalogSearch").addEventListener("input", render);
+$("#catalogSearch").addEventListener("input", schedulePublicPage);
 $("#themeToggle").addEventListener("click", () => { const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = theme; localStorage.setItem("mz-theme", theme); $("#themeToggle").innerHTML = themeIcon(theme); });
 $("#langToggle").addEventListener("click", () => { lang = lang === "ar" ? "en" : "ar"; localStorage.setItem("mz-lang", lang); document.documentElement.lang = lang; document.documentElement.dir = lang === "ar" ? "rtl" : "ltr"; location.reload(); });
 document.documentElement.dataset.theme = localStorage.getItem("mz-theme") === "light" ? "light" : "dark";
@@ -236,10 +238,30 @@ $("#langToggle").textContent = lang === "ar" ? "EN" : "ع";
 if (lang === "en") {
   const editorialCopy = {gallery:["Branch photos and videos", "Gallery", "Published photos and videos from El Mezaen, for your selected branch.", "Search gallery…"],news:["Updates from El Mezaen", "News", "Published branch news and updates.", "Search news…"],celebrities:["Guests of El Mezaen", "Our guests", "Published guest photos from El Mezaen, for your selected branch.", "Search guests…"]}[page];
   const copy = editorialCopy || (page === "services" ? ["All your choices in one place", "Services & Prices", "Search or choose a category, then add your selections to the booking cart.", "Search by service name..."] : page === "packages" ? ["More value in every visit", "All packages", "Compare packages by branch, review their services and add the right one to your booking cart.", "Search packages..."] : ["Choose your specialist", "Meet Our Team", "Search by team member or specialty and choose the right professional for you.", "Search by name or specialty..."]);
-  $(".catalog-hero .section-kicker").textContent = copy[0]; $(".catalog-hero h1").textContent = copy[1]; $(".catalog-hero p").textContent = copy[2]; $("#catalogSearch").placeholder = copy[3];
+  $(".catalog-hero .section-kicker").textContent = copy[0]; $(".catalog-hero h1").textContent = copy[1]; $(".catalog-hero p").textContent = copy[2]; $("#catalogSearch").placeholder = "Search by the beginning of the name…";
   const backLabel = document.querySelector('[data-safe-back] span');
   if (backLabel) backLabel.textContent = "Back";
 }
+const pagedCollection=page==='services'?'services':page==='packages'?'packages':page==='team'?'staff':'content';
+const pagedType={gallery:'gallery',news:'news',celebrities:'celebrity'}[page]||'';
+const cursorPager=createCursorPager(getCatalogPage,{take:24,maxHistory:10000});let pageGeneration=0,pageTimer,pageError=false;
+const pagerBar=document.createElement('nav');pagerBar.className='catalog-pagination';pagerBar.setAttribute('aria-label','صفحات النتائج');
+const previousPage=document.createElement('button'),nextPage=document.createElement('button'),pageLabel=document.createElement('span');
+previousPage.type=nextPage.type='button';previousPage.className=nextPage.className='btn btn-ghost';previousPage.textContent=lang==='ar'?'السابق':'Previous';nextPage.textContent=lang==='ar'?'التالي':'Next';pagerBar.append(previousPage,pageLabel,nextPage);$('#catalogGrid').after(pagerBar);
+function pageContext(){return {collection:pagedCollection,branchId:branchId||undefined,type:pagedType||undefined,category:page==='services'&&category!=='all'?category:undefined,search:$('#catalogSearch').value.trim(),lang};}
+async function loadPublicPage(direction='reset'){
+ const version=++pageGeneration;previousPage.disabled=nextPage.disabled=true;$('#catalogGrid').setAttribute('aria-busy','true');pageLabel.textContent=lang==='ar'?'جاري تحميل الصفحة…':'Loading page…';
+ try{const result=await cursorPager[direction](pageContext());if(!result||version!==pageGeneration)return;
+  catalog[pagedCollection]=result.items||[];
+  if(pagedCollection==='packages')catalog.services=result.linkedServices||[];
+  catalog.cached=Boolean(result.cached);catalog.offline=Boolean(result.offline);catalog.preview=Boolean(result.preview);
+  pageError=false;nextPage.textContent=lang==='ar'?'التالي':'Next';render();previousPage.disabled=!result.canPrevious;nextPage.disabled=!result.canNext;pageLabel.textContent=(lang==='ar'?'صفحة ':'Page ')+result.page+' • '+(result.items||[]).length+(lang==='ar'?' عنصر في الصفحة':' items on this page');
+ }catch(error){if(version!==pageGeneration)return;pageError=true;nextPage.textContent=lang==='ar'?'إعادة المحاولة':'Retry';pageLabel.textContent=error.message||'تعذر تحميل الصفحة';const current=cursorPager.state();previousPage.disabled=current.page<=1;nextPage.disabled=false;}
+ finally{if(version===pageGeneration)$('#catalogGrid').setAttribute('aria-busy','false');}
+}
+previousPage.onclick=()=>void loadPublicPage('previous');nextPage.onclick=()=>void loadPublicPage(pageError?'reset':'next');
+function schedulePublicPage(){pageGeneration++;clearTimeout(pageTimer);pageTimer=setTimeout(()=>void loadPublicPage(),300);}
+
 let catalogLoadPromise;
 async function loadCatalogPage() {
   if (catalogLoadPromise) return catalogLoadPromise;
@@ -256,7 +278,7 @@ async function loadCatalogPage() {
     $("#resultCount").textContent = "";
     let rendering=false;
     try {
-      catalog = await getCatalog();
+      catalog = {services:[],packages:[],staff:[],content:[],...await getCatalogMetadata()};
       if (catalog.offline && !catalog.cached) throw new Error("CATALOG_UNAVAILABLE");
       if (["gallery","celebrities"].includes(page) && !Array.isArray(catalog.content)) throw Object.assign(new Error("Missing content contract"),{publicStatus:"contract-error"});
       if (!catalog.branches?.some(branch => activeBranch(catalog,branch.id))) {
@@ -265,11 +287,12 @@ async function loadCatalogPage() {
         throw error;
       }
       catalogLoading = false;
+      $('#catalogSearch').placeholder=lang==='ar'?'ابحث ببداية الاسم…':'Search by the beginning of the name…';
       const selectedBranch = activeBranch(catalog, branchId);
       if (!selectedBranch) { branchId = ""; localStorage.removeItem("mz-branch"); }
       if (selectedBranch) document.querySelector(".brand small").textContent = localized(selectedBranch);
       grid.setAttribute("data-catalog-state", catalog.cached ? "cached" : "ready");
-      rendering=true;render();
+      rendering=true;render();await loadPublicPage();
       if (!selectedBranch) openBranchDialog();
     } catch (error) {
       if(rendering)error.publicStatus="rendering-error";

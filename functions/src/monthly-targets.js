@@ -11,16 +11,16 @@ export function createMonthlyTargetHandlers(d) {
    const role=request.auth?.token?.role;
    if(role==='worker'&&!write){const staffId=await d.linkedStaffId(request);if(!staffId)fail('permission-denied','حساب العامل غير مرتبط');return {role,staffId,branches:d.branchesFor(request)};}
    await d.requireLiveStaff(request);
-   if(write&&!['admin','cashier'].includes(role))fail('permission-denied','تحديد هدف العامل متاح للأدمن والكاشير فقط');
-   if(role==='cashier'&&write&&!d.hasPermission(request,'teamOperations'))fail('permission-denied','صلاحية إدارة الفريق مطلوبة');
-   if(!write&&role!=='admin'&&!(role==='cashier'&&request.data?.view==='workers'&&d.hasPermission(request,'teamOperations'))&&!d.hasPermission(request,'dashboard')&&!d.hasPermission(request,'revenue'))fail('permission-denied','لا تملك صلاحية عرض الهدف');
+   if(write&&!['admin','manager','cashier'].includes(role))fail('permission-denied','تحديد هدف العامل متاح للأدمن والكاشير فقط');
+   if(['manager','cashier'].includes(role)&&write&&!d.hasPermission(request,'teamOperations'))fail('permission-denied','صلاحية إدارة الفريق مطلوبة');
+   if(!write&&role!=='admin'&&!(['manager','cashier'].includes(role)&&request.data?.view==='workers'&&d.hasPermission(request,'teamOperations'))&&!d.hasPermission(request,'dashboard')&&!d.hasPermission(request,'revenue'))fail('permission-denied','لا تملك صلاحية عرض الهدف');
    return {role,branches:role==='admin'?['talkha','mashaya']:d.branchesFor(request)};
  }
  function scope(access,id){if(!['talkha','mashaya'].includes(id)||!access.branches.includes(id))fail('permission-denied','الفرع خارج صلاحيات الحساب');return id;}
  async function read(request){
    const a=await access(request),month=monthOf(request.data?.month),currentMonth=d.currentMonth?.()||cairoTargetMonth(),workerView=request.data?.view==='workers';
-   if(workerView&&!['admin','cashier','worker'].includes(a.role))fail('permission-denied','أهداف العاملين متاحة للأدمن والكاشير والعامل لنفسه');
-   if(workerView&&a.role==='cashier'&&!d.hasPermission(request,'teamOperations'))fail('permission-denied','صلاحية الفريق مطلوبة');
+   if(workerView&&!['admin','manager','cashier','worker'].includes(a.role))fail('permission-denied','أهداف العاملين متاحة للأدمن والكاشير والعامل لنفسه');
+   if(workerView&&['manager','cashier'].includes(a.role)&&!d.hasPermission(request,'teamOperations'))fail('permission-denied','صلاحية الفريق مطلوبة');
    if(request.data?.branchId==='all'){
      if(a.role!=='admin')fail('permission-denied','الإجمالي متاح للأدمن فقط');
      const parts=await Promise.all(a.branches.map(branchId=>read({...request,data:{...request.data,branchId}})));
@@ -30,9 +30,9 @@ export function createMonthlyTargetHandlers(d) {
    const branchId=scope(a,request.data?.branchId);
    const branchSnap=await d.db.doc('branches/'+branchId).get();if(!branchSnap.exists||branchSnap.data().active===false)fail('not-found','الفرع غير متاح');
    const workers=[];let staffDocs=[];
-   if((a.role==='admin'&&request.data?.view!=='branch')||(a.role==='cashier'&&workerView)){const snapshot=await d.db.collection('staff').where('branchIds','array-contains',branchId).limit(501).get();if(snapshot.size>500)fail('resource-exhausted','عدد العاملين يتطلب تقسيم العرض');staffDocs=snapshot.docs;}
+   if((a.role==='admin'&&request.data?.view!=='branch')||(['manager','cashier'].includes(a.role)&&workerView)){const snapshot=await d.db.collection('staff').where('branchIds','array-contains',branchId).limit(501).get();if(snapshot.size>500)fail('resource-exhausted','عدد العاملين يتطلب تقسيم العرض');staffDocs=snapshot.docs;}
    if(a.role==='worker'){const snapshot=await d.db.doc('staff/'+a.staffId).get();if(!snapshot.exists||snapshot.data().active===false||snapshot.data().userUid!==request.auth.uid||!snapshot.data().branchIds?.includes(branchId))fail('permission-denied','سجل العامل خارج الفرع');staffDocs=[snapshot];}
-   if(staffDocs.length){const ledger=await d.monthlyAttributedLedger([branchId],month);for(const doc of staffDocs){const staff=doc.data();if(staff.active===false)continue;const configured=staff.monthlyTargets?.[month]?.[branchId];const target=configured?.targetAmount??0;workers.push({staffId:doc.id,nameAr:staff.nameAr||doc.id,branchId,month,source:configured?'monthly':'unset',locked:configured!=null,canSet:['admin','cashier'].includes(a.role)&&month===currentMonth&&configured==null,...targetMeter(target,d.attributedWorkerRevenue(ledger,doc.id,[branchId]))});}}
+   if(staffDocs.length){const ledger=await d.monthlyAttributedLedger([branchId],month);for(const doc of staffDocs){const staff=doc.data();if(staff.active===false)continue;const configured=staff.monthlyTargets?.[month]?.[branchId];const target=configured?.targetAmount??0;workers.push({staffId:doc.id,nameAr:staff.nameAr||doc.id,branchId,month,source:configured?'monthly':'unset',locked:configured!=null,canSet:['admin','manager','cashier'].includes(a.role)&&month===currentMonth&&configured==null,...targetMeter(target,d.attributedWorkerRevenue(ledger,doc.id,[branchId]))});}}
    let branch=null;
    if(a.role!=='worker'){const achieved=await d.branchRevenue(branchId,month);const summary=d.branchMonthlyTargetSummary(branchSnap.data(),month,achieved);branch={branchId,nameAr:branchSnap.data().nameAr||branchId,month,source:branchSnap.data().monthlyRevenueTargets?.[month]?'monthly':'unset',locked:branchSnap.data().monthlyRevenueTargets?.[month]!=null,canSet:a.role==='admin'&&month===currentMonth&&branchSnap.data().monthlyRevenueTargets?.[month]==null,...targetMeter(branchSnap.data().monthlyRevenueTargets?.[month]?.targetAmount??0,summary.achieved)};}
    return {month,branchId,branch,workers,canEdit:a.role==='admin'};

@@ -8,11 +8,11 @@ export function branchWorkerAccountHandlers({db,requireLiveStaff,requireBranchAc
  async function access(request,recent=false){
   await requireLiveStaff(request);
   const role=request.auth?.token?.role;
-  if(!['admin','cashier'].includes(role))throw new HttpsError('permission-denied','إنشاء حسابات العمال للأدمن والكاشير فقط');
+  if(!['admin','manager','cashier'].includes(role))throw new HttpsError('permission-denied','إنشاء حسابات العمال للأدمن والكاشير فقط');
   if(recent&&Number(request.auth.token.auth_time)*1000<Date.now()-300000)throw new HttpsError('unauthenticated','أعد التحقق بكلمة مرور حسابك أولًا');
-  if(role==='cashier'){
+  if(role!=='admin'){
    const account=await db.doc('users/'+request.auth.uid).get();
-   if(!account.exists||account.data().role!=='cashier'||account.data().active!==true||account.data().accessOperation||account.data().roleChangePending)throw new HttpsError('permission-denied','حساب الكاشير غير فعال');
+   if(!account.exists||account.data().role!==role||account.data().active!==true||account.data().accessOperation||account.data().roleChangePending)throw new HttpsError('permission-denied','حساب الكاشير غير فعال');
    const liveBranches=account.data().branchIds||[];
    if(!(request.auth.token.branchIds||[]).every(id=>liveBranches.includes(id)))throw new HttpsError('permission-denied','فروع الحساب تغيرت؛ سجل الدخول مجددًا');
   }

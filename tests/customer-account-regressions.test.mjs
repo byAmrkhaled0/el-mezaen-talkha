@@ -50,7 +50,7 @@ test("cancel and reschedule update lock and booking in one transaction with race
   assert.match(reschedule, /latest\.data\(\)\.bookingDate !== current\.bookingDate/);
   assert.match(reschedule, /locks\.some\(lock => lock\.exists && lock\.data\(\)\?\.bookingId !== id\)/);
   assert.match(reschedule, /oldKeys\.filter\(key => !newKeys\.includes\(key\)\)\.forEach\(key => transaction\.delete/);
-  assert.match(reschedule, /transaction\.update\(bookingRef, \{ bookingDate: date/);
+  assert.match(reschedule, /transaction\.update\(bookingRef, \{ \.\.\.assignment, bookingDate: date/);
 });
 
 test("repeat resets the appointment and account rescheduling uses current availability", () => {

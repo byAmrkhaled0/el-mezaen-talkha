@@ -157,7 +157,7 @@ export function priceItems(lines, docsById, now = new Date(), branchId = "") {
       id,
       kind: source.kind,
       nameAr: source.nameAr,
-      nameEn: source.nameEn,
+      nameEn: source.nameEn || source.nameAr || line.id,
       duration: Number(source.duration || 0),
       qty,
       unitPrice,

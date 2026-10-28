@@ -81,7 +81,7 @@ test("missing package artwork uses the brand mark without assigning another pack
 test("public gallery App Check debug mode is constrained to local development hosts", async () => {
   for (const path of ["src/results.js", "src/hair-systems.js"]) {
     const source = await read(path);
-    assert.match(source, /import \{ getCatalog(?:, firebaseConfigured)? \} from "\.\/firebase-client\.js"/);
+    assert.match(source, path.includes("results") ? /import \{getCatalogMetadata,getCatalogPage\} from '\.\/firebase-client\.js'/ : /import \{ getCatalog(?:, firebaseConfigured)? \} from "\.\/firebase-client\.js"/);
     assert.doesNotMatch(source, /initializeApp|httpsCallable/);
     assert.match(await read("src/firebase-client.js"), /configureLocalAppCheck\(\)/);
     assert.match(await read("src/local-environment.js"), /if \(!isLocalEnvironment\(\)\) return/);

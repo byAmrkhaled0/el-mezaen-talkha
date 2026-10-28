@@ -48,7 +48,7 @@ test("shift figures use one server snapshot rather than bounded receipt pages", 
   for (const id of ["cashShiftNet", "cashShiftAverage", "cashShiftAdvances", "refreshShiftSnapshot", "posTodayRevenue", "posTodayOutgoings"]) assert.match(html, new RegExp(`id="${id}"`));
 });
 
-test("approved advances use the cashier-only request operation; direct bypass denied and reporting preserved", async () => {
+test("approved advances use the branch-operator request operation; direct bypass denied and reporting preserved", async () => {
   const [admin, backend, reporting, html] = await Promise.all([source("src/admin.js"), source("functions/src/index.js"), source("functions/src/reporting.js"), source("admin/index.html")]);
   const movement = backend.slice(backend.indexOf("export const addCashMovement"), backend.indexOf("async function summarizeShiftFinance"));
   assert.match(movement, /requireBranchAccess\(request, branch\.id\)/);
@@ -60,7 +60,9 @@ test("approved advances use the cashier-only request operation; direct bypass de
   assert.match(reporting, /"expenses", "advances", "cashIn", "cashOut"/);
   assert.match(movement, /if \(isAdvance\) throw new HttpsError/);
   const posting=await source("functions/src/advance-posting.js");
-  assert.match(posting,/role\(request,\['cashier'\]\)/);
+  assert.match(posting,/role\(request,\['cashier','manager'\]\)/);
+  assert.match(posting,/drawer.cashierUid!==request.auth.uid/);
+  assert.match(posting,/requirePermission\(request,'pos'\)/);
   assert.match(posting,/row.status!=='APPROVED'/);
   assert.match(posting,/disbursementReference:moveRef.id/);
   assert.doesNotMatch(posting,/db.doc\(`expenses\//);

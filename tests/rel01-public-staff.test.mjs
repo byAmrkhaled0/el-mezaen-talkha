@@ -1,3 +1,4 @@
+import {publicCatalogPaging} from '../functions/src/cursor-pagination.js';
 import {withoutPublicTargetFields} from '../functions/src/public-target-fields.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ test('actual staged loadCatalog response serialization',async()=>{
  const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');
  const body=source.slice(source.indexOf('async function loadCatalog()'),source.indexOf('export const getCatalog ='));
  const collection=name=>({where(){return this},orderBy(){return this},limit(){return this},async get(){return {docs:name==='staff'?[snap({...base,payroll:{secret},internal:secret})]:[]}}});
- const context=vm.createContext({PUBLIC_COLLECTIONS:['staff'],db:{collection},readSettings:async()=>({}),PUBLIC_SETTING_KEYS:[],API_VERSION:'test',MIN_FRONTEND_VERSION:'test',publicStaff,withoutPublicTargetFields,cleanDoc:()=>{throw Error('staff fell through generic serializer')},sanitizeText:x=>x,DRINK_TYPES:[],normalizeDrinkOptions:x=>x});
+ const context=vm.createContext({publicPages:publicCatalogPaging({db:null,HttpsError:Error,projectStaff:publicStaff}),PUBLIC_COLLECTIONS:['staff'],db:{collection},readSettings:async()=>({}),PUBLIC_SETTING_KEYS:[],API_VERSION:'test',MIN_FRONTEND_VERSION:'test',publicStaff,withoutPublicTargetFields,cleanDoc:()=>{throw Error('staff fell through generic serializer')},sanitizeText:x=>x,DRINK_TYPES:[],normalizeDrinkOptions:x=>x});
  const payload=await vm.runInContext(body+';loadCatalog()',context);assert(!JSON.stringify(payload).includes(secret));assert.equal(payload.staff[0].id,'real-worker');assert.deepEqual([...payload.staff[0].serviceIds],['cut']);
 });
 test('existing booking candidate selection retains branch/service/unavailable rules',async()=>{

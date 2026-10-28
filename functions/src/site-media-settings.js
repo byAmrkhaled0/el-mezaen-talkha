@@ -1,11 +1,11 @@
 import {canonicalManagedStoragePath} from './managed-media.js';
 export const SITE_MEDIA_FIELDS = Object.freeze({heroImageUrl:'homepage',hairSystemImageUrl:'homepage',aboutImageUrl:'homepage',brandLogoUrl:'branding',brandFaviconUrl:'branding'});
-export async function validateSiteMediaSettings(payload, previous, {role,bucket,metadata}) {
+export async function validateSiteMediaSettings(payload, previous, {role,bucket,metadata,canEditSiteMedia=false}) {
  for(const [field,folder] of Object.entries(SITE_MEDIA_FIELDS)) {
   if(!(field in payload))continue;
   const value=payload[field];
   if(typeof value!=='string' || value.length>1200)throw Error('SITE_MEDIA_INVALID');
-  if(role!=='admin')throw Error('SITE_MEDIA_ADMIN_REQUIRED');
+  if(role!=='admin'&&!(role==='media'&&canEditSiteMedia))throw Error('SITE_MEDIA_ADMIN_REQUIRED');
   if(!value || value===previous?.[field])continue;
   const path=canonicalManagedStoragePath(value,bucket);
   if(!path.startsWith(`public/${folder}/`) || !/\.(?:jpe?g|png|webp|avif)$/i.test(path))throw Error('SITE_MEDIA_PATH');

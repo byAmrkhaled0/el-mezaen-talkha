@@ -634,3 +634,46 @@ test("V9.2 addendum password audit acknowledges only the authenticated self", as
   assert.equal(JSON.stringify(event).includes(password), false);
   await denied("getAuditEvents", "cashierTalkha", { actorUid: "cashierMashaya" });
 });
+
+
+test('branch catalog manager edits package; website booking and cashier invoice keep the authoritative package price',async()=>{
+ const actor='packageShopManager',permissions=['dashboard','pos','bookings','revenue','refundTransactions','packages','services','sharedCatalog'];
+ await user(actor,'manager',['talkha'],permissions);await db.doc('users/'+actor).set({role:'manager',branchIds:['talkha'],permissions,active:true});
+ const data={nameAr:'باقة اختبار دورة الشيك',nameEn:'Package checkout QA',price:275,duration:30,active:true,catalogVisible:true,branchIds:['talkha'],includedServiceIds:['shared-service'],includedItemsAr:['Shared']};
+ await allowed('adminUpsert',actor,{collection:'packages',id:'manager-price-package',data});
+ await allowed('adminUpsert',actor,{collection:'packages',id:'manager-price-package',data:{...data,price:295}});
+ assert.equal((await db.doc('packages/manager-price-package').get()).data().price,295);
+ const result=await allowed('createBooking',null,{branchId:'talkha',bookingDate:futureDate,bookingTime:'18:00',staffId:'talkha-staff',items:[{kind:'package',id:'manager-price-package',price:1,unitPrice:1}],customer:{firstName:'Package',lastName:'QA',phone:'01012345991'},clientRequestId:'manager_package_price_booking_123456'});
+ const booking=(await db.doc('bookings/'+result.bookingCode).get()).data();assert.equal(booking.total,295);assert.equal(booking.items[0].kind,'package');assert.equal(booking.items[0].id,'manager-price-package');
+ const calendar=await allowed('getBookingCalendar',actor,{branchId:'talkha',from:futureDate,to:futureDate});const row=calendar.bookings.find(value=>value.id===result.bookingCode);assert.ok(row);assert.equal(row.total,295);
+});
+
+test('branch manager voids an unpaid POS cheque once without refunding money or altering a foreign branch',async()=>{
+ const id='manager-unpaid-void-check',data={source:'pos',branchId:'talkha',status:'completed',paymentStatus:'unpaid',orderState:'OPEN',total:295,items:[],createdAt:Timestamp.now()};
+ await db.doc('bookings/'+id).set(data);
+ const request={id,action:'void',reason:'عميل ألغى الشيك قبل الدفع',idempotencyKey:'manager_unpaid_void_request_123456'};
+ await denied('updateBooking','managerMashaya',request);
+ assert.equal((await allowed('updateBooking','managerTalkha',request)).orderState,'VOIDED');
+ assert.equal((await allowed('updateBooking','managerTalkha',request)).idempotent,true);
+ assert.equal((await db.doc('bookings/'+id).get()).data().paymentStatus,'unpaid');assert.equal((await db.collection('revenueLedger').where('bookingId','==',id).get()).size,0);
+});
+
+
+test('cashier creates an approved internal booking in own branch; server price, schedule locks and retry identity are authoritative',async()=>{
+ const payload={bookingOrigin:'branch',branchId:'talkha',bookingDate:futureDate,bookingTime:'19:00',staffId:'talkha-staff',items:[{kind:'service',id:'shared-service',price:1}],customer:{firstName:'عميل الفرع',phone:'01012345992'},clientRequestId:'branch_cashier_booking_123456789'};
+ await denied('createBooking',null,payload,'PERMISSION_DENIED');await denied('createBooking','workerTalkha',payload);await denied('createBooking','managerMashaya',payload);await denied('createBooking','managerMarketingTalkha',payload);
+ const result=await allowed('createBooking','cashierTalkha',payload),row=(await db.doc('bookings/'+result.bookingCode).get()).data();assert.equal(result.status,'confirmed');assert.equal(row.source,'branch');assert.equal(row.createdBy,'cashierTalkha');assert.equal(row.decisionBy,'cashierTalkha');assert.equal(row.total,75);assert.ok(row.lockIds.length);const transactions=await allowed('getAdminCollection','cashierTalkha',{collection:'bookings',branchId:'talkha',source:'booking',take:100});assert.ok(transactions.items.some(value=>value.id===result.bookingCode));
+ assert.equal((await allowed('createBooking','cashierTalkha',payload)).idempotent,true);await denied('createBooking','managerTalkha',payload,'ALREADY_EXISTS');await denied('createBooking','cashierTalkha',{...payload,customer:{...payload.customer,firstName:'طلب مختلف'}},'ALREADY_EXISTS');
+ await denied('createBooking','cashierTalkha',{...payload,clientRequestId:'branch_competing_slot_123456789',customer:{firstName:'عميل آخر',phone:'01012345993'}},'FAILED_PRECONDITION');
+ assert.equal((await db.collection('revenueLedger').where('bookingId','==',result.bookingCode).get()).size,0);const calendar=await allowed('getBookingCalendar','cashierTalkha',{branchId:'talkha',from:futureDate,to:futureDate});assert.ok(calendar.bookings.some(value=>value.id===result.bookingCode));
+});
+
+
+test('POS price preview applies server price and manual discount with no order, stock, ledger or target mutation; finalization rejects a changed expected total',async()=>{
+ const payload={branchId:'talkha',staffId:'talkha-staff',customer:{firstName:'معاينة فقط',phone:'01012345994'},items:[{kind:'service',id:'shared-service',qty:1,workerId:'talkha-staff',unitPrice:1}],discountAmount:5,paymentMethod:'card',paid:false,idempotencyKey:'server_price_preview_request_123456'};
+ const collections=['bookings','revenueLedger','workerMonthlyRevenue','serviceMonthlyTargets','cashMovements'];const before=await Promise.all(collections.map(async name=>(await db.collection(name).get()).size));
+ const preview=await allowed('createPosOrder','managerTalkha',{...payload,previewOnly:true});assert.equal(preview.previewOnly,true);assert.equal(preview.subtotal,75);assert.equal(preview.manualDiscountAmount,5);assert.equal(preview.total,70);assert.equal(preview.items[0].lineTotal,75);
+ assert.deepEqual(await Promise.all(collections.map(async name=>(await db.collection(name).get()).size)),before);
+ await denied('createPosOrder','managerTalkha',{...payload,expectedTotal:1},'FAILED_PRECONDITION');
+ const actual=await allowed('createPosOrder','managerTalkha',{...payload,expectedTotal:preview.total});assert.equal(actual.total,70);assert.equal(actual.receipt.total,preview.total);assert.equal(actual.paymentStatus,'unpaid');
+});

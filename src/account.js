@@ -1,4 +1,6 @@
+import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
 import {parseCustomerProfile} from '../functions/src/customer-profile.js';
+import {staffDestination} from './staff-routing.js';
 import {isOtpLoopback,normalizeOtp,hostedAccountUrl} from './customer-onboarding.js';
 import {readPublicCatalogCache, purgeLegacyCatalogCache} from './catalog-cache.js';
 import {applySiteMedia} from './site-media.js';
@@ -10,8 +12,8 @@ import "./account.css";
 import "./account-favorite.css";
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
-import { browserLocalPersistence, getAuth, onAuthStateChanged, RecaptchaVerifier, setPersistence, signInWithPhoneNumber, signOut } from "firebase/auth";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { connectAuthEmulator, browserLocalPersistence, getAuth, onAuthStateChanged, RecaptchaVerifier, setPersistence, signInWithPhoneNumber, signOut } from "firebase/auth";
+import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { normalizePhone } from "../functions/src/core.js";
 import { bindSafeBack } from "./navigation.js";
 import { availableAtBranch } from "./branch-availability.js";
@@ -26,6 +28,7 @@ const money = value => `${Number(value || 0).toFixed(2)} ${getLang() === "en" ? 
 const dateKey = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const addDays = (key, days) => { const date = new Date(`${key}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 let registrationMode = false, pendingRegistration = null, retryAt = 0, retryTimer;
+document.querySelector('#loginCard').hidden=true;
 let auth, functions, confirmation, portalData, catalog, unsubscribe, loginBusy = false, actionBusy = false, loadSequence = 0, selectedBooking = null, availableSlots = [];
 function message(value, error = false, target = "#loginMessage") { $(target).textContent = value; $(target).dataset.messageState = error ? "error" : "success"; $(target).setAttribute("role", error ? "alert" : "status"); }
 function friendly(error) {
@@ -136,13 +139,15 @@ $('#cancelProfileEdit').addEventListener('click',()=>{if(actionBusy||!portalData
 
 if (!configured) message(accountCopy("إعداد Firebase غير مكتمل."), true);
 else {
+  if(globalThis.__USE_EMULATORS__)assertDemoEmulator(config);
   const app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   auth = getAuth(app); functions = getFunctions(app, "europe-west1");
+  if(globalThis.__USE_EMULATORS__){connectLocalAuth(auth,connectAuthEmulator);connectLocalFunctions(functions,connectFunctionsEmulator);}
   setPersistence(auth, browserLocalPersistence).then(() => {
     unsubscribe = onAuthStateChanged(auth, user => {
-      if (user) enterAccount().catch(error => message(friendly(error), true));
-      else { $("#profileSetup").hidden=true; ++loadSequence; portalData = null; selectedBooking = null; $("#loginCard").hidden = false; $("#portal").hidden = true; $("#logout").hidden = true; $("#phoneForm").hidden = false; $("#codeForm").hidden = true; }
+      if (user) user.getIdTokenResult().then(token=>{const destination=staffDestination(token.claims.role);if(destination){location.replace(destination);return;}return enterAccount();}).catch(error => message(friendly(error), true));
+      else { location.replace("/login/"); $("#profileSetup").hidden=true; ++loadSequence; portalData = null; selectedBooking = null; $("#loginCard").hidden = false; $("#portal").hidden = true; $("#logout").hidden = true; $("#phoneForm").hidden = false; $("#codeForm").hidden = true; }
     }, error => message(friendly(error), true));
   }).catch(error => message(friendly(error), true));
   window.addEventListener("pagehide", () => {unsubscribe?.();clearInterval(retryTimer);});

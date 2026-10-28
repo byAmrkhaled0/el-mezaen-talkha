@@ -13,10 +13,20 @@ service firebase.storage {
           && request.resource.contentType.matches('video/(mp4|webm)'))
       );
     }
+    function mediaAccountLive() {
+      let account = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return account.role == 'media' && account.active == true
+        && !('accessOperation' in account) && !('roleChangePending' in account)
+        && account.permissions is list && request.auth.token.permissions is list
+        && account.permissions.hasAll(request.auth.token.permissions)
+        && account.branchIds is list && request.auth.token.branchIds is list
+        && account.branchIds.hasAll(request.auth.token.branchIds);
+    }
     function contentGrant(type, branchId) {
       return request.auth != null && (
         request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['manager', 'cashier']
+        (request.auth.token.role in ['manager', 'cashier', 'media']
+          && (request.auth.token.role != 'media' || mediaAccountLive())
           && request.auth.token.permissions is list
           && request.auth.token.branchIds is list
           && request.auth.token.branchIds.hasAny([branchId])
@@ -60,13 +70,15 @@ service firebase.storage {
         && request.resource.contentType.matches('image/(jpeg|png|webp|avif)')
         && request.auth != null
         && (request.auth.token.role == 'admin'
-          || (request.auth.token.role in ['manager', 'cashier']
+          || (request.auth.token.role in ['manager', 'cashier', 'media']
+            && (request.auth.token.role != 'media' || mediaAccountLive())
             && request.auth.token.permissions is list
             && request.auth.token.permissions.hasAny(['offers'])
             && request.auth.token.branchIds is list
             && request.auth.token.branchIds.hasAny([branchId])));
       allow delete: if request.auth != null && (request.auth.token.role == 'admin'
-        || (request.auth.token.role in ['manager', 'cashier']
+        || (request.auth.token.role in ['manager', 'cashier', 'media']
+          && (request.auth.token.role != 'media' || mediaAccountLive())
           && request.auth.token.permissions is list
           && request.auth.token.permissions.hasAny(['offers'])
           && request.auth.token.branchIds is list
@@ -84,6 +96,44 @@ service firebase.storage {
         && request.resource.contentType.matches('video/(mp4|webm)');
       allow delete: if contentGrant(type, branchId);
     }
+    // SHOP_MEDIA_GRANTS_BEGIN
+    function sharedCatalogMedia() {
+      let account = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return account.role == 'manager' && account.active == true
+        && !('accessOperation' in account) && !('roleChangePending' in account)
+        && account.permissions is list && account.permissions.hasAny(['sharedCatalog']) && request.auth != null && request.auth.token.role == 'manager'
+        && request.auth.token.permissions is list
+        && request.auth.token.permissions.hasAny(['sharedCatalog']);
+    }
+    function siteMediaEditor() {
+      return request.auth != null && request.auth.token.role == 'media'
+        && mediaAccountLive() && request.auth.token.permissions.hasAny(['siteMedia']);
+    }
+    match /public/homepage/{fileName} {
+      allow read: if true;
+      allow create, update: if siteMediaEditor() && isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+      allow delete: if false;
+    }
+    match /public/branding/{fileName} {
+      allow read: if true;
+      allow create, update: if siteMediaEditor() && isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+      allow delete: if false;
+    }
+    match /public/packages/{fileName} {
+      allow read: if true;
+      allow create, update: if sharedCatalogMedia() && isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+      allow delete: if false;
+    }
+    match /public/services/{fileName} {
+      allow read: if true;
+      allow create, update: if sharedCatalogMedia() && isValidMedia()
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+      allow delete: if false;
+    }
+    // SHOP_MEDIA_GRANTS_END
     match /public/{fileName} {
       allow read: if true;
       allow create, update: if canManageMedia() && isValidMedia();

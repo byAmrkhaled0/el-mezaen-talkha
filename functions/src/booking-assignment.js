@@ -1,0 +1,10 @@
+import {minutes,staffCanServeInterval} from './core.js';
+export function assignmentCandidates({booking,staff,bookings,leaves,settings,clock,presentIds}){
+ const start=minutes(booking.bookingTime),end=start+Number(booking.duration||0),day=new Date(booking.bookingDate+'T12:00:00Z').getUTCDay(),serviceIds=[...new Set((booking.items||[]).filter(line=>line.staffRequired!==false).flatMap(line=>line.serviceIds||((line.kind==='service')?[line.id]:[])))];
+ return staff.map(member=>{const assigned=bookings.filter(row=>(row.staffId===member.id||row.workerIds?.includes(member.id))&&row.id!==booking.id),hasPresence=booking.bookingDate!==clock.dateKey||presentIds.has(member.id),conflict=assigned.some(row=>start<minutes(row.bookingTime)+Number(row.duration||0)&&end>minutes(row.bookingTime));const scheduled=staffCanServeInterval(member,{branchId:booking.branchId,day,start,end,openingTime:settings.openingTime,closingTime:settings.closingTime,serviceIds,leaves});return {id:member.id,nameAr:member.nameAr||member.id,present:hasPresence,canAssign:Boolean(hasPresence&&scheduled&&!conflict),bookingCount:assigned.length,workloadMinutes:assigned.reduce((sum,row)=>sum+Number(row.duration||0),0),reason:!hasPresence?'لم يسجل حضورًا فعالًا':conflict?'عنده حجز في نفس الموعد':!scheduled?'خارج الجدول أو مشغول في الموعد':'متاح لهذا الموعد'};}).sort((a,b)=>Number(b.canAssign)-Number(a.canAssign)||a.workloadMinutes-b.workloadMinutes||a.bookingCount-b.bookingCount||a.id.localeCompare(b.id));
+}
+export function transferredBookingMetadata(booking,worker){
+ if(booking.paymentStatus==='paid'||booking.financialPosted)throw Error('لا يمكن نقل إيراد شيك تم تحصيله');
+ const items=(booking.items||[]).map(line=>{if(line.staffRequired===false||['product','inventory','drink'].includes(line.kind))return {...line};if(line.workerId&&line.workerId!=='none'&&line.workerId!==booking.staffId)throw Error('الحجز موزع على أكثر من عامل؛ راجع توزيع بنوده');return {...line,workerId:worker.id,workerNameAr:worker.nameAr||worker.id,workerNameEn:worker.nameEn||worker.nameAr||worker.id};});
+ return {items,workerIds:[worker.id],orderRevision:Number(booking.orderRevision||0)+1};
+}

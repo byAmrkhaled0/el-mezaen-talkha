@@ -11,7 +11,7 @@ function harness(catalog){
  const el=key=>{if(!elements.has(key))elements.set(key,{innerHTML:'',textContent:'',disabled:false,setAttribute(){},replaceChildren(){}});return elements.get(key);};
  let opens=0,renders=0;
  const listeners=[];
- const context=vm.createContext({page:"services",publicDataStatus,publicStatusText,console:{debug(){}},getCatalog:async()=>catalog,activeBranch:(c,id)=>c.branches.find(b=>b.id===id&&b.active!==false),branchId:'',catalog:{},localized:()=>'',localStorage:{removeItem(){}},document:{querySelector:el,addEventListener:(name,cb,opts)=>listeners.push({cb,opts})},$:el,render:()=>renders++,openBranchDialog:()=>opens++,lang:'ar',location:{reload(){context.reloads++}},reloads:0});
+ const context=vm.createContext({page:"services",publicDataStatus,publicStatusText,console:{debug(){}},getCatalogMetadata:async()=>catalog,loadPublicPage:async()=>{},activeBranch:(c,id)=>c.branches.find(b=>b.id===id&&b.active!==false),branchId:'',catalog:{},localized:()=>'',localStorage:{removeItem(){}},document:{querySelector:el,addEventListener:(name,cb,opts)=>listeners.push({cb,opts})},$:el,render:()=>renders++,openBranchDialog:()=>opens++,lang:'ar',location:{reload(){context.reloads++}},reloads:0});
  return {context,el,listeners,opens:()=>opens,renders:()=>renders};
 }
 async function boot(h){

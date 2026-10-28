@@ -1,3 +1,4 @@
+import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
 import {readPublicCatalogCache, savePublicCatalogCache, purgeLegacyCatalogCache, projectCatalogStaff} from './catalog-cache.js';
 import {applySiteMedia} from './site-media.js';
 import { configureLocalAppCheck } from './local-environment.js';
@@ -27,13 +28,14 @@ function assertBackendCompatibility(data) {
 }
 
 if (firebaseConfigured) {
+  if(globalThis.__USE_EMULATORS__)assertDemoEmulator(config);
   app = initializeApp(config);
   if (globalThis.__APP_CHECK_SITE_KEY__) {
     configureLocalAppCheck();
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(globalThis.__APP_CHECK_SITE_KEY__), isTokenAutoRefreshEnabled: true });
   }
   functions = getFunctions(app, "europe-west1");
-  if (globalThis.__USE_EMULATORS__) connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  if (globalThis.__USE_EMULATORS__) connectLocalFunctions(functions,connectFunctionsEmulator);
 }
 
 export async function trackEvent(name, params = {}) {
@@ -79,6 +81,8 @@ async function loadCatalog() {
   if (navigator.onLine === false && cached) { if(typeof document!=='undefined')applySiteMedia(cached.settings); return { ...cached, offline: true, cached: true }; }
   try {
     const remote = projectCatalogStaff(await callFunction("getCatalog", {}, 15000) || {});
+    const cartIds=savedCatalogItemIds();
+    if(cartIds.length){const hydrated=await callFunction('getCatalog',{mode:'hydrate',ids:cartIds},15000);for(const key of ['services','packages','offers'])remote[key]=[...new Map([...(remote[key]||[]),...(hydrated[key]||[])].map(item=>[item.id,item])).values()];}
     const fallback = localCatalog();
     const fallbackStaff = new Map(fallback.staff.map(item => [item.id, item]));
     const fallbackContent = new Map(fallback.content.map(item => [item.id, item]));
@@ -113,6 +117,7 @@ async function loadCatalog() {
   }
 }
 
+function savedCatalogItemIds(){try{return [...new Set(JSON.parse(localStorage.getItem('mz-cart')||'[]').map(line=>String(line.id||'')).filter(id=>id&&id.length<=200&&!id.includes('/')))].slice(0,30);}catch{return [];}}
 export async function getPublishedReviews(pageSize = 12, cursor = "") {
   if (firebaseConfigured) return await callFunction("getPublishedReviews", { pageSize, cursor }, 15000);
   const items = (localCatalog().reviews || []).filter(item => item.active !== false).slice(0, pageSize);
@@ -209,8 +214,9 @@ export async function createBooking(payload) {
 
 export async function signedInCustomer() {
   if (!firebaseConfigured) return null;
-  const { getAuth } = await import("firebase/auth");
+  const { getAuth,connectAuthEmulator } = await import("firebase/auth");
   const auth = getAuth(app);
+  if(globalThis.__USE_EMULATORS__)connectLocalAuth(auth,connectAuthEmulator);
   await auth.authStateReady();
   const user = auth.currentUser;
   if (!user?.phoneNumber) return null;
@@ -253,3 +259,19 @@ export async function submitReview(payload) {
 
 export const askCustomerAgent = payload => firebaseConfigured ? callFunction('customerAiAgent', payload, 30000) : Promise.resolve({ fallback: true });
 export const confirmCustomerAgent = payload => callFunction('confirmAiAction', payload, 30000);
+
+export async function getCatalogMetadata(){
+ if(!firebaseConfigured)return {...localCatalog(),preview:true};
+ if(navigator.onLine===false){const cached=readCatalogCache();if(cached)return {...cached,cartSources:{services:cached.services||[],packages:cached.packages||[],offers:cached.offers||[]},cached:true,offline:true};throw Error('تحميل البيانات يحتاج اتصالًا');}
+ const metadata=await callFunction('getCatalog',{mode:'metadata'},15000),ids=savedCatalogItemIds();if(typeof document!=='undefined')applySiteMedia(metadata.settings||{});if(ids.length)metadata.cartSources=await callFunction('getCatalog',{mode:'hydrate',ids},15000);return metadata;
+}
+export async function getCatalogPage(options={}){
+ const take=Number(options.take??options.Take??24);if(!Number.isSafeInteger(take)||take<1||take>50)throw Error('حجم الصفحة غير صحيح');
+ if(firebaseConfigured&&navigator.onLine!==false)return await callFunction('getCatalog',{...options,mode:'page',take},15000);
+ const data=firebaseConfigured?readCatalogCache():localCatalog();if(!data)throw Error('تحميل البيانات يحتاج اتصالًا');
+ let items=(data[options.collection]||[]).filter(item=>item.active!==false&&(!options.branchId||item.branchIds?.includes(options.branchId))&&(!options.type||item.type===options.type)&&(!options.category||options.category==='all'||item.categoryId===options.category));
+ const search=String(options.search||'').toLowerCase();if(search)items=items.filter(item=>String(item[options.collection==='content'?(options.lang==='en'?'titleEn':'titleAr'):(options.lang==='en'?'nameEn':'nameAr')]||'').toLowerCase().startsWith(search));
+ items.sort((a,b)=>String(a.id).localeCompare(String(b.id)));const skip=Number(options.skip||0),page=items.slice(skip,skip+take);
+ return {items:page,linkedServices:options.collection==='packages'?data.services||[]:[],take,skip,hasMore:skip+take<items.length,nextCursor:skip+take<items.length?'local-'+(skip+take):null,preview:!firebaseConfigured,cached:firebaseConfigured,offline:firebaseConfigured};
+}
+

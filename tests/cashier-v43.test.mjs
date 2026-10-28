@@ -9,7 +9,7 @@ test("cashier has exactly the five reference sidebar entries and no admin worksp
   const primary = html.match(/<div class="sidebar-primary">([\s\S]*?)<\/div>/)?.[1] || "";
   const cashierVisible = [...primary.matchAll(/<button[^>]*?(?:data-section="(pos|calendar|bookings)"|data-go="cash"|data-cashier-target)[^>]*>/g)].map(match => match[1] || (match[0].includes("data-go") ? "cash" : "targets"));
   assert.deepEqual(cashierVisible, ["pos", "calendar", "bookings", "cash", "targets"]);
-  for (const item of [".sidebar-workspaces", ".sidebar-more", ".desktop-primary-nav", ".cashier-mobile-nav", ".admin-command-search", ".header-scope"]) assert.ok(css.includes(`html[data-admin-role="cashier"] ${item}`), item);
+  for (const item of [".sidebar-workspaces", ".sidebar-more", ".desktop-primary-nav", ".cashier-mobile-nav", ".admin-command-search", ".header-scope"]) assert.ok(css.includes(`html[data-admin-layout="cashier"] ${item}`), item);
   assert.match(html, /class="sidebar-footer"[\s\S]*?إنهاء الشيفت[\s\S]*?id="logoutButton"/);
 });
 

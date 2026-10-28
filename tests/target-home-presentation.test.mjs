@@ -16,7 +16,7 @@ test('branch selection renders exactly one scoped meter including aggregate; wor
  class Element{
   constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.style={};this.handlers={};this.value='';}
   append(...nodes){this.children.push(...nodes)} prepend(...nodes){this.children.unshift(...nodes)} replaceChildren(...nodes){this.children=nodes}
-  setAttribute(){} addEventListener(name,fn){this.handlers[name]=fn} querySelectorAll(){return []}
+  setAttribute(){} addEventListener(name,fn){this.handlers[name]=fn} querySelectorAll(){return []} closest(){return null}
   querySelector(s){return s==='.gauge-fill'||s==='line'?new Element('svg'):null}
  }
  const document={createElement:tag=>new Element(tag),querySelector:()=>null,addEventListener(){}};
