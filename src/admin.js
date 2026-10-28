@@ -71,6 +71,7 @@ import './admin-visual-layout.css';
 import './admin-calm.css';
 import './cashier-compact.css';
 import './order-additions.css';
+import './admin-mobile-layout.css';
 import {syncAdminWorkspace} from './admin-workspace.js';
 import {siteMediaSlots} from './site-media.js';
 import {mountSiteMediaEditor,refreshSiteMediaEditor,pendingSiteMediaFile,setSiteMediaSaveState,stageSiteMediaUpload,completeSiteMediaSave} from './site-media-editor.js';
