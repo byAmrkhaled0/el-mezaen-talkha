@@ -689,3 +689,9 @@ src/compact-record-list.js
 tests/compact-record-list.test.mjs
 functions/src/public-editorial-scope.js
 tests/public-global-results.test.mjs
+functions/src/public-service-sharing.js
+functions/scripts/share-public-services.mjs
+functions/test/public-service-sharing.test.mjs
+functions/src/shared-public-catalog.js
+functions/scripts/share-public-catalog.mjs
+functions/test/shared-public-catalog.test.mjs

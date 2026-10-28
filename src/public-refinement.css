@@ -264,6 +264,15 @@ body[data-public-refinement] .public-footer .social-links a{width:44px;height:44
 body[data-public-refinement] .public-footer .footer-bottom{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:16px;margin-top:24px}
 body[data-public-refinement] .public-footer .developer-credit{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px}
 body[data-public-refinement] .public-footer .developer-credit a{color:var(--cyan)}
+body[data-public-refinement] .public-footer .developer-credit{max-width:100%;font-size:13px}
+body[data-public-refinement] .public-footer .developer-signature{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--text);text-decoration:none;max-width:100%;box-sizing:border-box;transition:border-color .18s ease,background .18s ease}
+body[data-public-refinement] .public-footer .developer-signature:hover{border-color:var(--cyan);background:var(--panel)}
+body[data-public-refinement] .public-footer .developer-signature-mark{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:var(--panel);color:var(--cyan)}
+body[data-public-refinement] .public-footer .developer-signature-copy{display:grid;gap:3px;min-width:0;text-align:start}
+body[data-public-refinement] .public-footer .developer-signature-copy small{font-size:10px;font-weight:400;color:var(--muted);line-height:1.6}
+body[data-public-refinement] .public-footer .developer-signature-copy strong{font-size:13px;line-height:1.6;font-weight:700;color:var(--text)}
+body[data-public-refinement] .public-footer .developer-signature-contact{display:flex;align-items:center;gap:6px;padding-inline-start:12px;margin-inline-start:4px;border-inline-start:1px solid var(--line);font-size:11px;font-weight:500;color:var(--cyan);white-space:nowrap}
+@media(max-width:600px){body[data-public-refinement] .public-footer .footer-bottom{justify-content:center;text-align:center}body[data-public-refinement] .public-footer .developer-credit{justify-content:center}body[data-public-refinement] .public-footer .developer-signature{flex-wrap:wrap;justify-content:center;gap:10px}body[data-public-refinement] .public-footer .developer-signature-contact{padding-inline-start:0;margin-inline-start:0;border:0;justify-content:center;flex-basis:100%}}
 
 
 body[data-public-refinement] :is(.seo-hero,.branch-landing-hero){padding-block:32px;min-height:0;background:var(--panel);color:var(--text)}
