@@ -1,4 +1,7 @@
 import {mountAdminClarity} from './admin-clarity.js';
+import {mountCompactRecordList} from './compact-record-list.js';
+const revenuePreview=mountCompactRecordList({target:document.querySelector('#revenueTable'),anchor:document.querySelector('#revenueTable')?.closest('.table-scroll')});
+const ownerSalesPreview=mountCompactRecordList({target:document.querySelector('#ownerSalesCards'),anchor:document.querySelector('#ownerSalesCards'),more:document.querySelector('#ownerSalesMore')});
 import {getWorkerServiceSessions} from './admin-api.js';
 import {openManualAttendance} from './manual-attendance.js';
 import {renderReportDetails,renderReportDays,renderShiftReconciliation} from './report-details.js';
@@ -1479,6 +1482,7 @@ async function loadOwnerHistory(kind, more = false) {
       $("#ownerSalesCount").textContent = `${result.totals.count} عملية في نطاق الفلتر`;
       target.innerHTML = ownerHistory.sales.items.map(item => `<button type="button" data-owner-sale-detail="${escapeAttr(item.id)}" class="owner-list-card"><b>${escapeHtml(item.bookingCode || item.id)}<small>${escapeHtml(item.customerName || "عميل غير مسجل")}</small></b><strong>${money(item.amount)}</strong><small>${escapeHtml(branchLabel(item.branchId))} • ${escapeHtml(paymentMethod(item.paymentMethod))} • ${escapeHtml(item.type === "refund" ? "استرداد" : "دفع")} • ${escapeHtml(item.dateKey || "")}</small></button>`).join("") || '<p class="empty-state">لا توجد معاملات.</p>';
       $("#ownerSalesMore").hidden = !result.nextCursor;
+      ownerSalesPreview?.update(JSON.stringify(options),{hasMore:Boolean(result.nextCursor)});
     } else {
       $("#ownerExpenseTotal").textContent = money(result.totals.amount);
       $("#ownerExpenseCount").textContent = `${result.totals.count} مصروف في نطاق الفلتر`;
@@ -2010,6 +2014,7 @@ function renderRevenue() {
     const details = [`خدمات: ${money(breakdown.services)}`, `بضاعة: ${money(breakdown.products)}`, `مشروبات: ${money(breakdown.drinks)}`].join("<br>");
     return `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td><small>${details}</small></td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>سجل مالي محفوظ</td></tr>`;
   }).join("") || emptyRow(9);
+  revenuePreview?.update(JSON.stringify({from,to,branch,staff,service}));
 }
 
 function expenseLabel(value) { if (value === "inventory") return "مشتريات / شراء مخزون"; return ({ electricity: "كهرباء", water: "مياه", rent: "إيجار", salary: "رواتب", maintenance: "صيانة", tools: "أدوات ومستلزمات", marketing: "تسويق", other: "بند آخر" })[value] || value || "—"; }

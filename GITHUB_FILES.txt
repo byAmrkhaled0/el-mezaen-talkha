@@ -685,3 +685,5 @@ vite.config.js
 vite.local.config.mjs
 worker/index.html
 src/admin-mobile-layout.css
+src/compact-record-list.js
+tests/compact-record-list.test.mjs
