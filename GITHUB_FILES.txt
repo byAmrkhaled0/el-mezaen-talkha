@@ -2,6 +2,7 @@
 .gitignore
 404.html
 ADMIN_ASSISTANT_LOCAL_NOTES.md
+ADMIN_CALM_MANUAL_TIME_AR.md
 ADMIN_WORKER_UPDATE_AR.md
 BACKEND_FIREBASE_RELEASE_PLAN_AR.md
 BUILD_AND_PUBLISH_AR.md
@@ -375,6 +376,8 @@ src/admin-advisor.css
 src/admin-advisor.js
 src/admin-api.js
 src/admin-appearance.css
+src/admin-calm.css
+src/admin-clarity.js
 src/admin-interface.css
 src/admin-read-coordinator.js
 src/admin-session.js
@@ -511,6 +514,7 @@ storage.rules
 team/index.html
 tests/addition-inbox.test.mjs
 tests/admin-advisor.test.mjs
+tests/admin-clarity.test.mjs
 tests/admin-collection-requests.test.mjs
 tests/admin-read-coordinator.test.mjs
 tests/admin-regressions.test.mjs
@@ -576,6 +580,8 @@ tests/helpers/parse-html.py
 tests/invoice-payment-preview-dom.test.mjs
 tests/legacy-admin-compat.test.mjs
 tests/manager-shop-navigation.test.mjs
+tests/manual-arrival-time.emulator.mjs
+tests/manual-arrival-time.test.mjs
 tests/manual-attendance-dom.test.mjs
 tests/manual-attendance.emulator.mjs
 tests/media.test.mjs

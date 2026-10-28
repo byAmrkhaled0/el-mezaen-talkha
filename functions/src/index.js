@@ -1895,7 +1895,7 @@ export const getAttendancePolicies = onCall(adminOptions, attendanceEngine.polic
 export const setAttendancePolicy = onCall(adminOptions, attendanceEngine.setPolicy);
 export const finishAttendanceShifts = onSchedule({region,schedule:"* * * * *",timeZone:"Africa/Cairo",timeoutSeconds:120,maxInstances:1},()=>attendanceEngine.sweep());
 export const getOwnStaffAttendance = onCall(adminOptions, selfAttendance.read);
-const recordManualAttendance=manualAttendanceHandler({db,engine:attendanceEngine,hash,FieldValue,HttpsError,requireLiveStaff,requireRole,requirePermission,requireBranchAccess,businessDateParts,getUser:async uid=>(await import('firebase-admin/auth')).getAuth().getUser(uid)});
+const recordManualAttendance=manualAttendanceHandler({db,Timestamp,engine:attendanceEngine,hash,FieldValue,HttpsError,requireLiveStaff,requireRole,requirePermission,requireBranchAccess,businessDateParts,getUser:async uid=>(await import('firebase-admin/auth')).getAuth().getUser(uid)});
 export const recordOwnStaffAttendance = onCall(adminOptions, async request=>{if(request.data?.method==='manual'){await enforceRateLimit(request,'branch_manual_attendance',60,15*60*1000,request.auth?.uid||'anonymous');return recordManualAttendance(request);}return selfAttendance.record(request);});
 
 export const recordWorkerAttendance = onCall(adminOptions, async request => {

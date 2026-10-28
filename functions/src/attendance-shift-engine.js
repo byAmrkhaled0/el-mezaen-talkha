@@ -28,8 +28,10 @@ export function attendanceShiftEngine({db,Timestamp,FieldValue,HttpsError,hash,r
     return {durationMinutes:minutes,policyVersion:p.data().version||1};
   }
   async function sessionReads(tx,uid){const ref=queueRef(uid);return {ref,snapshot:await tx.get(ref)};}
-  function start(tx,uid,recordRef,base,policy,queue){
-    const t=now(),due=t+policy.durationMinutes*60000;
+  function start(tx,uid,recordRef,base,policy,queue,{startedAtMs}={}){
+    const current=now(),t=startedAtMs===undefined?current:startedAtMs;
+    if(!Number.isSafeInteger(t)||t>current||t<0)fail('invalid-argument','وقت بداية الحضور غير صحيح');
+    const due=t+policy.durationMinutes*60000;
     const previous=queue.snapshot.data();
     if(previous?.state==='ACTIVE')fail('failed-precondition','عندك وردية حضور مفتوحة؛ حدّث سجل الحضور أولًا');
     const fields={plannedMinutes:policy.durationMinutes,policyVersion:policy.policyVersion,startedAt:Timestamp.fromMillis(t),scheduledEndAt:Timestamp.fromMillis(due),recordVersion:2};

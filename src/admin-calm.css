@@ -1,0 +1,57 @@
+/* Layout and discoverability only: no roles, data or actions are removed. */
+#adminApp{--calm-gap:12px}
+#adminApp .admin-disclosure-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 13px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--text);font:700 13px Tajawal,system-ui,sans-serif;box-shadow:none;cursor:pointer;max-width:100%;white-space:normal;line-height:1.6}
+#adminApp .admin-disclosure-button::after{content:'+';font-size:18px;line-height:1}
+#adminApp .admin-disclosure-button[aria-expanded=true]::after{content:'−'}
+#adminApp details.admin-disclosure-content>summary[hidden]{display:none!important}
+#adminApp .admin-disclosure-content{margin-block:8px;border:0;min-width:0}
+#adminApp .admin-disclosure-content[open]{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+#adminApp .booking-primary-actions>.admin-disclosure-button,#adminApp td>.admin-disclosure-button{width:100%}
+#adminApp #bookingListSummary{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-block:4px 18px}
+#adminApp #bookingListSummary .metric-card{min-height:78px;padding:12px 14px;gap:5px;border-radius:14px;box-shadow:none;justify-content:center}
+#adminApp #bookingListSummary .metric-card strong{font-size:23px;line-height:1.35}
+#adminApp #bookingListSummary .metric-card>span{font-size:12px;line-height:1.6}
+#adminApp #bookingListSummary .primary-metric{background:var(--bg2);border-color:var(--line)}
+#adminApp #bookingListSummary .primary-metric :is(span,strong){color:var(--text)}
+#adminApp #bookings .panel-head{display:flex;align-items:stretch;flex-direction:column;gap:14px;margin-bottom:16px}
+#adminApp #bookings .panel-head h2{font-size:21px;margin:0 0 5px;line-height:1.6}
+#adminApp #bookings .panel-head p{margin:0;max-width:75ch;font-size:13px}
+#adminApp #bookings .panel-head .toolbar{width:100%;display:grid;grid-template-columns:minmax(140px,1fr) auto minmax(190px,2fr) repeat(3,minmax(112px,1fr)) auto auto;gap:8px;align-items:center}
+#adminApp #bookings .toolbar>:is(input,select,button){width:100%;min-width:0;min-height:42px;font-size:13px;border-radius:10px;margin:0;box-shadow:none}
+#adminApp #bookings .toolbar :is(input,select){background:var(--panel);border-color:var(--line)}
+#adminApp #bookings table{table-layout:auto;min-width:1120px}
+#adminApp #bookings th{padding:12px 10px;background:var(--bg2);font-size:12px;white-space:nowrap}
+#adminApp #bookings td{padding:14px 10px;font-size:13px;line-height:1.7;vertical-align:top}
+#adminApp #bookings td:first-child{max-width:150px;overflow-wrap:anywhere}
+#adminApp #bookings td:nth-last-child(2){min-width:126px}
+#adminApp #bookings td:last-child{min-width:170px}
+#adminApp #bookings :is(.booking-primary-actions,.payment-controls,.booking-worker-controls){display:grid;gap:8px;min-width:0}
+#adminApp #bookings td :is(button,select){min-height:38px;padding:7px 11px;font-size:12px;border-radius:9px;line-height:1.5;box-shadow:none}
+#adminApp #bookings .status-pill{display:inline-block;white-space:nowrap;padding:5px 10px;border-radius:9px;min-width:54px;text-align:center;font-size:12px}
+html[data-admin-role=admin] #adminApp .admin-header{padding:12px 18px;gap:12px;box-shadow:none;min-height:76px}
+html[data-admin-role=admin] #adminApp :is(.admin-panel,.metric-card){box-shadow:none}
+html[data-admin-role=admin] #adminApp .admin-panel{border-radius:16px}
+html[data-admin-role=admin] #adminApp #sidebar nav button{font-size:13px;min-height:44px;padding:9px 12px}
+html[data-admin-role=admin] #adminApp #sidebar .sidebar-footer button{min-height:43px;font-size:13px}
+#adminApp #payroll .panel-head{gap:12px;align-items:start}
+#adminApp #payroll .service-target-filters{display:flex;flex-wrap:wrap;gap:12px}
+#adminApp #payroll .service-target-filters label{display:grid;gap:6px;min-width:170px;flex:1}
+#adminApp #payroll .service-target-form{padding:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;margin-block:14px}
+@media(max-width:1280px){#adminApp #bookingListSummary{grid-template-columns:repeat(4,minmax(0,1fr))}#adminApp #bookings .panel-head .toolbar{grid-template-columns:repeat(4,minmax(0,1fr))}#adminApp #bookings #bookingSearch{grid-column:span 2}}
+@media(max-width:720px){
+ #adminApp #bookingListSummary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:14px}
+ #adminApp #bookingListSummary .metric-card{min-height:70px;padding:11px 12px}
+ #adminApp #bookingListSummary .primary-metric{grid-column:1/-1;display:flex;flex-direction:row;justify-content:space-between;align-items:center;min-height:58px}
+ #adminApp #bookings .panel-head .toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #adminApp #bookings #bookingSearch{grid-column:1/-1}
+ #adminApp #bookings .toolbar>:is(input,select,button){min-height:44px}
+ #adminApp .admin-disclosure-button{min-height:44px;width:100%}
+ #adminApp #payroll .panel-head{display:flex;flex-direction:column;align-items:stretch}
+ #adminApp #payroll .panel-head .toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%}
+ #adminApp #payroll .panel-head .toolbar label{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px}
+ #adminApp #payroll .panel-head .toolbar :is(input,button){min-width:0;width:100%;min-height:44px}
+ #adminApp #payroll .service-target-filters{display:grid;grid-template-columns:1fr;width:100%}
+ #adminApp #payroll .service-target-filters label{min-width:0;width:100%;gap:6px}
+ #adminApp #payroll .service-target-form{display:grid;grid-template-columns:1fr;padding:12px;gap:12px}
+ html[data-admin-role=admin] #adminApp .admin-header{padding:10px 12px;gap:8px}
+}

@@ -1,3 +1,4 @@
+import {mountAdminClarity} from './admin-clarity.js';
 import {getWorkerServiceSessions} from './admin-api.js';
 import {openManualAttendance} from './manual-attendance.js';
 import {renderReportDetails,renderReportDays,renderShiftReconciliation} from './report-details.js';
@@ -67,6 +68,7 @@ import './admin-interface.css';
 import './closure-ui.css';
 import './admin-theme-consistency.css';
 import './admin-visual-layout.css';
+import './admin-calm.css';
 import './cashier-compact.css';
 import './order-additions.css';
 import {syncAdminWorkspace} from './admin-workspace.js';
@@ -3799,21 +3801,7 @@ window.addEventListener("appinstalled", () => { deferredInstallPrompt = null; $(
 $("#installAdmin").addEventListener("click", async () => { if (!deferredInstallPrompt) return toast("استخدم تثبيت التطبيق من قائمة المتصفح", true); deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; $("#installAdmin").hidden = true; });
 
 setupPanels();
-// Move secondary booking controls into a native details sheet on narrow screens.
-const bookingToolbar = $("#bookings .panel-head .toolbar");
-if (bookingToolbar) {
-  const more = document.createElement("details");
-  more.id = "bookingMobileFilters";
-  more.innerHTML = '<summary>الفلاتر والإجراءات</summary><div class="booking-mobile-filter-body"></div>';
-  for (const selector of ["#bookingBranchFilter", "#bookingPaymentFilter", "#openScanner", "#exportBookings"]) {
-    const control = bookingToolbar.querySelector(selector);
-    if (control) more.querySelector("div").append(control);
-  }
-  bookingToolbar.append(more);
-  const viewport = matchMedia("(max-width: 720px)");
-  const update = () => { more.open = !viewport.matches; };
-  update(); viewport.addEventListener?.("change", update);
-}
+mountAdminClarity();
 initializeLineIcons();
 $("#reviewStatusFilter").addEventListener("change", () => renderCollection("reviews"));
 setTheme(sessionStorage.getItem("mz-admin-theme") || "light");
