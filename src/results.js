@@ -82,8 +82,8 @@ async function load(direction='reset',version=resultsVersion) {
   // The isolated demo uses the same synthetic catalog path.
   if(!catalog)catalog={content:[],...await getCatalogMetadata()};
   if(!activeBranch(catalog,branch))branch='';
-  pageBar.hidden=!branch;
-  if(branch){const page=await resultPager[direction]({collection:'content',type:'result',branchId:branch,search:document.querySelector('#resultsSearch').value.trim(),lang:getLang()});if(!page||version!==resultsVersion)return;if(page.offline||page.cached)throw Object.assign(new Error('Catalog is offline'),{publicStatus:'cached'});catalog.content=page.items||[];prevPage.disabled=!page.canPrevious;nextPage.disabled=!page.canNext;pageText.textContent=resultText('صفحة ','Page ')+page.page;}else catalog.content=[];
+  pageBar.hidden=false;
+  const page=await resultPager[direction]({collection:'content',type:'result',branchId:branch,globalOnly:!branch,search:document.querySelector('#resultsSearch').value.trim(),lang:getLang()});if(!page||version!==resultsVersion)return;if(page.offline||page.cached)throw Object.assign(new Error('Catalog is offline'),{publicStatus:'cached'});catalog.content=page.items||[];prevPage.disabled=!page.canPrevious;nextPage.disabled=!page.canNext;pageText.textContent=resultText('صفحة ','Page ')+page.page;
   if (catalog.offline) throw Object.assign(new Error("Catalog is offline"),{publicStatus:catalog.cached?"cached":"connection-error"});
   if (!Array.isArray(catalog.content)) throw Object.assign(new Error("Missing content contract"),{publicStatus:"contract-error"});
   items = catalog.content.filter(item => item.type === "result" && (item.imageUrl || (item.beforeImageUrl && item.afterImageUrl))).map(item => ({ ...item, branchIds: Array.isArray(item.branchIds) ? item.branchIds.filter(value => ["talkha", "mashaya"].includes(value)) : [item.branchId].filter(value => ["talkha", "mashaya"].includes(value)) }));
@@ -100,7 +100,7 @@ void loadResults();
 
 const en=getLang()==='en';
 document.querySelector('.results-hero h1').textContent=en?'Our results':'نتائج شغلنا';
-document.querySelector('.results-hero .seo-lead').textContent=en?'Before-and-after work from your selected branch. Choose Talkha or El Mashaya to see its results.':'نتائج قبل وبعد من الفرع اللي اخترته. اختار طلخا أو المشاية علشان تشوف نتائج شغله.';
+document.querySelector('.results-hero .seo-lead').textContent=en?'Browse published work from El Mezaen. General results are always visible; choose a branch to include its work.':'تصفّح أعمال المزين المنشورة. النتائج العامة ظاهرة ليك، واختيار الفرع بيضيف نتائج شغله.';
 document.querySelector('#all-results-title').textContent=en?'Published results':'النتائج المنشورة';
 document.querySelector('.section-kicker').textContent=en?'Before & after portfolio':'معرض أعمال قبل وبعد';
 document.querySelector('#resultsSearch').placeholder=en?'Search by title prefix':'ابحث ببداية العنوان';

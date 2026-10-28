@@ -687,3 +687,5 @@ worker/index.html
 src/admin-mobile-layout.css
 src/compact-record-list.js
 tests/compact-record-list.test.mjs
+functions/src/public-editorial-scope.js
+tests/public-global-results.test.mjs

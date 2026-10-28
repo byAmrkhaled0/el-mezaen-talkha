@@ -1,3 +1,4 @@
+import {PUBLIC_EDITORIAL_TYPES,globalEditorialRecord,editorialMatchesBranch} from './public-editorial-scope.js';
 export function parsePage(data={},maximum=100){
  const take=Number(data.take??data.Take??data.pageSize??data.limit??25),skip=Number(data.skip??data.Skip??0);
  if(!Number.isSafeInteger(take)||take<1||take>maximum||!Number.isSafeInteger(skip)||skip<0)throw Error('INVALID_PAGE');
@@ -27,14 +28,17 @@ export function publicCatalogPaging({db,HttpsError,projectStaff}){
  async function page(data){
  try{
  const {take,skip,cursor}=parsePage(data,50),collection=data.collection,branchId=data.branchId||'',type=data.type||'',category=data.category||'',search=String(data.search||'').trim().slice(0,80),lang=data.lang==='en'?'en':'ar';
+ const shared=collection==='content'&&PUBLIC_EDITORIAL_TYPES.includes(type),globalOnly=data.globalOnly===true;
+ if(data.globalOnly!==undefined&&typeof data.globalOnly!=='boolean'||globalOnly&&(!shared||branchId))throw Error('INVALID_PAGE');
  if(!allowed.has(collection)||branchId&&!['talkha','mashaya'].includes(branchId)||type&&!['gallery','news','celebrity','result','hair-system'].includes(type)||category&&collection!=='services')throw Error('INVALID_PAGE');
  const field=collection==='content'?(lang==='en'?'titleEn':'titleAr'):(lang==='en'?'nameEn':'nameAr');
- const scope=JSON.stringify([collection,branchId,type,category,search,lang]);
+ const scope=JSON.stringify([collection,branchId,type,category,search,lang,...(globalOnly?['global']:[])]);
  const token=cursor?decodeCursor(cursor,scope):null;
  if(search&&token&&typeof token.value!=='string')throw Error('INVALID_CURSOR');
  function build(branchField='branchIds'){
  let query=db.collection(collection).where('active','==',true);
- if(branchId)query=query.where(branchField,branchField==='branchIds'?'array-contains':'==',branchId);
+ if(globalOnly||branchField==='global')query=query.where('branchIds','==',[]);
+ else if(branchId)query=query.where(branchField,branchField==='branchIds'?'array-contains':'==',branchId);
  if(type)query=query.where('type','==',type);
  if(category&&category!=='all')query=query.where('categoryId','==',category);
  if(search)query=query.orderBy(field).where(field,'>=',search).where(field,'<=',search+'\uf8ff');
@@ -42,11 +46,11 @@ export function publicCatalogPaging({db,HttpsError,projectStaff}){
  if(token)query=search?query.startAfter(token.value,token.id):query.startAfter(token.id);
  return query.limit(take+1);
  }
- const queries=branchId&&collection==='content'?[build(),build('branchId')]:[build()];
+ const queries=branchId&&collection==='content'?[build(),build('branchId'),...(shared?[build('global')]:[])]:[build()];
  const snapshots=await Promise.all(queries.map(query=>query.get()));
  const compare=(a,b)=>{if(search){const value=Buffer.compare(Buffer.from(a.data()[field]),Buffer.from(b.data()[field]));if(value)return value;}return Buffer.compare(Buffer.from(a.id),Buffer.from(b.id));};
  const documents=[...new Map(snapshots.flatMap(snapshot=>snapshot.docs).map(doc=>[doc.id,doc])).values()].sort(compare),scanned=documents.slice(0,take),more=documents.length>take,last=scanned.at(-1);
- const items=scanned.filter(d=>visible(d.data())).map(d=>collection==='staff'?projectStaff(d):project(d));
+ const items=scanned.filter(d=>visible(d.data())&&(!globalOnly||globalEditorialRecord(d.data()))&&(!shared||!branchId||editorialMatchesBranch(d.data(),branchId))).map(d=>collection==='staff'?projectStaff(d):project(d));
  return {items,linkedServices:collection==='packages'?await linkedServices(items):[],take,skip,hasMore:more,nextCursor:more&&last?encodeCursor(scope,last,search?last.data()[field]:null):null,scanned:scanned.length};
  }catch(error){if(error instanceof HttpsError)throw error;if(['INVALID_PAGE','INVALID_CURSOR','CURSOR_REQUIRED'].includes(error.message))throw new HttpsError('invalid-argument',error.message==='CURSOR_REQUIRED'?'استخدم مؤشر الصفحة للانتقال بدل تخطي السجلات':'بيانات الصفحة غير صحيحة');throw error;}
  }

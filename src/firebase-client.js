@@ -9,6 +9,7 @@ import { normalizePhone } from "../functions/src/core.js";
 import { seedCatalog } from "./seed-data.js";
 import {createLocalDemoCatalog,assertDemoWorkerScope} from "./local-demo-catalog.js";
 import { availableAtBranch } from "./branch-availability.js";
+import {PUBLIC_EDITORIAL_TYPES,globalEditorialRecord} from '../functions/src/public-editorial-scope.js';
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
 export const firebaseConfigured = !globalThis.__OFFLINE_DEMO__ && Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
@@ -267,9 +268,10 @@ export async function getCatalogMetadata(){
 }
 export async function getCatalogPage(options={}){
  const take=Number(options.take??options.Take??24);if(!Number.isSafeInteger(take)||take<1||take>50)throw Error('حجم الصفحة غير صحيح');
+ if(options.globalOnly&&(options.collection!=='content'||!PUBLIC_EDITORIAL_TYPES.includes(options.type)||options.branchId))throw Error('نطاق المحتوى غير صحيح');
  if(firebaseConfigured&&navigator.onLine!==false)return await callFunction('getCatalog',{...options,mode:'page',take},15000);
  const data=firebaseConfigured?readCatalogCache():localCatalog();if(!data)throw Error('تحميل البيانات يحتاج اتصالًا');
- let items=(data[options.collection]||[]).filter(item=>item.active!==false&&(!options.branchId||item.branchIds?.includes(options.branchId))&&(!options.type||item.type===options.type)&&(!options.category||options.category==='all'||item.categoryId===options.category));
+ let items=(data[options.collection]||[]).filter(item=>item.active!==false&&(!options.branchId||item.branchIds?.includes(options.branchId)||options.collection==='content'&&PUBLIC_EDITORIAL_TYPES.includes(options.type)&&globalEditorialRecord(item))&&(!options.globalOnly||globalEditorialRecord(item))&&(!options.type||item.type===options.type)&&(!options.category||options.category==='all'||item.categoryId===options.category));
  const search=String(options.search||'').toLowerCase();if(search)items=items.filter(item=>String(item[options.collection==='content'?(options.lang==='en'?'titleEn':'titleAr'):(options.lang==='en'?'nameEn':'nameAr')]||'').toLowerCase().startsWith(search));
  items.sort((a,b)=>String(a.id).localeCompare(String(b.id)));const skip=Number(options.skip||0),page=items.slice(skip,skip+take);
  return {items:page,linkedServices:options.collection==='packages'?data.services||[]:[],take,skip,hasMore:skip+take<items.length,nextCursor:skip+take<items.length?'local-'+(skip+take):null,preview:!firebaseConfigured,cached:firebaseConfigured,offline:firebaseConfigured};

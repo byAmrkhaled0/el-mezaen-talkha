@@ -1,8 +1,9 @@
 import {safeMediaUrl} from './media.js';
+import {editorialMatchesBranch} from '../functions/src/public-editorial-scope.js';
 export const sharedEditorialTypes = new Set(['gallery','celebrity','result']);
 export function sharedEditorial(items, type, branchId) {
  if (!sharedEditorialTypes.has(type)) return [];
- return (Array.isArray(items)?items:[]).filter(item => item && item.type===type && (branchId === undefined || (['talkha','mashaya'].includes(branchId) && (Array.isArray(item.branchIds) ? item.branchIds.includes(branchId) : item.branchId === branchId))) && item.active===true && item.catalogVisible!==false && item.published!==false && (!item.status||item.status==='published')
+ return (Array.isArray(items)?items:[]).filter(item => item && item.type===type && editorialMatchesBranch(item,branchId) && item.active===true && item.catalogVisible!==false && item.published!==false && (!item.status||item.status==='published')
   && item.private!==true && item.isPrivate!==true && item.branchRestricted!==true && item.restricted!==true
   && (!item.visibility||item.visibility==='public') && (!item.access||item.access==='public') && (!item.scope||['public','global','shared'].includes(item.scope))
   && (type!=='result'||safeMediaUrl(item.imageUrl)||(safeMediaUrl(item.beforeImageUrl)&&safeMediaUrl(item.afterImageUrl))))
