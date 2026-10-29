@@ -1,6 +1,6 @@
 import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
 import {parseCustomerProfile} from '../functions/src/customer-profile.js';
-import {staffDestination} from './staff-routing.js';
+import {createCustomerAccountRouter} from './customer-account-entry.js';
 import {isOtpLoopback,normalizeOtp,hostedAccountUrl} from './customer-onboarding.js';
 import {readPublicCatalogCache, purgeLegacyCatalogCache} from './catalog-cache.js';
 import {applySiteMedia} from './site-media.js';
@@ -29,7 +29,15 @@ const dateKey = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Africa/Cairo
 const addDays = (key, days) => { const date = new Date(`${key}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 let registrationMode = false, pendingRegistration = null, retryAt = 0, retryTimer;
 document.querySelector('#loginCard').hidden=true;
+const accountEntryRouter=createCustomerAccountRouter({
+ showGuest(){resetAccountEntry();$('#accountRestoring').hidden=true;$('#customerGuest').hidden=false;},
+ showPending(){resetAccountEntry();$('#customerGuest').hidden=true;$('#accountRestoring').hidden=false;},
+ async showCustomer(){await enterAccount();$('#accountRestoring').hidden=true;},
+ navigate:destination=>location.replace(destination),
+ onError:error=>{$('#customerGuestMessage').textContent=friendly(error);}
+});
 let auth, functions, confirmation, portalData, catalog, unsubscribe, loginBusy = false, actionBusy = false, loadSequence = 0, selectedBooking = null, availableSlots = [];
+function resetAccountEntry(){++loadSequence;portalData=null;selectedBooking=null;$('#profileSetup').hidden=true;$('#portal').hidden=true;$('#loginCard').hidden=true;$('#logout').hidden=true;$('#customerGuestMessage').textContent='';}
 function message(value, error = false, target = "#loginMessage") { $(target).textContent = value; $(target).dataset.messageState = error ? "error" : "success"; $(target).setAttribute("role", error ? "alert" : "status"); }
 function friendly(error) {
   // Do not log profile data, phone numbers or OTP values.
@@ -137,7 +145,7 @@ $('#cancelProfileEdit').addEventListener('click',()=>{if(actionBusy||!portalData
 
 
 
-if (!configured) message(accountCopy("إعداد Firebase غير مكتمل."), true);
+if (!configured) {accountEntryRouter.update(null);$('#customerGuestMessage').textContent=accountCopy("إعداد Firebase غير مكتمل.");}
 else {
   if(globalThis.__USE_EMULATORS__)assertDemoEmulator(config);
   const app = initializeApp(config);
@@ -145,12 +153,9 @@ else {
   auth = getAuth(app); functions = getFunctions(app, "europe-west1");
   if(globalThis.__USE_EMULATORS__){connectLocalAuth(auth,connectAuthEmulator);connectLocalFunctions(functions,connectFunctionsEmulator);}
   setPersistence(auth, browserLocalPersistence).then(() => {
-    unsubscribe = onAuthStateChanged(auth, user => {
-      if (user) user.getIdTokenResult().then(token=>{const destination=staffDestination(token.claims.role);if(destination){location.replace(destination);return;}return enterAccount();}).catch(error => message(friendly(error), true));
-      else { location.replace("/login/"); $("#profileSetup").hidden=true; ++loadSequence; portalData = null; selectedBooking = null; $("#loginCard").hidden = false; $("#portal").hidden = true; $("#logout").hidden = true; $("#phoneForm").hidden = false; $("#codeForm").hidden = true; }
-    }, error => message(friendly(error), true));
-  }).catch(error => message(friendly(error), true));
-  window.addEventListener("pagehide", () => {unsubscribe?.();clearInterval(retryTimer);});
+    unsubscribe = onAuthStateChanged(auth, user => {void accountEntryRouter.update(user);}, error => {void accountEntryRouter.update(null);$('#customerGuestMessage').textContent=friendly(error);});
+  }).catch(error => {void accountEntryRouter.update(null);$('#customerGuestMessage').textContent=friendly(error);});
+  window.addEventListener("pagehide", () => {accountEntryRouter.dispose();unsubscribe?.();clearInterval(retryTimer);});
 }
 async function sendCode() {
   if (loginBusy || !auth) return;

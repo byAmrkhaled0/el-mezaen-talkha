@@ -39,7 +39,17 @@ test('dependency baseline preserved except authorized Vite 7.3.7 security patch'
  lock.packages[''].devDependencies.vite=before.beforeRange;
  assert.equal(createHash('sha256').update(JSON.stringify(lock,null,2)+'\n').digest('hex'),'7f52b37a4e0379c91acce2c68a20b9e3efcd55d31aa5454ef399f151ea346701');
 });
-test('locked baseline preservation: functions/package-lock.json',()=>assert.equal(createHash('sha256').update(readFileSync(new URL('../functions/package-lock.json',import.meta.url))).digest('hex'),'95e3e8f7f5520ca034f72ee4342a7e9535a937f4f322909cdc9cbd0d86d9de49'));
+test('reviewed backend lock baseline includes the October 2026 security fixes only',()=>{
+ const source=readFileSync(new URL('../functions/package-lock.json',import.meta.url),'utf8');
+ const lock=JSON.parse(source);
+ assert.equal(lock.packages['node_modules/body-parser'].version,'2.4.0');
+ assert.equal(lock.packages['node_modules/qs'].version,'6.17.0');
+ assert.equal(lock.packages['node_modules/firebase-admin'].version,'14.5.0');
+ assert.equal(lock.packages['node_modules/firebase-functions'].version,'7.4.0');
+ // Approved changes: body-parser and qs, including their metadata and dependency ranges.
+ // Keep the whole-file fingerprint so unrelated dependency changes still fail this gate.
+ assert.equal(createHash('sha256').update(source).digest('hex'),'6f52eb8496905e26ae12caeb216e9245fc9f1316526ed280312aee2e9711262d');
+});
 test('pricing baseline preserved; authorized actor and active-drawer tracking changes only: createPosOrder',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');let block=source.match(/export const createPosOrder =.*?(?=\nexport const |$)/s)[0];assert.match(block,/Object\.assign\(bookingRecord, receiptActor\(request\), \{createdAt:now\}\)/);block=block.replace(/  \/\/ OFFLINE_POS_BEGIN:[\s\S]*?  \/\/ OFFLINE_POS_END\n/,'').replace('\n\n  const customer =','\n  const customer =');
 // Strip only the authorized read-only price preview and expected-total guard; keep the original financial hash.
 const pricePreviewAddition="\n    if(request.data?.expectedTotal!=null&&(!Number.isFinite(request.data.expectedTotal)||request.data.expectedTotal<0||Math.abs(request.data.expectedTotal-total)>0.005))throw new HttpsError(\"failed-precondition\",\"السعر اتغير؛ راجع إجمالي الشيك قبل التحصيل\");\n    if(request.data?.previewOnly===true){if(offlineOrder)throw new HttpsError(\"invalid-argument\",\"معاينة السعر تحتاج اتصالًا\");return {ok:true,previewOnly:true,items:publicItems,subtotal,manualDiscountAmount,couponDiscountAmount,walletRedemptionAmount:redemptionValue,total};}\n";

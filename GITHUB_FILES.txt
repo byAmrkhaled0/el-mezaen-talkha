@@ -695,3 +695,5 @@ functions/test/public-service-sharing.test.mjs
 functions/src/shared-public-catalog.js
 functions/scripts/share-public-catalog.mjs
 functions/test/shared-public-catalog.test.mjs
+src/customer-account-entry.js
+tests/customer-account-entry.test.mjs

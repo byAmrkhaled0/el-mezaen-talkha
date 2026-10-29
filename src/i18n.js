@@ -1,5 +1,13 @@
 export const translations = {
   ar: {
+    accountRestoring: "جاري فتح حسابك…",
+    customerAccountTitle: "حساب العميل",
+    customerAccountIntro: "حجوزاتك وزياراتك ونقاطك في مكان واحد.",
+    customerAccountBookings: "تابع حجوزاتك وراجع تفاصيل زياراتك",
+    customerAccountRewards: "شوف نقاطك ومحفظتك والحلاق المفضل",
+    customerAccountProfile: "حدّث بياناتك واحجز زيارتك الجاية بسهولة",
+    customerAccountSignIn: "دخول أو إنشاء حساب برقم الموبايل",
+    customerAccountOtp: "هنبعت لك رمز تحقق لحماية حسابك، من غير كلمة مرور.",
     accountAccessTitle: "حسابك في المزين",
     accountAccessIntro: "سجّل برقم موبايلك، أو اعمل حساب جديد من غير كلمة مرور.",
     accountSignIn: "دخول",
@@ -51,6 +59,14 @@ export const translations = {
     privacy: "بياناتك تُستخدم لتنفيذ الحجز فقط.", loadError: "تعذر تحميل البيانات. حاول مرة أخرى.", couponInvalid: "كود الخصم غير صالح.", added: "تمت الإضافة للسلة", menu: "القائمة", theme: "تغيير المظهر", language: "تغيير اللغة"
   },
   en: {
+    accountRestoring: "Opening your account…",
+    customerAccountTitle: "Customer account",
+    customerAccountIntro: "Your bookings, visits and rewards in one place.",
+    customerAccountBookings: "Track bookings and review your visits",
+    customerAccountRewards: "View your points, wallet and favourite barber",
+    customerAccountProfile: "Update your profile and book your next visit",
+    customerAccountSignIn: "Sign in or create an account with your phone",
+    customerAccountOtp: "We will send a verification code to protect your account. No password needed.",
     accountAccessTitle: "Your El Mezaen account",
     accountAccessIntro: "Sign in with your mobile number, or create an account without a password.",
     accountSignIn: "Sign in",
