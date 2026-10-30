@@ -16,13 +16,15 @@ test("one phone identity is shared across OTP, booking, account and admin lookup
   assert.match(admin, /function whatsappPhone\(value\)[\s\S]*normalizePhone\(value\)/);
 });
 
-test("portal links an existing record and creates only when canonical ID is absent", () => {
+test("portal links an existing record and creates only when canonical ID is absent", async () => {
   const portal = backend.slice(backend.indexOf("export const getCustomerPortal"), backend.indexOf("export const saveFavoriteBarber"));
   assert.match(portal, /transaction\.get\(customerRef\)/);
   assert.match(portal, /if \(!snapshot\.exists\) \{/);
   assert.match(portal, /transaction\.create\(customerRef/);
   assert.match(portal, /record\.authUid !== identity\.uid/);
-  assert.match(portal, /where\("phoneHash", "==", identity\.customerId\)/);
+  assert.match(portal, /customerRecordPage\(\{db,FieldPath,Timestamp,identity/);
+  const history = await readFile('functions/src/record-history.js','utf8');
+  assert.match(history, /identity\.customerId/);
   assert.match(portal, /bookingHistory: bookings\.slice/);
   assert.match(portal, /request\.data\?\.profileOnly === true/);
   assert.match(client, /getCustomerPortal", \{ profileOnly: true \}/);
@@ -59,7 +61,9 @@ test("repeat resets the appointment and account rescheduling uses current availa
   assert.match(account, /excludeBookingId: booking\.id/);
   assert.match(account, /call\("rescheduleBooking", \{ id: selectedBooking\.id/);
   assert.match(account, /if \(actionBusy \|\| !selectedBooking\) return/);
-  assert.match(account, /bookingHistory\.map\(item => bookingCard\(item, true\)\)/);
+  // Upcoming bookings retain their actions in the dedicated panel; avoid duplicate cards in history.
+  assert.match(account, /upcomingBookings\.map\(item => bookingCard\(item, true\)\)/);
+  assert.match(account, /bookingHistory\.filter\(item=>!upcomingIds\.has\(item\.id\)\)\.map\(item => bookingCard\(item, true\)\)/);
 });
 
 test("direct customer routes resolve with or without a trailing slash on both hosts", () => {

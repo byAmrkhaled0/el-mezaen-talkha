@@ -521,3 +521,5 @@ export const createBranchBooking = options => call('createBooking',{...options,b
 export const previewPosOrder = options => call('createPosOrder',{...options,previewOnly:true,idempotencyKey:crypto.randomUUID()});
 
 export const getWorkerBookingHistory = data=>readCall('getWorkerWorkspace',{...data,view:'history'});
+
+export const getAdminHistory = options => readCall("getAdminHistory", options);

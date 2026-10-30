@@ -1,3 +1,4 @@
+import {customerRecordPage,adminRecordPage} from './record-history.js';
 import {workerHistoryPage} from './worker-history.js';
 import {manualAttendanceHandler} from './manual-attendance.js';
 import {readDetailedDay,rollupDetails} from './report-details.js';
@@ -1077,6 +1078,19 @@ async function aggregateScoped(collection, allowedBranches, configure = query =>
     return total;
   }, includeCount ? { count: 0 } : {});
 }
+
+export const getAdminHistory = onCall(adminOptions, async request => {
+  await requireLiveStaff(request);
+  const kind = request.data?.kind;
+  requirePermission(request, kind === 'revenue' ? 'revenue' : 'bookings');
+  const claimed = branchesFor(request);
+  if (request.auth.token.role !== 'admin' && !claimed.length) throw new HttpsError('permission-denied','الحساب غير مرتبط بفرع');
+  const branch = String(request.data?.branchId || 'all').toLowerCase();
+  if (!['all','talkha','mashaya'].includes(branch)) throw new HttpsError('invalid-argument','فرع غير صالح');
+  if (branch !== 'all' && claimed.length && !claimed.includes(branch)) throw new HttpsError('permission-denied','هذا الحساب غير مصرح له بهذا الفرع');
+  const branches = branch === 'all' ? (claimed.length ? claimed : ['talkha','mashaya']) : [branch];
+  return adminRecordPage({db,FieldPath,Timestamp,uid:request.auth.uid,branches,data:request.data || {},cleanDoc,fail:()=>new HttpsError('invalid-argument','فلاتر أو صفحة السجل غير صحيحة؛ حدّث السجل')});
+});
 
 // Mobile history uses the same canonical ledgers as Dashboard and reports.
 // Page rows never contribute to totals. Each branch query is bounded to 20.
@@ -3328,6 +3342,12 @@ function authenticatedCustomer(request) {
   return { uid: request.auth.uid, phone, customerId: hash(phone) };
 }
 
+export const getCustomerHistory = onCall(publicOptions, async request => {
+  const identity = authenticatedCustomer(request);
+  await enforceRateLimit(request,'customer_history',120,15*60*1000,identity.uid);
+  return customerRecordPage({db,FieldPath,Timestamp,identity,kind:request.data?.kind,cursor:request.data?.cursor,today:businessDateParts().dateKey,cleanDoc,fail:()=>new HttpsError('invalid-argument','صفحة السجل غير صحيحة؛ حدّث حسابك')});
+});
+
 export const getCustomerPortal = onCall(publicOptions, async request => {
   const identity = authenticatedCustomer(request);
   await enforceRateLimit(request, "customer_portal", 60, 15 * 60 * 1000, identity.uid);
@@ -3336,9 +3356,9 @@ export const getCustomerPortal = onCall(publicOptions, async request => {
     const snapshot = await customerRef.get();
     return { customer: { ...publicCustomerProfile(snapshot.data()), phone: identity.phone } };
   }
-  const [bookingsSnapshot, walletSnapshot, offersSnapshot] = await Promise.all([
-    db.collection("bookings").where("phoneHash", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
-    db.collection("walletTransactions").where("customerId", "==", identity.customerId).orderBy("createdAt", "desc").limit(30).get(),
+  const customerPage = kind => customerRecordPage({db,FieldPath,Timestamp,identity,kind,today:businessDateParts().dateKey,cleanDoc,fail:()=>new HttpsError('invalid-argument','صفحة غير صحيحة')});
+  const [historyPage, walletPage, upcomingPage, offersSnapshot] = await Promise.all([
+    customerPage('history'), customerPage('wallet'), customerPage('upcoming'),
     db.collection("offers").where("active", "==", true).limit(20).get()
   ]);
   const customer = await db.runTransaction(async transaction => {
@@ -3350,22 +3370,23 @@ export const getCustomerPortal = onCall(publicOptions, async request => {
       const variants = [local, `2${local}`, `+2${local}`, local.slice(1)];
       const legacy = await transaction.get(db.collection("customers").where("phone", "in", variants).limit(10));
       if (legacy.docs.some(item => item.id !== identity.customerId)) throw new HttpsError("failed-precondition", "وجدنا سجل عميل قديم لهذا الرقم يحتاج مراجعة آمنة؛ تواصل مع الفرع لربط حسابك");
-      const previous = bookingsSnapshot.docs[0]?.data()?.customer || {};
-      transaction.create(customerRef, { phone: identity.phone, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), qrToken, authUid: identity.uid, bookingCount: bookingsSnapshot.size, pointsBalance: 0, cashbackBalance: 0, createdAt: FieldValue.serverTimestamp() });
-      return { ...record, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), bookingCount: bookingsSnapshot.size, qrToken };
+      const previous = historyPage.items[0]?.customer || {};
+      transaction.create(customerRef, { phone: identity.phone, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), qrToken, authUid: identity.uid, bookingCount: historyPage.items.length, pointsBalance: 0, cashbackBalance: 0, createdAt: FieldValue.serverTimestamp() });
+      return { ...record, firstName: sanitizeText(previous.firstName, 50), lastName: sanitizeText(previous.lastName, 50), bookingCount: historyPage.items.length, qrToken };
     } else if (record.authUid !== identity.uid || !record.qrToken || record.phone !== identity.phone) {
       transaction.set(customerRef, { authUid: identity.uid, phone: identity.phone, qrToken, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     }
     return { ...record, qrToken };
   });
   const qrToken = customer.qrToken;
-  const bookings = bookingsSnapshot.docs.map(cleanDoc);
+  const bookings = historyPage.items;
   return {
-    customer: { ...publicCustomerProfile(customer), firstName: customer.firstName || "", lastName: customer.lastName || "", phone: identity.phone, qrToken, bookingCount: Number(customer.bookingCount || bookingsSnapshot.size || 0), completedVisits: Number(customer.completedVisits || 0), noShowCount: Number(customer.noShowCount || 0), lastBranchId: customer.lastBranchId || null, whatsappOptIn: customer.whatsappOptIn === true, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
-    upcomingBookings: bookings.filter(item => ["pending", "confirmed", "arrived"].includes(item.status)).slice(0, 10),
+    customer: { ...publicCustomerProfile(customer), firstName: customer.firstName || "", lastName: customer.lastName || "", phone: identity.phone, qrToken, bookingCount: Number(customer.bookingCount || historyPage.items.length || 0), completedVisits: Number(customer.completedVisits || 0), noShowCount: Number(customer.noShowCount || 0), lastBranchId: customer.lastBranchId || null, whatsappOptIn: customer.whatsappOptIn === true, pointsBalance: Number(customer.pointsBalance || 0), cashbackBalance: Number(customer.cashbackBalance || 0), favoriteStaffId: customer.favoriteStaffId || null },
+    upcomingBookings: upcomingPage.items,
+    historyCursors: {history:historyPage.nextCursor,wallet:walletPage.nextCursor,upcoming:upcomingPage.nextCursor},
     bookingHistory: bookings.slice(0, 20),
     lastBooking: bookings.find(item => !["cancelled", "rejected"].includes(item.status)) || null,
-    walletActivity: walletSnapshot.docs.map(cleanDoc),
+    walletActivity: walletPage.items,
     offers: offersSnapshot.docs.map(cleanDoc).filter(offer => offerAtBranch(offer, customer.lastBranchId || "", new Date()))
   };
 });

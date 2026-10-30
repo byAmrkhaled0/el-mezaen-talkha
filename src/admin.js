@@ -1,3 +1,5 @@
+import {collectRecordPages} from './record-history-client.js';
+import {getAdminHistory} from './admin-api.js';
 import {mountAdminClarity} from './admin-clarity.js';
 import {mountCompactRecordList} from './compact-record-list.js';
 const revenuePreview=mountCompactRecordList({target:document.querySelector('#revenueTable'),anchor:document.querySelector('#revenueTable')?.closest('.table-scroll')});
@@ -1988,6 +1990,35 @@ async function findScanned() {
  }catch(error){if(uid===state.user?.uid&&generation===scanGeneration){scanLocked=false;toast(error.message||'تعذر قراءة الحجز؛ حاول مرة أخرى',true);}}
 }
 
+const revenueRecords={key:'',snapshot:null,rows:[],cursor:null,busy:false,revision:0,error:''};
+function revenueRecordFilters(){return {kind:'revenue',branchId:$('#revenueBranch').value||'all',from:$('#revenueFrom').value,to:$('#revenueTo').value,staff:$('#revenueStaff').value||'all',service:$('#revenueService').value||'all'};}
+function bookingRecordFilters(){return {kind:'bookings',branchId:$('#bookingBranchFilter').value||'all',date:$('#bookingDateFilter').value,query:$('#bookingSearch').value.trim(),status:$('#bookingStatusFilter').value,payment:$('#bookingPaymentFilter').value||'all'};}
+function revenueHistoryControls(){
+ let box=$('#revenueHistoryControls');if(!box){box=document.createElement('div');box.id='revenueHistoryControls';box.className='toolbar';$('#revenueTable').closest('.table-scroll').after(box);}
+ box.replaceChildren();const note=document.createElement('span');note.setAttribute('role','status');note.textContent=revenueRecords.error||(revenueRecords.busy?'جاري تحميل السجل…':`المعروض ${revenueRecords.rows.length} حركة مطابقة للفلاتر${revenueRecords.cursor?' · باقي السجل متاح بالزر':''}`);box.append(note);
+ if(revenueRecords.cursor||revenueRecords.error){const button=document.createElement('button');button.type='button';button.className='small-button';button.disabled=revenueRecords.busy;button.textContent=revenueRecords.error?'إعادة المحاولة':'تحميل المزيد من السجل';button.addEventListener('click',()=>loadRevenueRecords(Boolean(revenueRecords.cursor)));box.append(button);}
+}
+async function loadRevenueRecords(more=false){
+ if(revenueRecords.busy)return;const filters=revenueRecordFilters(),key=JSON.stringify(filters),revision=++revenueRecords.revision,uid=state.user?.uid;
+ revenueRecords.busy=true;revenueRecords.error='';revenueHistoryControls();
+ try{
+  const page=await getAdminHistory({...filters,...(more&&revenueRecords.cursor?{cursor:revenueRecords.cursor}:{})});
+  if(revision!==revenueRecords.revision||uid!==state.user?.uid||key!==JSON.stringify(revenueRecordFilters()))return;
+  revenueRecords.rows=more?[...new Map([...revenueRecords.rows,...page.items].map(row=>[row.id,row])).values()]:page.items;revenueRecords.cursor=page.nextCursor;
+ }catch(error){if(revision===revenueRecords.revision)revenueRecords.error=error.message||'تعذر تحميل السجل؛ أعد المحاولة';}
+ finally{if(revision===revenueRecords.revision){revenueRecords.busy=false;renderRevenue();}}
+}
+async function exportRecordHistory(kind,button){
+ if(button.disabled)return;const filters=kind==='revenue'?revenueRecordFilters():bookingRecordFilters(),uid=state.user?.uid,caption=button.textContent;
+ button.disabled=true;
+ try{
+  const rows=await collectRecordPages(async data=>{if(uid!==state.user?.uid)throw Error('تغير الحساب؛ أعد فتح السجل');return getAdminHistory(data);},filters,{onProgress:count=>{button.textContent=`جاري التجهيز (${count})`;}});
+  if(uid!==state.user?.uid)throw Error('تغير الحساب؛ أعد فتح السجل');
+  if(kind==='revenue')exportCsv('el-mezaen-revenue.csv',['date','branch','booking','type','method','staff','services','products','drinks','amount'],rows.map(item=>[item.dateKey,branchLabel(item.branchId),item.bookingCode,item.type,item.paymentMethod,item.staffId,item.revenueBreakdown?.services||0,item.revenueBreakdown?.products||0,item.revenueBreakdown?.drinks||0,item.amount]));
+  else exportCsv('el-mezaen-bookings.csv',['code','branch','customer','phone','items','staff','date','time','subtotal','discount','total','status','payment'],rows.map(item=>[item.code,item.branchNameAr||branchLabel(item.branchId),item.customerName,item.phone,(item.serviceNamesAr||[]).join(' + '),item.staffNameAr,item.bookingDate,item.bookingTime,item.subtotal,item.discountAmount,item.total,item.status,item.paymentStatus]));
+ }catch(error){toast(error.message||'تعذر التصدير؛ لم يتم إنشاء ملف ناقص',true);}
+ finally{button.disabled=false;button.textContent=caption;}
+}
 function renderRevenue() {
   const serviceSelect = $("#revenueService");
   const selectedService = serviceSelect.value || "all";
@@ -2008,13 +2039,16 @@ function renderRevenue() {
   const branch = $("#revenueBranch").value;
   const staff = staffSelect.value;
   const service = serviceSelect.value;
-  const rows = state.dashboard.ledger.filter(item => (!from || item.dateKey >= from) && (!to || item.dateKey <= to) && (branch === "all" || (item.branchId || "talkha") === branch) && (staff === "all" || item.staffId === staff) && (service === "all" || (item.itemIds || []).includes(service)));
+  const key=JSON.stringify(revenueRecordFilters());
+  if(revenueRecords.key!==key||revenueRecords.snapshot!==state.dashboard){revenueRecords.key=key;revenueRecords.snapshot=state.dashboard;revenueRecords.rows=[];revenueRecords.cursor=null;revenueRecords.error='';++revenueRecords.revision;revenueRecords.busy=false; if(state.section==='revenue')void loadRevenueRecords();else revenueRecords.key='';}
+  const rows = revenueRecords.rows;
   $("#revenueTable").innerHTML = rows.map(item => {
     const breakdown = item.revenueBreakdown || {};
     const details = [`خدمات: ${money(breakdown.services)}`, `بضاعة: ${money(breakdown.products)}`, `مشروبات: ${money(breakdown.drinks)}`].join("<br>");
     return `<tr><td>${escapeHtml(item.dateKey || item.createdAt)}</td><td><span class="branch-pill">${escapeHtml(branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.bookingCode)}</td><td>${item.type === "refund" ? "استرداد" : "دفع"}</td><td>${paymentMethod(item.paymentMethod)}</td><td>${escapeHtml(bookingStaff.get(item.staffId) || item.staffId || "—")}</td><td><small>${details}</small></td><td style="color:${Number(item.amount) < 0 ? "var(--danger)" : "var(--success)"}"><b>${money(item.amount)}</b></td><td>سجل مالي محفوظ</td></tr>`;
   }).join("") || emptyRow(9);
   revenuePreview?.update(JSON.stringify({from,to,branch,staff,service}));
+  revenueHistoryControls();
 }
 
 function expenseLabel(value) { if (value === "inventory") return "مشتريات / شراء مخزون"; return ({ electricity: "كهرباء", water: "مياه", rent: "إيجار", salary: "رواتب", maintenance: "صيانة", tools: "أدوات ومستلزمات", marketing: "تسويق", other: "بند آخر" })[value] || value || "—"; }
@@ -3691,8 +3725,8 @@ collectionPaging=collectionPageNavigation({state,scope:collectionReadScope,getPa
 mountCollectionSearch({reload:loadCollection,render:collection=>{for(const target of $$(`[data-list="${collection}"]`))target.innerHTML='<p role="status">جاري البحث في السجلات…</p>';}});
 [$("#calendarSearch"), $("#calendarStaffFilter"), $("#calendarPaymentFilter")].filter(Boolean).forEach(input => input.addEventListener(input.tagName === "INPUT" ? "input" : "change", renderCalendar));
 $("#applyRevenueFilter").addEventListener("click", renderRevenue);
-$("#exportBookings").addEventListener("click", () => exportCsv("el-mezaen-bookings.csv", ["code", "branch", "customer", "phone", "items", "staff", "date", "time", "subtotal", "discount", "total", "status", "payment"], state.dashboard.bookings.map(item => [item.code, item.branchNameAr || branchLabel(item.branchId), item.customerName, item.phone, (item.serviceNamesAr || []).join(" + "), item.staffNameAr, item.bookingDate, item.bookingTime, item.subtotal, item.discountAmount, item.total, item.status, item.paymentStatus])));
-$("#exportRevenue").addEventListener("click", () => exportCsv("el-mezaen-revenue.csv", ["date", "branch", "booking", "type", "method", "staff", "services", "products", "drinks", "amount"], state.dashboard.ledger.map(item => [item.dateKey, branchLabel(item.branchId), item.bookingCode, item.type, item.paymentMethod, item.staffId, item.revenueBreakdown?.services || 0, item.revenueBreakdown?.products || 0, item.revenueBreakdown?.drinks || 0, item.amount])));
+$("#exportBookings").addEventListener("click", event => void exportRecordHistory("bookings",event.currentTarget));
+$("#exportRevenue").addEventListener("click", event => void exportRecordHistory("revenue",event.currentTarget));
 $("#openScanner").addEventListener("click", openScanner);
 $("#scannerClose").addEventListener("click", closeScanner);
 $("#scannerDialog").addEventListener("close", () => closeScanner(false));

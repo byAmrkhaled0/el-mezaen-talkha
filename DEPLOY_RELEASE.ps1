@@ -8,7 +8,7 @@ $project='el-mezaen-talkha'
 $deferred=@('customerAiAgent','adminBusinessAssistant')
 $source=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'functions/src/index.js'))
 $expected=@([regex]::Matches($source,'(?m)^export const (\w+)\s*=') | ForEach-Object {$_.Groups[1].Value} | Where-Object {$_ -notin $deferred} | Sort-Object -Unique)
-if($expected.Count -ne 126){throw 'Unexpected function inventory. Review this release before deployment.'}
+if($expected.Count -ne 128){throw 'Unexpected function inventory. Review this release before deployment.'}
 function Get-Inventory {
   $raw=(& firebase functions:list --project $project --json | Out-String)
   Check-Exit 'Read cloud function inventory'
@@ -31,7 +31,7 @@ if($Mode -eq 'Verify'){
   $inactive=@($remote|Where-Object {$_.id -in $expected -and $_.state -ne 'ACTIVE'})
   if($missing.Count){throw ('Missing functions: '+($missing -join ', '))}
   if($inactive.Count){throw ('Inactive functions: '+($inactive.id -join ', '))}
-  Write-Output 'PASS: all 126 non-model functions are deployed and ACTIVE. This checks deployment state, not live business transactions.'
+  Write-Output 'PASS: all 128 non-model functions are deployed and ACTIVE. This checks deployment state, not live business transactions.'
   Write-Output 'Deferred model endpoints: customerAiAgent, adminBusinessAssistant.'
   exit 0
 }

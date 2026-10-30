@@ -10,6 +10,8 @@ import './global-navigation.js';
 import { safeMediaUrl } from "./media.js";
 import "./account.css";
 import "./account-favorite.css";
+import "./customer-workspace.css";
+import {mountCustomerWorkspace} from './customer-workspace.js';
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { connectAuthEmulator, browserLocalPersistence, getAuth, onAuthStateChanged, RecaptchaVerifier, setPersistence, signInWithPhoneNumber, signOut } from "firebase/auth";
@@ -28,6 +30,7 @@ const money = value => `${Number(value || 0).toFixed(2)} ${getLang() === "en" ? 
 const dateKey = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const addDays = (key, days) => { const date = new Date(`${key}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 let registrationMode = false, pendingRegistration = null, retryAt = 0, retryTimer;
+const customerWorkspace=mountCustomerWorkspace(document,accountCopy,location.hash);
 document.querySelector('#loginCard').hidden=true;
 const accountEntryRouter=createCustomerAccountRouter({
  showGuest(){resetAccountEntry();$('#accountRestoring').hidden=true;$('#customerGuest').hidden=false;},
@@ -37,7 +40,7 @@ const accountEntryRouter=createCustomerAccountRouter({
  onError:error=>{$('#customerGuestMessage').textContent=friendly(error);}
 });
 let auth, functions, confirmation, portalData, catalog, unsubscribe, loginBusy = false, actionBusy = false, loadSequence = 0, selectedBooking = null, availableSlots = [];
-function resetAccountEntry(){++loadSequence;portalData=null;selectedBooking=null;$('#profileSetup').hidden=true;$('#portal').hidden=true;$('#loginCard').hidden=true;$('#logout').hidden=true;$('#customerGuestMessage').textContent='';}
+function resetAccountEntry(){++loadSequence;portalData=null;selectedBooking=null;customerWorkspace.reset();$('#profileSetup').hidden=true;$('#portal').hidden=true;$('#loginCard').hidden=true;$('#logout').hidden=true;$('#customerGuestMessage').textContent='';}
 function message(value, error = false, target = "#loginMessage") { $(target).textContent = value; $(target).dataset.messageState = error ? "error" : "success"; $(target).setAttribute("role", error ? "alert" : "status"); }
 function friendly(error) {
   // Do not log profile data, phone numbers or OTP values.
@@ -60,6 +63,35 @@ function bookingCard(item, actions = false) {
   const names = getLang() === "en" && item.serviceNamesEn?.length ? item.serviceNamesEn : item.serviceNamesAr?.length ? item.serviceNamesAr : (item.items || []).map(line => (getLang() === "en" ? line.nameEn || line.nameAr : line.nameAr) || line.id);
   return `<div class="booking-card"><b>${esc(item.code || item.id)}</b><span>${esc(statusLabel(item.status))}</span><small>${accountCopy("الفرع:")} ${esc((getLang() === "en" ? item.branchNameEn || item.branchNameAr : item.branchNameAr) || item.branchId || "—")}</small><small>${esc(names.join(" + ") || accountCopy("لا توجد خدمات"))}</small><small>${accountCopy("المتخصص:")} ${esc((getLang() === "en" ? item.staffNameEn || item.staffNameAr : item.staffNameAr) || "—")}</small><small>${accountCopy("الموعد:")} ${esc(item.bookingDate || accountCopy("طلب منتجات"))} ${esc(item.bookingTime || "")}</small><small>${accountCopy("الفرعي:")} ${money(item.subtotal)} • ${accountCopy("الخصم:")} ${money(item.discountAmount)}${item.couponCode ? ` • ${accountCopy("كوبون")} ${esc(item.couponCode)}` : ""}${item.walletRedemptionAmount ? ` • ${accountCopy("من المحفظة:")} ${money(item.walletRedemptionAmount)}` : ""}</small><strong>${accountCopy("الإجمالي:")} ${money(item.total)}</strong>${["pending", "confirmed"].includes(item.status) && item.paymentStatus === "paid" ? accountCopy("<small>الإلغاء بعد الدفع يحتاج التواصل مع الفرع لمعالجة الاسترداد.</small>") : ""}${actions ? `<div class="booking-actions">${cancellable ? `<button type="button" data-cancel="${esc(item.id)}">${accountCopy("إلغاء")}</button>` : ""}${["pending", "confirmed"].includes(item.status) && !item.productOnly ? `<button type="button" data-reschedule="${esc(item.id)}">${accountCopy("تغيير الموعد")}</button>` : ""}<button type="button" data-repeat="${esc(item.id)}">${accountCopy("كرر الحجز")}</button></div>` : ""}</div>`;
 }
+const customerHistoryTargets={history:'#bookingHistory',upcoming:'#upcoming',wallet:'#walletActivity'};
+function updateCustomerHistoryButtons(){
+ for(const [kind,target] of Object.entries(customerHistoryTargets)){
+  let button=document.querySelector(`[data-customer-history="${kind}"]`);
+  if(!button){button=document.createElement('button');button.type='button';button.dataset.customerHistory=kind;$(target).after(button);button.addEventListener('click',()=>loadCustomerHistory(kind,button));}
+  button.hidden=!portalData?.historyCursors?.[kind];button.textContent=getLang()==='en'?'Load more':'عرض المزيد';button.setAttribute('aria-label',getLang()==='en'?`Load more ${kind==='wallet'?'wallet activity':kind==='upcoming'?'upcoming bookings':'booking history'}`:kind==='wallet'?'عرض المزيد من حركات المحفظة':kind==='upcoming'?'عرض المزيد من الحجوزات القادمة':'عرض المزيد من سجل الحجوزات');
+ }
+}
+async function loadCustomerHistory(kind,button){
+ const cursor=portalData?.historyCursors?.[kind],sequence=loadSequence;
+ if(!cursor||button.disabled)return;button.disabled=true;
+ try{
+  const page=await call('getCustomerHistory',{kind,cursor});
+  if(sequence!==loadSequence||!auth.currentUser)return;
+  const field=kind==='history'?'bookingHistory':kind==='upcoming'?'upcomingBookings':'walletActivity';
+  const known=new Set(portalData[field].map(row=>row.id));
+  const items=page.items.filter(row=>!known.has(row.id));portalData[field].push(...items);
+  portalData.historyCursors[kind]=page.nextCursor;
+  if(kind==='wallet')$(customerHistoryTargets[kind]).innerHTML=portalData.walletActivity.map(item=>`<div><b>${esc(item.type)}</b><br>${Number(item.points||0)} ${accountCopy('نقطة')} • ${money(item.cashback)}</div>`).join('')||accountCopy('<div>لا توجد حركات بعد.</div>');
+  else {
+   // Re-render both lists so loading an upcoming page cannot duplicate history cards.
+   $('#upcoming').innerHTML=portalData.upcomingBookings.map(item=>bookingCard(item,true)).join('')||accountCopy('<div>لا توجد حجوزات قادمة.</div>');
+   const upcomingIds=new Set(portalData.upcomingBookings.map(item=>item.id));
+   $('#bookingHistory').innerHTML=portalData.bookingHistory.filter(item=>!upcomingIds.has(item.id)).map(item=>bookingCard(item,true)).join('')||accountCopy('<div>لا يوجد سجل حجوزات بعد.</div>');
+  }
+  updateCustomerHistoryButtons();
+ }catch(error){if(sequence===loadSequence)message(friendly(error),true,'#accountMessage');}
+ finally{button.disabled=false;}
+}
 function renderFavorite() {
   const item = catalog?.staff?.find(value => value.id === $("#favoriteStaff").value);
   const target = $("#favoriteDetails");
@@ -71,6 +103,7 @@ async function loadPortal() {
   const [data, nextCatalog] = await Promise.all([call("getCustomerPortal"), loadPublicAccountCatalog()]);
   if (sequence !== loadSequence || !auth.currentUser) return;
   portalData = data; catalog = nextCatalog; populateProfileBranches(nextCatalog);
+  updateCustomerHistoryButtons();
   const c = data.customer;
   if(!c.firstName || !c.lastName){showProfileSetup(c);return;}
   $("#profileSetup").hidden=true;
@@ -79,22 +112,25 @@ async function loadPortal() {
   $("#whatsappMarketingConsent").checked = c.whatsappOptIn === true;
   $("#points").textContent = Number(c.pointsBalance || 0);
   $("#cashback").textContent = money(c.cashbackBalance);
-  const visits = Number(c.bookingCount || data.bookingHistory?.length || 0);
+  const visits = Math.max(0, Number(c.completedVisits || 0));
   const tier = visits >= 10 ? { name: accountCopy("عميل مميز"), from: 10, to: 20 } : visits >= 5 ? { name: accountCopy("عميل دائم"), from: 5, to: 10 } : { name: accountCopy("عضو مزين"), from: 0, to: 5 };
   const progress = Math.min(100, Math.round((visits - tier.from) / (tier.to - tier.from) * 100));
   $("#memberTier").textContent = tier.name; $("#tierProgressValue").textContent = `${progress}%`;
   $("#tierProgressBar").style.width = `${progress}%`;
   $("#tierProgressLabel").textContent = visits >= 20 ? accountCopy("وصلت لأعلى مستوى حاليًا") : (getLang() === "en" ? `${Math.max(0, tier.to - visits)} visits to the next tier` : `متبقي ${Math.max(0, tier.to - visits)} زيارة للمستوى التالي`);
-  if (c.qrToken) { const {default: QRCode} = await import("qrcode"); if (sequence !== loadSequence || !auth.currentUser) return; await QRCode.toCanvas($("#customerQr"), c.qrToken, { width: 220, margin: 1, errorCorrectionLevel: "M" }); }
+  customerWorkspace.update(data,{today:dateKey(),money,statusLabel,lang:getLang()});
+  customerWorkspace.setMembershipReady(false);
+  if (c.qrToken) { const {default: QRCode} = await import("qrcode"); if (sequence !== loadSequence || !auth.currentUser) return; await QRCode.toCanvas($("#customerQr"), c.qrToken, { width: 264, margin: 4, errorCorrectionLevel: "M" }); if (sequence !== loadSequence || !auth.currentUser) return; customerWorkspace.setMembershipReady(true); }
   $("#upcoming").innerHTML = data.upcomingBookings.map(item => bookingCard(item, true)).join("") || accountCopy("<div>لا توجد حجوزات قادمة.</div>");
-  $("#bookingHistory").innerHTML = data.bookingHistory.map(item => bookingCard(item, true)).join("") || accountCopy("<div>لا يوجد سجل حجوزات بعد.</div>");
+  const upcomingIds=new Set(data.upcomingBookings.map(item=>item.id));
+  $("#bookingHistory").innerHTML = data.bookingHistory.filter(item=>!upcomingIds.has(item.id)).map(item => bookingCard(item, true)).join("") || accountCopy("<div>لا يوجد سجل حجوزات بعد.</div>");
   $("#walletActivity").innerHTML = data.walletActivity.map(item => `<div><b>${esc(item.type)}</b><br>${Number(item.points || 0)} ${accountCopy("نقطة")} • ${money(item.cashback)}</div>`).join("") || accountCopy("<div>لا توجد حركات بعد.</div>");
   $("#lastBooking").innerHTML = data.lastBooking ? bookingCard(data.lastBooking) : accountCopy("لا يوجد حجز سابق.");
   $("#repeatBooking").hidden = !data.lastBooking;
   $("#favoriteStaff").innerHTML = accountCopy('<option value="">اختر الحلاق</option>') + catalog.staff.map(item => `<option value="${esc(item.id)}" ${item.id === c.favoriteStaffId ? "selected" : ""}>${esc(getLang() === "en" ? item.nameEn || item.nameAr : item.nameAr)} • ${esc((getLang() === "en" ? item.specialtyEn || item.specialtyAr : item.specialtyAr) || "")}</option>`).join("");
   renderFavorite(); $("#loginCard").hidden = true; $("#portal").hidden = false; $("#logout").hidden = false;
 }
-function findBooking(id) { return portalData?.bookingHistory?.find(item => item.id === id); }
+function findBooking(id) { return [...(portalData?.bookingHistory||[]),...(portalData?.upcomingBookings||[])].find(item => item.id === id); }
 function repeatBooking(item) {
   const branch = catalog?.branches?.find(value => value.id === item.branchId && value.active !== false);
   if (!branch) { message(accountCopy("فرع هذا الحجز لم يعد متاحًا؛ اختر فرعًا وخدمات جديدة."), true, "#accountMessage"); return; }
@@ -126,7 +162,7 @@ function openReschedule(item) {
   selectedBooking = item; $("#rescheduleDescription").textContent = `${(getLang() === "en" ? item.branchNameEn || item.branchNameAr : item.branchNameAr) || item.branchId} • ${item.code} • ${item.bookingDate} ${item.bookingTime}`;
   $("#rescheduleDate").min = dateKey(); $("#rescheduleDate").max = addDays(dateKey(), 60); $("#rescheduleDate").value = "";
   $("#rescheduleSlot").innerHTML = accountCopy('<option value="">اختر التاريخ أولًا</option>'); $("#rescheduleSlot").disabled = true;
-  message("", false, "#rescheduleMessage"); $("#reschedulePanel").hidden = false; $("#reschedulePanel").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  customerWorkspace.show('bookings');message("", false, "#rescheduleMessage"); $("#reschedulePanel").hidden = false; $("#reschedulePanel").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 const profileKeys={firstName:'accountFirstName',lastName:'accountLastName',email:'accountEmail',city:'accountCity',address:'accountAddress',birthDate:'accountBirthDate',preferredBranchId:'accountPreferredBranch'};
 function profileInput(prefix){return parseCustomerProfile(Object.fromEntries(Object.entries(profileKeys).map(([key,id])=>[key,$('#'+prefix+id).value])),dateKey());}
