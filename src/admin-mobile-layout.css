@@ -85,3 +85,10 @@
  #adminApp :is(.owner-mobile-nav,.cashier-mobile-nav) button.active{background:color-mix(in srgb,var(--cyan),transparent 88%);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cyan),transparent 75%)}
  #adminApp :is(.owner-mobile-nav,.cashier-mobile-nav) button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 }
+
+/* Keep one primary sales list on the owner's phone; detailed filters remain available. */
+#adminApp #ownerRevenueDetails{padding:0;border:0;background:transparent}
+#adminApp [data-admin-disclosure][aria-controls="ownerRevenueDetails"]{display:none}
+@media(max-width:720px){
+ html[data-admin-role="admin"] #adminApp [data-admin-disclosure][aria-controls="ownerRevenueDetails"]{display:flex;width:100%;min-height:44px;justify-content:space-between;margin-block:12px}
+}

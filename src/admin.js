@@ -518,6 +518,11 @@ function syncAdminMobileVisibility() {
   if ($("#managerBranchOpen")) $("#managerBranchOpen").hidden = state.role !== "manager" || state.branchIds.length<2 || !adminMobileViewport.matches;
   if ($("#ownerMobileNav")) $("#ownerMobileNav").hidden = !visible;
   if ($("#ownerSalesMobile")) $("#ownerSalesMobile").hidden = !visible;
+  const revenueDetails = $("#ownerRevenueDetails");
+  if (revenueDetails && revenueDetails.dataset.ownerMobileMode !== String(visible)) {
+    revenueDetails.open = !visible;
+    revenueDetails.dataset.ownerMobileMode = String(visible);
+  }
   if ($("#ownerExpensesMobile")) $("#ownerExpensesMobile").hidden = !visible;
   $(".cashier-mobile-nav")?.classList.toggle("manager-mobile-nav", state.role === "manager");
 }
