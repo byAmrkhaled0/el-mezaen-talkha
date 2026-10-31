@@ -56,10 +56,10 @@ test("booking confirmation keeps the one createBooking flow and presents the ret
 
 test("offer and package booking buttons enter the existing dialog only after a valid cart add", async () => {
   const app = await read("src/app.js");
-  assert.match(app, /if \(added && \["offer", "package"\]\.includes\(add\.dataset\.kind\)\) void openBooking\(add\)/);
+  assert.match(app, /if \(added && \(!\$\("#bookingDialog"\)\.open \|\| \["offer", "package"\]\.includes\(add\.dataset\.kind\)\)\) void openBooking\(add\)/);
   assert.match(app, /openEntryBooking = addToCart\(entry\.id\)/);
-  assert.match(app, /if \(openEntryBooking && !\$\("#bookingDialog"\)\.open\) showBookingDialog\(\)/);
-  assert.match(app, /if \(!selectBranch\(autoSelectedBranch\.id, false\)\) return false/);
+  assert.match(app, /if \(openEntryBooking && !\$\("#bookingDialog"\)\.open\) openBranchDialog\(true\)/);
+  assert.match(app, /inCheckout && !itemAvailableAtBranch/);
 });
 
 test("hair systems branch CTA reconciles through the homepage instead of silently replacing a cart", async () => {

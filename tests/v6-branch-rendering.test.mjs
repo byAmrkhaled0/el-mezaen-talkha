@@ -36,8 +36,9 @@ test("branchless legacy items fail closed in customer repeat, public cart, catal
   assert.match(account, /availableAtBranch\(entry, branch\.id, entry\.kind === "drink"\)/);
   assert.deepEqual(publicSubset([talkha, mashaya, shared, {}], "talkha"), [talkha, shared]);
   assert.deepEqual(reconcileBranchCart([{ id: "missing" }], { services: [], packages: [], offers: [], drinks: [] }, "talkha"), { kept: [], removed: 1 });
-  assert.match(app, /!hasBranchScope\(item, item\.kind === "drink"\) \|\| \(state\.branchId && !itemAvailableAtBranch\(item, state\.branchId, item\.kind === "drink"\)\)/);
-  assert.match(catalog, /publicSubset\(catalog\.packages, branchId, \{ dated: true \}\)/);
+  assert.match(app, /!hasBranchScope\(item,item.kind === "drink"\)/);
+  assert.match(app, /inCheckout && !itemAvailableAtBranch/);
+  assert.match(catalog, /browsingSubset\(catalog\.packages, catalog, \{ dated: true \}\)/);
   assert.match(admin, /function posCatalogItems\([\s\S]*?availableAtBranch\(item, branchId\)/);
   assert.match(admin, /function renderPos\([\s\S]*?availableAtBranch\(item, branchId\)/);
   assert.match(preview, /resolvedLines\.some\(\(\{ item \}\) => !availableAtBranch\(item, branch\.id, item\?\.kind === "drink"\)\)/);

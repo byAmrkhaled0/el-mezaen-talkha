@@ -21,14 +21,7 @@ let branchContextReady = false;
 
 function setBranchContext(catalog) {
   if (!activeBranch(catalog, branchId) || catalog.cached || catalog.offline) return false;
-  const prior = localStorage.getItem("mz-branch");
-  let cart = [];
-  try { cart = JSON.parse(localStorage.getItem("mz-cart") || "[]"); } catch {}
-  const { kept, removed } = reconcileBranchCart(cart, catalog, branchId);
-  if (removed && !confirm(branchText(`اختيار هذا الفرع سيحذف ${removed} من عناصر السلة غير المتاحة فيه. هل تريد المتابعة؟`, `Switching branch will remove ${removed} unavailable cart items. Continue?`))) return false;
-  if (prior !== branchId) { sessionStorage.removeItem("mz-staff-booking"); sessionStorage.removeItem("mz-entry-item"); }
-  localStorage.setItem("mz-branch", branchId);
-  if (removed) localStorage.setItem("mz-cart", JSON.stringify(kept)); window.dispatchEvent(new CustomEvent("mz:cart"));
+  // Visiting a branch information page never changes checkout state.
   return true;
 }
 
@@ -50,12 +43,14 @@ document.addEventListener("click", event => {
   const item = event.target.closest("[data-book-item]");
   const staff = event.target.closest("[data-book-staff]");
   if (item && branchContextReady) {
+    sessionStorage.setItem("mz-requested-branch",branchId);
     sessionStorage.setItem("mz-entry-item", JSON.stringify({ branchId, id: item.dataset.bookItem, kind: item.dataset.kind }));
-    location.href = "/#services";
+    location.href = "/?book=1";
   }
   if (staff && branchContextReady) {
+    sessionStorage.setItem("mz-requested-branch",branchId);
     sessionStorage.setItem("mz-staff-booking", JSON.stringify({ branchId, staffId: staff.dataset.bookStaff }));
-    location.href = "/#services";
+    location.href = "/?book=1";
   }
   if (event.target.closest("[data-branch-retry]")) location.reload();
 });

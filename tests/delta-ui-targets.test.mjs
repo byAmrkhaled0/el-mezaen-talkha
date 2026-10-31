@@ -17,7 +17,7 @@ test("admin target stays above the workspace chooser and supports all branch sco
 
 test("homepage uses the requested bounded packages, services and reviews", async () => {
   const [app, html] = await Promise.all([read("src/app.js"), read("index.html")]);
-  assert.match(app, /publicSubset\(state\.catalog\.packages, state\.branchId, \{ now, dated: true \}\)[\s\S]*\.slice\(0, 3\)/);
+  assert.match(app, /browsingSubset\(state\.catalog\.packages, state\.catalog, \{ now, dated: true \}\)[\s\S]*\.slice\(0, 3\)/);
   assert.match(app, /const visible =[\s\S]*\.slice\(0, 3\)/);
   assert.match(app, /function renderReviews\(\)[\s\S]*\.slice\(0, 3\)/);
   assert.match(html, /href="\/packages\/"[\s\S]*عرض كل الباقات/);

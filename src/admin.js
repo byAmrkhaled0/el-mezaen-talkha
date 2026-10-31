@@ -3336,12 +3336,20 @@ async function requestAdminPush(button) {
 }
 
 async function handlePushButton(button) {
-  if(canOpenSection('orderAdditions'))await orderAdditionView?.poll(true);
-  if(state.role==="admin")await loadTargetAchievementAlerts(true);
-  if (state.role === "cashier" && Date.now() - state.loadedAt.cashier > 30_000) await loadCashierDashboard(true);
-  else if (state.role !== "cashier" && Date.now() - state.loadedAt.dashboard > 30_000) await loadDashboard(true);
   renderAdminAlerts();
-  if (!$("#adminAlertsDialog").open) $("#adminAlertsDialog").showModal();
+  const dialog=$("#adminAlertsDialog");if(!dialog.open)dialog.showModal();
+  let status=$('#adminAlertsLoadState');if(!status){status=document.createElement('p');status.id='adminAlertsLoadState';status.setAttribute('role','status');dialog.querySelector('header')?.after(status);}
+  status.hidden=false;status.textContent='جاري تحديث الإشعارات…';dialog.setAttribute('aria-busy','true');
+  try{
+    const tasks=[];
+    if(canOpenSection('orderAdditions'))tasks.push(orderAdditionView?.poll(true));
+    if(state.role==="admin")tasks.push(loadTargetAchievementAlerts(true));
+    if (state.role === "cashier" && Date.now() - state.loadedAt.cashier > 30_000) tasks.push(loadCashierDashboard(true));
+    else if (state.role !== "cashier" && Date.now() - state.loadedAt.dashboard > 30_000) tasks.push(loadDashboard(true));
+    const results=await Promise.allSettled(tasks);renderAdminAlerts();
+    status.hidden=!results.some(result=>result.status==='rejected');
+    status.textContent=status.hidden?'':'تعذر تحديث بعض الإشعارات؛ المعروض من آخر بيانات محمّلة.';
+  }finally{dialog.setAttribute('aria-busy','false');}
 }
 
 function goBackInAdmin() {
@@ -3944,7 +3952,7 @@ async function bootstrapAdmin(user) {
       $("#openShiftForm [name=branchId]").value = state.branchIds[0];
       $("#openShiftForm [name=branchId]").disabled = true;
     }
-    if (["manager","cashier"].includes(state.role)) await loadCashOperations(true);
+    if (["manager","cashier"].includes(state.role)) void loadCashOperations(true);
     syncDashboardTargetBranchOptions();
     syncPushButtons();
     if ("Notification" in window && Notification.permission === "granted") void connectAdminPush().then(() => { pushRegistrationReady = true; syncPushButtons(); }).catch(error => console.debug("Push token refresh deferred", error?.message || error));

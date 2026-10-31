@@ -1,0 +1,184 @@
+/* Customer pages only. Preserve the existing navy/turquoise identity and booking controls. */
+body[data-public-refinement][data-customer-simple] {--public-max:1200px;--public-radius:16px;min-width:0}
+body[data-public-refinement][data-customer-simple] .public-header .nav-wrap {min-height:66px}
+body[data-public-refinement][data-customer-simple] .public-branch-strip {min-height:38px;padding-block:4px}
+body[data-public-refinement][data-customer-simple] .catalog-page {padding-block:20px 32px}
+body[data-public-refinement][data-customer-simple] .catalog-hero {padding-block:22px;background:transparent}
+body[data-public-refinement][data-customer-simple] .catalog-hero h1 {font-size:clamp(28px,3vw,40px);margin-block:6px 10px}
+body[data-public-refinement][data-customer-simple] .catalog-hero>p {max-width:64ch;font-size:14px;line-height:1.8}
+body[data-public-refinement][data-customer-simple] .catalog-search {margin-block:18px 0;min-height:48px;box-shadow:none}
+body[data-public-refinement][data-customer-simple] .catalog-search input {min-height:46px}
+body[data-public-refinement][data-customer-simple][data-page] .catalog-search {display:grid;grid-template-columns:20px minmax(0,1fr) auto;padding:6px 12px;gap:8px}
+body[data-public-refinement][data-customer-simple][data-page] .catalog-search>b {grid-column:3;grid-row:1;font-size:10px;margin:0;max-width:75px}
+body[data-public-refinement][data-customer-simple] .catalog-filters {margin-block:16px;gap:8px;scrollbar-width:thin}
+body[data-public-refinement][data-customer-simple] .filter-chip {min-height:40px;font-size:13px;padding:8px 14px}
+body[data-public-refinement][data-customer-simple] .catalog-pagination {gap:12px;margin-block:22px;align-items:center}
+body[data-public-refinement][data-customer-simple] .catalog-pagination .btn {min-height:42px;padding:9px 18px;font-size:13px}
+/* Service names and prices are the focus; repeated photographs become small thumbnails. */
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid {grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service {display:grid;grid-template-columns:64px minmax(0,1fr);gap:6px 12px;padding:14px;align-content:start;border-radius:16px;box-shadow:none}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>.service-image {grid-column:1;grid-row:1/4;width:64px;height:72px;object-fit:cover;border-radius:10px}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>.service-meta {grid-column:2;grid-row:1;font-size:11px;gap:7px}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>h3 {grid-column:2;grid-row:2;font-size:16px;line-height:1.6}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>.price-row {grid-column:2;grid-row:3;justify-content:start}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service .price {font-size:20px}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>:is(.service-description,.btn) {grid-column:1/-1;grid-row:auto}
+body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid .service-card.compact-service>.btn {min-height:42px;margin-top:6px;padding:9px 12px;font-size:13px}
+body[data-public-refinement][data-customer-simple] .results-hero {padding-block:24px;min-height:0}
+body[data-public-refinement][data-customer-simple] .results-hero h1 {font-size:clamp(30px,4vw,48px);margin-block:8px}
+body[data-public-refinement][data-customer-simple] .results-hero .seo-lead {font-size:14px;max-width:60ch;margin-block:10px}
+body[data-public-refinement][data-customer-simple] .results-tools {gap:12px;margin-block:16px}
+body[data-public-refinement][data-customer-simple] .results-page-grid {gap:16px}
+body[data-public-refinement][data-customer-simple][data-page=packages] #catalogGrid .package-card {padding:16px;gap:10px}
+body[data-public-refinement][data-customer-simple][data-page=packages] #catalogGrid .package-cover {height:130px;margin:-16px -16px 0}
+body[data-public-refinement][data-customer-simple][data-page=packages] #catalogGrid .package-cover:has(img[src*="/assets/package-mashaya-"]) {height:180px}
+body[data-public-refinement][data-customer-simple][data-page=packages] #catalogGrid h3 {font-size:19px;margin-block:4px}
+body[data-public-refinement][data-customer-simple][data-page=packages] #catalogGrid .price {font-size:23px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] #main>.section-pad {padding-block:30px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-editorial {display:grid;min-height:420px;padding-block:24px;gap:32px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-frame {height:390px;max-width:340px;border-radius:64px 64px 16px 16px;justify-self:center}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy h1 {font-size:clamp(34px,4vw,54px);margin-block:16px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy>p {font-size:15px;line-height:1.85}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy .hero-actions {margin-top:20px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-packages-link {display:none}
+body[data-public-refinement][data-customer-simple] .customer-shortcuts {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding-block:18px}
+body[data-public-refinement][data-customer-simple] .customer-shortcuts a {display:flex;align-items:center;justify-content:center;min-height:48px;padding:10px;border:1px solid var(--card-border);border-radius:12px;background:var(--panel);font-size:14px;font-weight:700;text-align:center}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head {gap:12px;margin-bottom:18px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head h2 {font-size:28px}
+body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust {padding-block:8px;gap:12px}
+body[data-public-refinement][data-customer-simple] .home-explore-head {display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+body[data-public-refinement][data-customer-simple] .home-explore-head h2 {font-size:24px;margin:0}
+body[data-public-refinement][data-customer-simple][data-home-editorial] #homeExplore {content-visibility:visible;contain-intrinsic-size:none}
+body[data-public-refinement][data-customer-simple] #homeExploreContent[hidden] {display:none!important}
+body[data-public-refinement][data-customer-simple] #homeExploreContent {padding-top:24px}
+body[data-public-refinement][data-customer-simple] .public-footer .footer-layout {padding-block:28px;gap:24px}
+@media(max-width:900px) {
+ body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px) {
+ body[data-public-refinement][data-customer-simple] .catalog-hero {padding-block:14px}
+ body[data-public-refinement][data-customer-simple] .catalog-hero .section-kicker {display:none}
+ body[data-public-refinement][data-customer-simple][data-page=services] #catalogGrid {grid-template-columns:minmax(0,1fr)}
+ body[data-public-refinement][data-customer-simple] .results-hero {padding-block:18px}
+ body[data-public-refinement][data-customer-simple] .results-hero .hero-actions {margin-top:14px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-editorial {grid-template-columns:minmax(0,1fr) 110px;min-height:270px;gap:12px;padding-block:22px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy {padding:0;grid-column:1;grid-row:1}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy h1 {font-size:29px;line-height:1.5;margin-block:10px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy .eyebrow {font-size:10px;min-height:0;padding:4px 8px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy>p {font-size:12px;line-height:1.8}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy .hero-actions {gap:8px;margin-top:14px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy .hero-actions>.btn-ghost {display:none}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-actions .btn {font-size:12px;min-height:44px;padding:9px 14px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-frame {grid-column:2;grid-row:1;width:110px;height:190px;align-self:center;border-radius:40px 40px 12px 12px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-signature {display:none}
+ body[data-public-refinement][data-customer-simple] .customer-shortcuts {gap:8px;padding-block:12px}
+ body[data-public-refinement][data-customer-simple] .customer-shortcuts a {font-size:11px;padding:6px;min-height:44px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #main>.section-pad {padding-block:22px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head h2 {font-size:25px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head p {font-size:13px;margin-top:6px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust {grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust>span {padding:6px 2px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust small {display:none}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust svg {width:24px;height:24px;padding:0;border:0}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust b {font-size:10px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-card {display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-cover {width:100%;height:90px;margin:0;grid-column:auto;grid-row:auto}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-image {width:100%;height:90px;object-fit:cover}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-copy {padding:10px;display:flex;flex:1;flex-direction:column;gap:6px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid h3 {font-size:15px;margin:0}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-meta {font-size:10px;flex-wrap:wrap;gap:4px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-purchase {margin-top:auto;display:flex;flex-wrap:wrap;gap:8px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .price {font-size:20px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .btn {width:100%;padding:8px;font-size:12px;min-height:40px}
+ body[data-public-refinement][data-customer-simple] .home-explore-head .btn {width:100%;white-space:normal}
+}
+@media(prefers-reduced-motion:no-preference) {
+ body[data-public-refinement][data-customer-simple] .customer-shortcuts a {transition:border-color .15s,background .15s}
+ body[data-public-refinement][data-customer-simple] .customer-shortcuts a:hover {border-color:var(--cyan)}
+}
+/* Four customer stages; the original inputs, calculations and submission guards stay mounted. */
+body[data-public-refinement][data-customer-simple] #bookingProgress {grid-template-columns:repeat(var(--booking-stages,4),minmax(0,1fr));padding:10px 16px;gap:8px}
+body[data-public-refinement][data-customer-simple] #bookingProgress li[hidden],
+body[data-public-refinement][data-customer-simple] #bookingSummaryToggle[hidden],
+body[data-public-refinement][data-customer-simple] #bookingSummaryDetails[hidden] {display:none!important}
+body[data-public-refinement][data-customer-simple] #bookingDialog .booking-main {min-height:0}
+body[data-public-refinement][data-customer-simple] #bookingDialog[data-booking-step="2"] .booking-main {display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+body[data-public-refinement][data-customer-simple] #bookingDialog .booking-step {min-width:0;max-width:100%}
+body[data-public-refinement][data-customer-simple] #bookingDialog .booking-step>h3 {font-size:18px;margin-block:0 12px}
+body[data-public-refinement][data-customer-simple] #bookingDialog .booking-step>p {font-size:13px;line-height:1.8}
+body[data-public-refinement][data-customer-simple] #bookingDialog :is(input,select,textarea) {font-size:16px;min-height:46px;min-width:0;max-width:100%;box-sizing:border-box}
+body[data-public-refinement][data-customer-simple] #bookingDialog .field {min-width:0}
+body[data-public-refinement][data-customer-simple] #bookingDialog .staff-choice {min-width:0}
+body[data-public-refinement][data-customer-simple] #bookingDialog .booking-catalog-search {display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px;margin-block:12px}
+body[data-public-refinement][data-customer-simple] #bookingSummaryToggle {width:100%;text-align:start;min-height:44px;font-size:13px}
+body[data-public-refinement][data-customer-simple] #bookingDialog [data-step="3"]>h3,
+body[data-public-refinement][data-customer-simple] #bookingDialog [data-step="4"]>h3 {display:none}
+@media(max-width:820px) {
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-shell {width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;grid-template-rows:auto auto auto minmax(0,1fr) auto}
+ body[data-public-refinement][data-customer-simple] #bookingDialog {padding:0;max-width:100%;max-height:100dvh;margin:0;width:100%;border:0}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-head {padding:10px 14px;gap:8px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-head h2 {font-size:20px;margin:3px 0 0}
+ body[data-public-refinement][data-customer-simple] #bookingStepStatus {font-size:11px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-back {display:none}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-close {width:44px;height:44px;min-width:44px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar {display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;padding:8px 14px;gap:8px;margin:0}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-icon {grid-column:1;grid-row:1}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar>div {grid-column:2;grid-row:1;min-width:0}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar>button {grid-column:3;grid-row:1;width:auto;min-width:0;min-height:44px;padding:7px;font-size:12px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar small {display:none}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar strong {font-size:14px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-branch-bar>div>span {font-size:10px;line-height:1.5}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-body {padding:14px;gap:14px;overscroll-behavior:contain}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-progress {padding:8px 14px;gap:6px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-progress li {gap:4px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-progress li span {width:24px;height:24px;font-size:11px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-progress b {font-size:11px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-add-actions {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-add-actions .btn {min-height:44px;padding:9px;font-size:13px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .cart-line {display:grid;grid-template-columns:minmax(0,1fr) auto 40px;gap:8px;padding:12px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .cart-line b {font-size:14px;line-height:1.6}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .remove-line {width:40px;height:40px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .package-choice-fields {grid-column:1/-1}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .cart-qty {grid-column:1/-1}
+ body[data-public-refinement][data-customer-simple] #staffPicker {display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
+ body[data-public-refinement][data-customer-simple] #staffPicker .staff-choice {flex:0 0 132px;min-height:98px;padding:10px;display:flex;flex-direction:column;justify-content:center;gap:5px;scroll-snap-align:start}
+ body[data-public-refinement][data-customer-simple] #staffPicker .staff-choice img {width:30px;height:30px;border-radius:50%;object-fit:cover}
+ body[data-public-refinement][data-customer-simple] #staffPicker .staff-choice b {font-size:12px}
+ body[data-public-refinement][data-customer-simple] #staffPicker .staff-choice small {font-size:10px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .date-time-grid {grid-template-columns:minmax(0,1fr)}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .customer-form {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-summary {padding:0;border:0;background:transparent}
+ body[data-public-refinement][data-customer-simple] #bookingSummaryDetails {padding:14px;margin-top:10px;border:1px solid var(--card-border);border-radius:14px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-actions {display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));align-items:center}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .dialog-actions .btn {min-height:46px;padding:10px 14px;font-size:13px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog[data-booking-step="1"] .dialog-actions {grid-template-columns:auto minmax(0,1fr)}
+ body[data-public-refinement][data-customer-simple] #bookingDialog[data-booking-step="1"] #prevStep {display:none}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .mobile-booking-total {display:grid;text-align:start;min-width:70px;gap:3px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .mobile-booking-total b {font-size:17px}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-catalog-search {grid-template-columns:minmax(0,1fr)}
+ body[data-public-refinement][data-customer-simple] #bookingDialog .booking-catalog-search input {width:100%;min-width:0}
+}
+
+/* Branch choice belongs to checkout. No empty header strip or duplicated selector. */
+body[data-public-refinement] #choose-branch[hidden] {display:none!important}
+body[data-public-refinement] :is(.btn,button,a) {touch-action:manipulation}
+body[data-public-refinement] button:active:not(:disabled) {filter:brightness(.94)}
+body[data-public-refinement] button[aria-busy=true] {cursor:progress}
+body[data-public-refinement] .footer-branch-detail {display:block;margin-block:10px}
+@media(max-width:820px){body[data-public-refinement] #branchDialog {width:calc(100% - 24px);max-height:calc(100dvh - 24px);border-radius:20px}body[data-public-refinement] #branchDialog .branch-picker {grid-template-columns:minmax(0,1fr)}body[data-public-refinement] #branchDialog .branch-choice {padding:16px}body[data-public-refinement] #branchDialog .branch-choice-top figure {display:none}body[data-public-refinement] #branchDialog [data-select-branch] {min-height:48px;width:100%}}
+@media(max-width:820px){
+ body[data-public-refinement] #branchDialog {position:fixed;inset:0;height:auto;margin:auto;padding:0;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+ body[data-public-refinement] #branchDialog .branch-dialog-shell {display:grid;grid-template-rows:auto minmax(0,1fr);width:100%;max-height:calc(100dvh - 24px);margin:0;border:0;border-radius:inherit;overflow:hidden}
+ body[data-public-refinement] #branchDialog .dialog-head {padding:12px 14px}
+ body[data-public-refinement] #branchDialog .dialog-head h2 {font-size:20px}
+ body[data-public-refinement] #branchDialog .branch-dialog-content {min-height:0;overflow:auto;padding:0 14px 14px}
+ body[data-public-refinement] #branchDialog .branch-dialog-content>p {font-size:13px;margin:0 0 12px}
+ body[data-public-refinement] #branchDialog .branch-picker {gap:10px}
+ body[data-public-refinement] #branchDialog .branch-choice {padding:12px;border-radius:14px}
+ body[data-public-refinement] #branchDialog .branch-choice h3 {font-size:18px}
+ body[data-public-refinement] #branchDialog .branch-choice-top small {display:none}
+ body[data-public-refinement] #branchDialog .branch-choice>p {min-height:0;font-size:12px;margin:6px 0}
+ body[data-public-refinement] #branchDialog .branch-quick-info {font-size:11px}
+ body[data-public-refinement] #branchDialog .branch-choice .btn {margin-top:8px;min-height:44px;padding:10px}
+}

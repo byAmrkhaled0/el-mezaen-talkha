@@ -1,5 +1,6 @@
 export const translations = {
   ar: {
+    bookingBranchQuestion:"هتحجز في أنهي فرع؟", bookingAppointmentStage:"الموعد", bookingDayLabel:"اختار اليوم", bookingCustomerDetails:"بياناتك", bookingSummaryDetails:"تفاصيل السعر والخدمات",
     accountRestoring: "جاري فتح حسابك…",
     customerAccountTitle: "حساب العميل",
     customerAccountIntro: "حجوزاتك وزياراتك ونقاطك في مكان واحد.",
@@ -33,10 +34,10 @@ export const translations = {
     home: "الرئيسية", branch: "فرعا طلخا والمشاية", offers: "العروض", packages: "الباقات", services: "الخدمات", hairSystems: "تركيب الشعر", about: "عن مزين",
     team: "الفريق", gallery: "المعرض", contact: "تواصل معنا", bookNow: "احجز الآن", addCart: "إضافة للسلة", callNow: "اتصل الآن", whatsappBranch: "واتساب المحل",
     heroBadge: "منذ 1995 • خبرة بتبان في كل تفصيلة", heroTitle1: "تفاصيل محسوبة.", heroTitle2: "لوك يليق بيك.",
-    heroText: "من القصة والدقن للعناية وتركيب الشعر. اختار فرعك وخدمتك، واحجز الموعد المناسب ليك.",
+    heroText: "من القصة والدقن للعناية وتركيب الشعر. اختار خدمتك واحجز الموعد المناسب ليك.",
     startBooking: "احجز موعدك", exploreServices: "اكتشف خدماتنا", years: "خبرة منذ 1995", specialists: "+20 متخصص", fastBooking: "حجز سريع وآمن",
     offersTag: "عروض تتحكم بها الإدارة", offersTitle: "عروض مختارة ليك", offersText: "العروض النشطة والمجدولة تظهر هنا تلقائيًا.", noOffers: "لا توجد عروض نشطة حاليًا.",
-    packagesTag: "قيمة أكبر في زيارة واحدة", packagesTitle: "الباقات", packagesText: "اختار الفرع ثم احجز الباقة المناسبة بسهولة.",
+    packagesTag: "قيمة أكبر في زيارة واحدة", packagesTitle: "الباقات", packagesText: "شوف تفاصيل الباقة وسعرها، واختار المناسب ليك.",
     servicesTag: "كل التفاصيل واضحة", servicesTitle: "الخدمات", servicesText: "اختر خدمة أو أكثر وأضفها إلى سلة الحجز.", all: "الكل",
     from: "يبدأ من", minute: "دقيقة", product: "منتج", package: "باقة", featured: "الأكثر طلبًا", special: "عرض مميز",
     aboutTag: "حكاية خبرة", aboutTitle: "منذ 1995.. نصنع إطلالة تشبهك", aboutText: "في مزين مصر نؤمن أن الإطلالة القوية تبدأ من التفاصيل. نجمع بين خبرة السنين، أحدث أساليب العناية، واهتمام حقيقي براحتك لتخرج كل مرة بأفضل نسخة منك.",
@@ -59,6 +60,7 @@ export const translations = {
     privacy: "بياناتك تُستخدم لتنفيذ الحجز فقط.", loadError: "تعذر تحميل البيانات. حاول مرة أخرى.", couponInvalid: "كود الخصم غير صالح.", added: "تمت الإضافة للسلة", menu: "القائمة", theme: "تغيير المظهر", language: "تغيير اللغة"
   },
   en: {
+    bookingBranchQuestion:"Which branch are you booking?", bookingAppointmentStage:"Appointment", bookingDayLabel:"Choose a day", bookingCustomerDetails:"Your details", bookingSummaryDetails:"Price and service details",
     accountRestoring: "Opening your account…",
     customerAccountTitle: "Customer account",
     customerAccountIntro: "Your bookings, visits and rewards in one place.",
@@ -92,10 +94,10 @@ export const translations = {
     home: "Home", branch: "Talkha & El Mashaya", offers: "Offers", packages: "Packages", services: "Services", hairSystems: "Hair Systems", about: "About",
     team: "Team", gallery: "Gallery", contact: "Contact", bookNow: "Book Now", addCart: "Add to Cart", callNow: "Call Now", whatsappBranch: "Shop WhatsApp",
     heroBadge: "Since 1995 • Experience That Shows", heroTitle1: "Every detail matters.", heroTitle2: "A look that suits you.",
-    heroText: "Haircuts, grooming and hair systems. Choose your branch and service, then book your visit.",
+    heroText: "Haircuts, grooming and hair systems. Choose your service and book your visit.",
     startBooking: "Start Booking", exploreServices: "Explore Services", years: "Since 1995", specialists: "20+ Specialists", fastBooking: "Fast, Secure Booking",
     offersTag: "Admin-managed offers", offersTitle: "Offers Picked for You", offersText: "Active and scheduled offers appear here automatically.", noOffers: "There are no active offers right now.",
-    packagesTag: "More value in one visit", packagesTitle: "Packages", packagesText: "Choose your branch, then book the package that suits you.",
+    packagesTag: "More value in one visit", packagesTitle: "Packages", packagesText: "Compare package details and prices, then choose what suits you.",
     servicesTag: "Every detail, upfront", servicesTitle: "Services", servicesText: "Choose one or more services and add them to your booking cart.", all: "All",
     from: "From", minute: "min", product: "Product", package: "Package", featured: "Most Popular", special: "Special Offer",
     aboutTag: "About El Mezaen Egypt", aboutTitle: "Since 1995, Details Make the Look", aboutText: "Talkha's destination for men's grooming, with a focus on hygiene, precision and a result that suits you.",

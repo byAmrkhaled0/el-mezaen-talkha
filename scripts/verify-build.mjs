@@ -103,7 +103,8 @@ assert.match(appSource, /data-book-branch/);
 assert.match(appSource, /data-video-src/);
 assert.match(appSource, /getCustomerBooking/);
 assert.match(appSource, /import\("\.\/firebase-client\.js"\)/);
-assert.match(appSource, /requestIdleCallback/);
+assert.match(appSource, /refreshRemoteCatalog\(\);/, 'Critical public catalog starts without an idle delay');
+assert.doesNotMatch(appSource, /requestIdleCallback\(refreshRemoteCatalog/, 'Do not postpone visible services behind idle work');
 assert.match(appSource, /import\("jsbarcode"\)/);
 assert.doesNotMatch(appSource, /import JsBarcode from "jsbarcode"/);
 

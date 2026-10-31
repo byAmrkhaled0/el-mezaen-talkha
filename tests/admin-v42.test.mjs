@@ -49,7 +49,9 @@ test("booking notifications open a right drawer and link to the existing booking
   assert.match(html, /id="pushButton"[\s\S]*?id="adminAlertsCount"/);
   assert.match(html, /id="adminAlertsDialog"[\s\S]*?id="adminAlertsList"/);
   assert.match(admin, /pushButton"\)\.addEventListener\("click", event => handlePushButton/);
-  assert.match(admin, /handlePushButton\(button\)[\s\S]*?adminAlertsDialog"\)\.showModal\(\)/);
+  const handler=admin.slice(admin.indexOf('async function handlePushButton('),admin.indexOf('function goBackInAdmin()'));
+  assert.match(handler, /const dialog=\$\("#adminAlertsDialog"\)/);
+  assert.ok(handler.indexOf('dialog.showModal()')<handler.indexOf('orderAdditionView?.poll(true)'), 'Open the drawer before network refresh');
   assert.match(admin, /data-calendar-booking="\$\{escapeAttr\(item\.id\)\}"/);
   assert.match(admin, /\[item\.id, item\.code, item\.customerName/);
   assert.match(css, /\.admin-alerts-shell>header\{background:#245b7b/);

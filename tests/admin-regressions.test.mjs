@@ -73,7 +73,7 @@ test("package cards open complete details and add to cart before booking", async
   assert.match(app, /class="package-phone"/);
   assert.match(app, /متابعة الحجز/);
   assert.match(app, /احجز الباقة/);
-  assert.match(app, /if \(added && \["offer", "package"\]\.includes\(add\.dataset\.kind\)\) void openBooking\(add\)/);
+  assert.match(app, /if \(added && \(!\$\("#bookingDialog"\)\.open \|\| \["offer", "package"\]\.includes\(add\.dataset\.kind\)\)\) void openBooking\(add\)/);
   assert.match(html, /class="package-grid" id="packageGrid"/);
   assert.doesNotMatch(html, /class="package-grid horizontal-cards"/);
   assert.match(await read("src/premium-components.css"), /\.package-card\{[^}]*display:flex;flex-direction:column/);

@@ -702,3 +702,15 @@ tests/results-viewer-focus.test.mjs
 functions/src/customer-session.js
 tests/customer-session.test.mjs
 tests/customer-session.emulator.mjs
+src/public-catalog-requests.js
+src/customer-simple.js
+src/customer-simple.css
+tests/public-catalog-requests.test.mjs
+tests/customer-simple.test.mjs
+tests/customer-precache.test.mjs
+src/booking-experience.js
+src/admin-startup.js
+tests/booking-experience.test.mjs
+tests/admin-startup-performance.test.mjs
+src/public-browsing.js
+tests/booking-branch-only.test.mjs

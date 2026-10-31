@@ -1,4 +1,5 @@
 import {workerPushNotification} from './worker-push.js';
+import {verifyStaffStartup,needsMarketingGrantCheck} from './admin-startup.js';
 import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
 import {legacyCollectionError,legacyCollectionPage} from './legacy-admin-compat.js';
 import {isOfflineMode,setDeviceOffline} from './offline-connectivity.js';
@@ -98,7 +99,7 @@ export async function currentAccess(user) {
   }
 
   let token;
-  try {token=await user.getIdTokenResult(true);await ensureAdminAppCheckReady();}
+  try {token=await verifyStaffStartup(user,async()=>{await ensureAdminAppCheckReady();});}
   catch(error){
     if(!transientFailure(error))throw error;
     const cached=await offlineStore.get(`${config.projectId}:${user.uid}`,'access','current');
@@ -108,7 +109,7 @@ export async function currentAccess(user) {
   const role = token.claims.role || null;
   let permissions = Array.isArray(token.claims.permissions) ? token.claims.permissions : [];
   const branchIds = Array.isArray(token.claims.branchIds) ? token.claims.branchIds : [];
-  if (role === "cashier" || role === "manager" || role === "media") {
+  if (needsMarketingGrantCheck(role,permissions)) {
     let grants = [];
     try {
       grants = (await httpsCallable(functions, "getOwnMarketingGrants", { timeout: 15000 })({})).data.grants || [];

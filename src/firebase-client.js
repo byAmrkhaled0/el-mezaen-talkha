@@ -10,8 +10,11 @@ import { seedCatalog } from "./seed-data.js";
 import {createLocalDemoCatalog,assertDemoWorkerScope} from "./local-demo-catalog.js";
 import { availableAtBranch } from "./branch-availability.js";
 import {PUBLIC_EDITORIAL_TYPES,globalEditorialRecord} from '../functions/src/public-editorial-scope.js';
+import {createPublicCatalogRequests} from './public-catalog-requests.js';
 
 const config = globalThis.__FIREBASE_CONFIG__ || {};
+let browseStorage;try{browseStorage=globalThis.sessionStorage;}catch{}
+const browseRequest=createPublicCatalogRequests({storage:browseStorage,namespace:config.projectId||'preview'});
 export const firebaseConfigured = !globalThis.__OFFLINE_DEMO__ && Boolean(config.projectId && !String(config.projectId).includes("YOUR_"));
 let functions;
 let app;
@@ -81,9 +84,10 @@ async function loadCatalog() {
   const cached = readCatalogCache();
   if (navigator.onLine === false && cached) { if(typeof document!=='undefined')applySiteMedia(cached.settings); return { ...cached, offline: true, cached: true }; }
   try {
-    const remote = projectCatalogStaff(await callFunction("getCatalog", {}, 15000) || {});
     const cartIds=savedCatalogItemIds();
-    if(cartIds.length){const hydrated=await callFunction('getCatalog',{mode:'hydrate',ids:cartIds},15000);for(const key of ['services','packages','offers'])remote[key]=[...new Map([...(remote[key]||[]),...(hydrated[key]||[])].map(item=>[item.id,item])).values()];}
+    const [response,hydrated]=await Promise.all([callFunction("getCatalog", {}, 15000),cartIds.length?callFunction('getCatalog',{mode:'hydrate',ids:cartIds},15000):Promise.resolve(null)]);
+    const remote = projectCatalogStaff(response || {});
+    if(hydrated)for(const key of ['services','packages','offers'])remote[key]=[...new Map([...(remote[key]||[]),...(hydrated[key]||[])].map(item=>[item.id,item])).values()];
     const fallback = localCatalog();
     const fallbackStaff = new Map(fallback.staff.map(item => [item.id, item]));
     const fallbackContent = new Map(fallback.content.map(item => [item.id, item]));
@@ -264,12 +268,19 @@ export const confirmCustomerAgent = payload => callFunction('confirmAiAction', p
 export async function getCatalogMetadata(){
  if(!firebaseConfigured)return {...localCatalog(),preview:true};
  if(navigator.onLine===false){const cached=readCatalogCache();if(cached)return {...cached,cartSources:{services:cached.services||[],packages:cached.packages||[],offers:cached.offers||[]},cached:true,offline:true};throw Error('تحميل البيانات يحتاج اتصالًا');}
- const metadata=await callFunction('getCatalog',{mode:'metadata'},15000),ids=savedCatalogItemIds();if(typeof document!=='undefined')applySiteMedia(metadata.settings||{});if(ids.length)metadata.cartSources=await callFunction('getCatalog',{mode:'hydrate',ids},15000);return metadata;
+ const ids=savedCatalogItemIds();
+ const [metadata,cartSources]=await Promise.all([
+  browseRequest({mode:'metadata'},()=>callFunction('getCatalog',{mode:'metadata'},15000)),
+  ids.length?callFunction('getCatalog',{mode:'hydrate',ids},15000):Promise.resolve(null)
+ ]);
+ if(typeof document!=='undefined')applySiteMedia(metadata.settings||{});
+ if(cartSources)metadata.cartSources=cartSources;
+ return metadata;
 }
 export async function getCatalogPage(options={}){
  const take=Number(options.take??options.Take??24);if(!Number.isSafeInteger(take)||take<1||take>50)throw Error('حجم الصفحة غير صحيح');
  if(options.globalOnly&&(options.collection!=='content'||!PUBLIC_EDITORIAL_TYPES.includes(options.type)||options.branchId))throw Error('نطاق المحتوى غير صحيح');
- if(firebaseConfigured&&navigator.onLine!==false)return await callFunction('getCatalog',{...options,mode:'page',take},15000);
+ if(firebaseConfigured&&navigator.onLine!==false){const payload={...options,mode:'page',take};return await browseRequest(payload,()=>callFunction('getCatalog',payload,15000),{remember:options.collection!=='staff'});}
  const data=firebaseConfigured?readCatalogCache():localCatalog();if(!data)throw Error('تحميل البيانات يحتاج اتصالًا');
  let items=(data[options.collection]||[]).filter(item=>item.active!==false&&(!options.branchId||item.branchIds?.includes(options.branchId)||options.collection==='content'&&PUBLIC_EDITORIAL_TYPES.includes(options.type)&&globalEditorialRecord(item))&&(!options.globalOnly||globalEditorialRecord(item))&&(!options.type||item.type===options.type)&&(!options.category||options.category==='all'||item.categoryId===options.category));
  const search=String(options.search||'').toLowerCase();if(search)items=items.filter(item=>String(item[options.collection==='content'?(options.lang==='en'?'titleEn':'titleAr'):(options.lang==='en'?'nameEn':'nameAr')]||'').toLowerCase().startsWith(search));

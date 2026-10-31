@@ -1,6 +1,8 @@
 import './public-interface.css';
 import './public-refinement.css';
 import './client-showcase.css';
+import './customer-simple.css';
+import {mountCustomerSimple} from './customer-simple.js';
 import {mountPublicControls} from './public-controls.js';
 import {publicRoutes} from './public-navigation.js';
 import {refinePublicNavigation} from './public-navigation.js';
@@ -20,3 +22,4 @@ export function mountGlobalNavigation() {
 mountGlobalNavigation();
 refinePublicNavigation();
 mountPublicControls();
+mountCustomerSimple();

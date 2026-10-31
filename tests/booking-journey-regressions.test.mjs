@@ -9,12 +9,7 @@ const [app, catalog, client, backend] = await Promise.all([
   readFile("functions/src/index.js", "utf8")
 ]);
 
-test("exclusive branch items select their only active branch before entering the cart", () => {
-  assert.match(app, /!state\.branchId && Array\.isArray\(item\.branchIds\) && item\.branchIds\.length === 1/);
-  assert.match(app, /selectBranch\(autoSelectedBranch\.id, false\)/);
-  assert.match(catalog, /!branchId && Array\.isArray\(item\.branchIds\) && item\.branchIds\.length === 1/);
-  assert.match(catalog, /localStorage\.setItem\("mz-branch", branchId\)/);
-});
+test("public item selection does not persist a branch, checkout still reconciles",()=>{assert.doesNotMatch(catalog,/localStorage\.setItem\("mz-branch"/);assert.match(catalog,/browsingSubset\(\[item\],catalog\)/);assert.match(app,/inCheckout && !itemAvailableAtBranch/);assert.match(app,/state.cart = reconcileBranchCart\(state.cart, state.catalog, branch.id\).kept/);});
 
 test("booking submit locks branch changes and dialog dismissal until the request resolves", () => {
   assert.match(app, /function openBranchDialog[\s\S]*bookingSubmitting/);

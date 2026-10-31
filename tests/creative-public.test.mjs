@@ -20,7 +20,7 @@ function harness(mobile){
 }
 test('mobile header moves original controls while retaining state and handlers',()=>{
  const h=harness(true);assert.equal(h.events.length,1);const prefs=h.links.children[0];
- for(const id of ['#branchSwitch','.nav-book']){const node=h.nodes.get(id);assert.equal(node.parent,prefs);node.click();assert.equal(node.state.clicks,1);}
+ for(const id of ['.nav-book']){const node=h.nodes.get(id);assert.equal(node.parent,prefs);node.click();assert.equal(node.state.clicks,1);}
  for(const id of ['#langToggle','#themeToggle'])assert.equal(h.nodes.get(id).parent,h.actions);
 assert.equal(h.nodes.get('#menuToggle').parent,h.actions);
 });
@@ -35,7 +35,7 @@ test('visible language control retains focus when resizing to mobile',()=>{
  const h=harness(false);h.root.activeElement=h.nodes.get('#langToggle');h.media.matches=true;h.sync();assert.equal(h.root.activeElement,h.nodes.get('#langToggle'));
 });
 test('public shell keeps original control IDs and destinations in both languages',()=>{
- for(const lang of ['ar','en']){const s=publicHeaderMarkup(lang);for(const id of ['branchSwitch','langToggle','themeToggle','menuToggle','navLinks'])assert.equal((s.match(new RegExp(`id="${id}"`,'g'))||[]).length,1);for(const path of ['/account/','/results/','/gallery/','/celebrities/','/hair-systems/'])assert.ok(s.includes(`href="${path}"`));}
+ for(const lang of ['ar','en']){const s=publicHeaderMarkup(lang);for(const id of ['langToggle','themeToggle','menuToggle','navLinks'])assert.equal((s.match(new RegExp(`id="${id}"`,'g'))||[]).length,1);for(const path of ['/account/','/results/','/gallery/','/celebrities/','/hair-systems/'])assert.ok(s.includes(`href="${path}"`));}
 });
 test('source About layout explicitly defeats inherited empty-gallery one-column selector',()=>{
  const s=read('src/public-refinement.css');assert.match(s,/body\[data-home-editorial\] #about \.about-grid,body\[data-home-editorial\] #about \.about-grid.without-gallery\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);assert.match(s,/#about \.about-media\{grid-column:1;grid-row:2/);

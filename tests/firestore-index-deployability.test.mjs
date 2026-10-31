@@ -11,3 +11,8 @@ test('worker leaderboard has collection indexes for completed counters across al
   assert.ok(config.indexes.some(index=>index.collectionGroup===group&&index.queryScope==='COLLECTION'&&JSON.stringify(index.fields.filter(field=>field.fieldPath!=='__name__').map(field=>[field.fieldPath,field.order]))===JSON.stringify(expected.map(field=>[field,'ASCENDING']))),group+': missing '+expected.join(', '));
  }
 });
+
+test('cashier legacy receipts have a branch-scoped descending business-date index',()=>{
+ const config=JSON.parse(readFileSync(new URL('../firestore.indexes.json',import.meta.url),'utf8'));
+ assert.ok(config.indexes.some(index=>index.collectionGroup==='bookings'&&index.queryScope==='COLLECTION'&&JSON.stringify(index.fields.filter(field=>field.fieldPath!=='__name__'))===JSON.stringify([{fieldPath:'branchId',order:'ASCENDING'},{fieldPath:'bookingDate',order:'DESCENDING'}])), 'getCashierSnapshot must support recent legacy receipts without a production FAILED_PRECONDITION');
+});

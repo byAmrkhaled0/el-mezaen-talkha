@@ -24,8 +24,25 @@ async function put(cacheName, request, response) {
   await cache.put(request, copy);
 }
 
+let adminWarmPromise;
+async function warmAdminOffline(cache) {
+  if(!adminWarmPromise)adminWarmPromise=(async()=>{
+    const missing=[];
+    for(const url of OFFLINE_CORE)if(!await cache.match(url))missing.push(url);
+    if(missing.length)await cache.addAll(missing);
+  })().finally(()=>{adminWarmPromise=null;});
+  return adminWarmPromise;
+}
+function adminClient(client) {
+  try{const url=new URL(client?.url);return url.origin===self.location.origin&&/^\/admin(?:\/|$)/.test(url.pathname);}catch{return false;}
+}
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(STATIC_CACHE).then(async cache => {await cache.addAll(OFFLINE_CORE); await Promise.allSettled(CORE.map(url => cache.add(url)));}));
+  event.waitUntil(caches.open(STATIC_CACHE).then(async cache => {
+    // Do not download every management/employee bundle on a customer's first visit.
+    const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    if(clients.some(adminClient))await warmAdminOffline(cache);
+    await Promise.allSettled(CORE.map(url => cache.add(url)));
+  }));
   self.skipWaiting();
 });
 
@@ -46,6 +63,7 @@ self.addEventListener("fetch", event => {
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.hostname.includes("googleapis.com") || url.hostname.includes("cloudfunctions.net")) return;
 
   if(request.mode === 'navigate' && /^\/admin(?:\/|$)/.test(url.pathname)) {
+    event.waitUntil(caches.open(STATIC_CACHE).then(warmAdminOffline).catch(()=>{}));
     // Static shell only. No authenticated API responses enter CacheStorage.
     event.respondWith(fetch(request).then(async response=>{await put(STATIC_CACHE,'/admin/',response);return response;}).catch(async()=>await caches.match('/admin/')||new Response('افتح لوحة الإدارة أثناء الاتصال أولًا',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}})));
     return;
@@ -112,5 +130,10 @@ self.addEventListener("notificationclick", event => {
 
 self.addEventListener('message',event=>{
   if(event.data?.type!=='OFFLINE_READY')return;
-  event.waitUntil((async()=>{const cache=await caches.open(STATIC_CACHE);const present=await Promise.all(OFFLINE_CORE.map(url=>cache.match(url)));event.ports[0]?.postMessage({ready:OFFLINE_CORE.length>0&&present.every(Boolean),version:VERSION});})());
+  event.waitUntil((async()=>{
+    const cache=await caches.open(STATIC_CACHE);
+    try{if(adminClient(event.source))await warmAdminOffline(cache);}catch{/* Readiness stays false until all required files are cached. */}
+    const present=await Promise.all(OFFLINE_CORE.map(url=>cache.match(url)));
+    event.ports[0]?.postMessage({ready:OFFLINE_CORE.length>0&&present.every(Boolean),version:VERSION});
+  })());
 });
