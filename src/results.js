@@ -53,7 +53,8 @@ document.querySelector("#resultsSearch").addEventListener("input", event => {
 const viewer = document.querySelector("#resultViewer");
 function showViewer(index) {
   const item = visibleItems[index]; if (!item) return;
-  if(viewer.hidden)resultOpener=document.activeElement;
+  const opening = viewer.hidden;
+  if(opening)resultOpener=document.activeElement;
   viewerIndex = index;
   document.querySelector("#resultViewerImage").src = safeMediaUrl(item.beforeImageUrl && item.afterImageUrl ? item.afterImageUrl : item.imageUrl);
   const before = document.querySelector("#resultViewerBefore");
@@ -63,7 +64,7 @@ function showViewer(index) {
   document.querySelector("#resultViewerBranch").textContent = branchLabel(item);
   viewer.hidden = false;
   document.body.classList.add("viewer-open");
-  viewer.querySelector(".result-viewer-close").focus();
+  if(opening)viewer.querySelector(".result-viewer-close").focus();
 }
 function closeViewer() { viewer.hidden = true; document.body.classList.remove("viewer-open"); resultOpener?.focus?.(); }
 function moveViewer(step) { if (visibleItems.length) showViewer((viewerIndex + step + visibleItems.length) % visibleItems.length); }

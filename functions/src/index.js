@@ -1,3 +1,4 @@
+import {liveCustomerIdentity} from './customer-session.js';
 import {customerRecordPage,adminRecordPage} from './record-history.js';
 import {workerHistoryPage} from './worker-history.js';
 import {manualAttendanceHandler} from './manual-attendance.js';
@@ -624,7 +625,7 @@ export const getAvailableSlots = onCall(publicOptions, async request => {
   const bookingDate = sanitizeText(data.bookingDate, 10);
   const excludeBookingId = sanitizeText(data.excludeBookingId, 100);
   if (excludeBookingId) {
-    const identity = authenticatedCustomer(request);
+    const identity = await authenticatedCustomer(request);
     const original = await db.doc(`bookings/${excludeBookingId}`).get();
     if (!original.exists || original.data().phoneHash !== identity.customerId || original.data().branchId !== branchId || !["pending", "confirmed"].includes(original.data().status)) throw new HttpsError("not-found", "لم نجد حجزًا تابعًا لحسابك لإعادة الجدولة");
   }
@@ -706,7 +707,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const branch = await readBranch(data.branchId);
   const branchId = branch.id;
   if(branchOperator)requireBranchAccess(request,branchId);
-  const identity = request.auth && !request.auth.token.role ? authenticatedCustomer(request) : null;
+  const identity = request.auth && !request.auth.token.role ? await authenticatedCustomer(request) : null;
   let suppliedPhone;
   try { suppliedPhone = data.customer?.phone ? normalizePhone(data.customer.phone) : null; }
   catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
@@ -908,7 +909,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
 
 export const rescheduleBooking = onCall(adminOptions, async request => {
   if(['admin','manager','cashier'].includes(request.auth?.token?.role))await requireLiveStaff(request);
-  const customerIdentity = request.auth && !request.auth.token.role ? authenticatedCustomer(request) : null;
+  const customerIdentity = request.auth && !request.auth.token.role ? await authenticatedCustomer(request) : null;
   if (!customerIdentity) requirePermission(request, "bookings");
   const id = sanitizeText(request.data?.id, 100);
   const date = sanitizeText(request.data?.date, 10);
@@ -1006,7 +1007,7 @@ export const submitReview = onCall(publicOptions, async request => {
 });
 
 export const getCustomerBooking = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   const code = sanitizeText(request.data?.code, 40).toUpperCase();
   if (request.data?.phone) {
     let supplied; try { supplied = normalizePhone(request.data.phone); } catch { throw new HttpsError("invalid-argument", "رقم الهاتف غير صحيح"); }
@@ -1021,7 +1022,7 @@ export const getCustomerBooking = onCall(publicOptions, async request => {
 });
 
 export const cancelCustomerBooking = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   const code = sanitizeText(request.data?.code, 40).toUpperCase();
   if (!/^MZ-[A-Z0-9-]{6,36}$/.test(code)) throw new HttpsError("invalid-argument", "كود الحجز غير صحيح");
   if (request.data?.phone) {
@@ -3334,22 +3335,21 @@ export const updateBooking = onCall(adminOptions, async request => {
   });
 });
 
-function authenticatedCustomer(request) {
-  if (!request.auth || request.auth.token.role) throw new HttpsError("unauthenticated", "سجّل دخول العميل أولًا");
-  let phone;
-  try { phone = normalizePhone(request.auth.token.phone_number); }
-  catch { throw new HttpsError("failed-precondition", "حساب العميل غير مرتبط برقم هاتف صحيح"); }
-  return { uid: request.auth.uid, phone, customerId: hash(phone) };
+async function authenticatedCustomer(request) {
+  return liveCustomerIdentity(request, {
+    getUser: async uid => (await import('firebase-admin/auth')).getAuth().getUser(uid),
+    normalizePhone, hash, HttpsError
+  });
 }
 
 export const getCustomerHistory = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   await enforceRateLimit(request,'customer_history',120,15*60*1000,identity.uid);
   return customerRecordPage({db,FieldPath,Timestamp,identity,kind:request.data?.kind,cursor:request.data?.cursor,today:businessDateParts().dateKey,cleanDoc,fail:()=>new HttpsError('invalid-argument','صفحة السجل غير صحيحة؛ حدّث حسابك')});
 });
 
 export const getCustomerPortal = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   await enforceRateLimit(request, "customer_portal", 60, 15 * 60 * 1000, identity.uid);
   const customerRef = db.doc(`customers/${identity.customerId}`);
   if (request.data?.profileOnly === true) {
@@ -3392,11 +3392,8 @@ export const getCustomerPortal = onCall(publicOptions, async request => {
 });
 
 export const saveCustomerProfile = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   await enforceRateLimit(request, 'customer_profile_save', 12, 15 * 60 * 1000, identity.uid);
-  const {getAuth}=await import('firebase-admin/auth');
-  const liveUser = await getAuth().getUser(identity.uid);
-  if (liveUser.disabled || liveUser.customClaims?.role || normalizePhone(liveUser.phoneNumber) !== identity.phone) throw new HttpsError('permission-denied', 'سجّل دخول العميل برقم هاتف مؤكد');
   let profile;
   try { profile = parseCustomerProfile(request.data, businessDateParts().dateKey); }
   catch(error) { throw new HttpsError('invalid-argument', error.message); }
@@ -3421,7 +3418,7 @@ export const saveCustomerProfile = onCall(publicOptions, async request => {
 });
 
 export const saveFavoriteBarber = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   const staffId = sanitizeText(request.data?.staffId, 100);
   const customerRef = db.doc(`customers/${identity.customerId}`);
   const staffRef = db.doc(`staff/${staffId}`);
@@ -3516,7 +3513,7 @@ export const updateWhatsappConsent = onCall(adminOptions, async request => {
 });
 
 export const updateOwnWhatsappConsent = onCall(publicOptions, async request => {
-  const identity = authenticatedCustomer(request);
+  const identity = await authenticatedCustomer(request);
   const optedIn = request.data?.optedIn;
   if (typeof optedIn !== "boolean") throw new HttpsError("invalid-argument", "اختر حالة موافقة صحيحة");
   const customerRef = db.doc(`customers/${identity.customerId}`);

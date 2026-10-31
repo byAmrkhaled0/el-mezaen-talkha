@@ -32,7 +32,7 @@ body[data-public-refinement] .btn-tertiary{background:transparent;color:var(--te
 body[data-public-refinement] .btn-danger{background:#b42332;color:#fff;}
 body[data-public-refinement] :is(button,.btn):disabled,body[data-public-refinement] [aria-disabled=true]{opacity:.6;cursor:not-allowed;box-shadow:none;}
 body[data-public-refinement] :is(button,.btn):not(:disabled):hover{filter:brightness(1.08);}
-body[data-public-refinement] :is(button,.btn):active{transform:translateY(1px);}
+body[data-public-refinement] :is(button,.btn):active{translate:0 1px;}
 body[data-public-refinement] :is(button,a,summary,input,select):focus-visible{outline:3px solid var(--control-accent);outline-offset:3px;}
 body[data-public-refinement] :is(button,.btn,.global-back) svg{width:20px;height:20px;flex-shrink:0;stroke-width:1.8;}
 body[data-public-refinement] .global-back{padding:10px;}

@@ -6,7 +6,7 @@ const {RGBLuminanceSource,BinaryBitmap,HybridBinarizer,QRCodeReader}=require('@z
 const h=await import('../functions/src/index.js');const {getFirestore}=backendRequire('firebase-admin/firestore'),{getAuth}=backendRequire('firebase-admin/auth');const db=getFirestore(),auth=getAuth();
 const hash=s=>createHash('sha256').update(s).digest('hex').slice(0,32),rawRequest={ip:'127.0.0.1',headers:{}};
 const uid='membership-qr-customer',phone='01099910009',customerId=hash(phone);
-const customer={uid,token:{phone_number:'+201099910009'}};
+const customer={uid,token:{auth_time:Math.ceil(Date.now()/1000),phone_number:'+201099910009'}};
 const actor=(uid,role,branchIds)=>({uid,token:{role,branchIds,auth_time:Math.floor(Date.now()/1000),firebase:{sign_in_provider:'password'}}});
 const cashier=actor('membership-qr-cashier','cashier',['talkha']),admin=actor('membership-qr-admin','admin',['talkha','mashaya']);
 const call=(name,a,data={})=>h[name].run({auth:a,data,rawRequest});let token;

@@ -39,6 +39,7 @@ let taskId;
 const worker=actor('p11-google','worker','p11-staff');worker.token.auth_time=Math.floor(Date.now()/1000)+5;
 const cashier=actor('p11-cashier','cashier');
 test('prepare worker task and GPS fixtures',async()=>{
+ await db.doc('staff/p11-staff').set({userUid:'p11-google'},{merge:true});
  await auth.setCustomUserClaims('p11-google',{role:'worker',staffId:'p11-staff',branchIds:['talkha'],permissions:['attendance','tasks']});
  await db.doc('users/p11-google').set({role:'worker',staffId:'p11-staff',branchIds:['talkha'],active:true,accountStatus:'ACTIVE'},{merge:true});
  await db.doc('branches/talkha').set({nameAr:'فرع اختبار',nameEn:'Test branch',phone:'01000000000',whatsapp:'01000000000',active:true,latitude:31.04,longitude:31.38,attendanceRadiusMeters:100},{merge:true});
@@ -64,14 +65,15 @@ const { aiAgentHandlers }=await import('../functions/src/ai-agent.js');
 const { createHash }=await import('node:crypto');
 let nextPlan, draftId, aiBookingCode;
 const realFetch=globalThis.fetch;
-const customer={uid:'p11-ai-customer',token:{uid:'p11-ai-customer',phone_number:'+201022345678'}};
-const otherCustomer={uid:'p11-ai-other',token:{uid:'p11-ai-other',phone_number:'+201022345679'}};
+const customer={uid:'p11-ai-customer',token:{uid:'p11-ai-customer',auth_time:Math.ceil(Date.now()/1000),phone_number:'+201022345678'}};
+const otherCustomer={uid:'p11-ai-other',token:{uid:'p11-ai-other',auth_time:Math.ceil(Date.now()/1000),phone_number:'+201022345679'}};
 const domain=name=>r=>h[name].run(r);
-const ai=aiAgentHandlers({db,apiKey:()=> 'emulator-only',rateLimit:async()=>{},catalog:()=>h.getCatalog.run({}),available:domain('getAvailableSlots'),price:async()=>[{id:'p11-hair',kind:'service',nameAr:'حلاقة اختبار',qty:1,lineTotal:60}],create:domain('createBooking'),portal:domain('getCustomerPortal'),lookup:domain('getCustomerBooking'),cancel:domain('cancelCustomerBooking'),reschedule:domain('rescheduleBooking'),identity:r=>{if(!r.auth || r.auth.token.role || !r.auth.token.phone_number)throw Error('CUSTOMER_REQUIRED');const phone=r.auth.token.phone_number.replace('+2','');return {uid:r.auth.uid,phone,customerId:createHash('sha256').update(phone).digest('hex').slice(0,32)};}});
+const ai=aiAgentHandlers({db,apiKey:()=> 'emulator-only',rateLimit:async()=>{},catalog:()=>h.getCatalog.run({}),available:domain('getAvailableSlots'),price:async()=>[{id:'p11-hair',kind:'service',nameAr:'حلاقة اختبار',qty:1,lineTotal:60}],create:domain('createBooking'),portal:domain('getCustomerPortal'),lookup:domain('getCustomerBooking'),cancel:domain('cancelCustomerBooking'),reschedule:domain('rescheduleBooking'),identity:async r=>{if(!r.auth || r.auth.token.role || !r.auth.token.phone_number)throw Error('CUSTOMER_REQUIRED');const phone=r.auth.token.phone_number.replace('+2','');return {uid:r.auth.uid,phone,customerId:createHash('sha256').update(phone).digest('hex').slice(0,32)};}});
 const agent=(auth=customer,message='سؤال اختبار')=>ai.agent({auth,data:{message,branchId:'talkha'},rawRequest});
 const confirm=(auth=customer)=>ai.confirm({auth,data:{draftId,confirmed:true,firstName:'عميل',lastName:'اختبار'},rawRequest});
 const future=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo'}).format(new Date(Date.now()+3*86400000));
 test('AI isolated fixtures and mocked language provider only',async()=>{
+ for (const actor of [customer,otherCustomer]) await auth.createUser({uid:actor.uid,phoneNumber:actor.token.phone_number});
  await db.doc('settings/public').set({aiAgentEnabled:true},{merge:true});
  await db.doc('services/p11-hair').set({nameAr:'حلاقة اختبار',nameEn:'Test haircut',active:true,catalogVisible:true,branchIds:['talkha'],price:60,duration:30,type:'service'});
  await db.doc('staff/p11-staff').set({active:true,available:true,nameAr:'عامل اختبار',nameEn:'Test worker',branchIds:['talkha'],shiftStart:'11:00',shiftEnd:'23:00'},{merge:true});

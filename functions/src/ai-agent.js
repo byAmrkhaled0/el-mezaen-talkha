@@ -32,7 +32,7 @@ export function aiAgentHandlers({ db, emulator = false, apiKey, rateLimit, catal
     const business = await catalog();
     if (tool === 'getBusinessInfo' && args.query) return { message:'معلومات مزين', cards:(business.content || []).filter(r => (!args.branchId || r.branchIds?.includes(args.branchId)) && `${r.nameAr || ''} ${r.descriptionAr || ''} ${r.type || ''}`.includes(args.query)).slice(0,8).map(publicCard) };
     if (['getBusinessInfo','getBranches'].includes(tool)) return { message:'الفروع وساعات العمل', cards: business.branches.slice(0, 10).map(publicCard) };
-    if (tool === 'getMyBookings') { identity(request); const result = await invoke(portal, request, {}); return { message:'حجوزاتك', cards:(result.bookingHistory || result.upcomingBookings || []).slice(0, 10).map(b => Object.fromEntries(['code','branchNameAr','serviceNamesAr','staffNameAr','bookingDate','bookingTime','total','status'].map(k => [k, b[k] ?? '']))) }; }
+    if (tool === 'getMyBookings') { await identity(request); const result = await invoke(portal, request, {}); return { message:'حجوزاتك', cards:(result.bookingHistory || result.upcomingBookings || []).slice(0, 10).map(b => Object.fromEntries(['code','branchNameAr','serviceNamesAr','staffNameAr','bookingDate','bookingTime','total','status'].map(k => [k, b[k] ?? '']))) }; }
     if (tool === 'getPolicies') return { message:'سياسات وأسئلة الفرع', cards:[...bookingFaqKnowledge, ...(business.faqs || []).filter(row => row.active !== false && (!args.branchId || !row.branchIds?.length || row.branchIds.includes(args.branchId)))].slice(0, 10).map(publicCard) };
     const branch = business.branches.find(b => b.id === args.branchId && b.active !== false);
     if (!branch) return { message:'اختر الفرع أولًا', cards:business.branches.slice(0, 10).map(publicCard) };
@@ -63,7 +63,7 @@ export function aiAgentHandlers({ db, emulator = false, apiKey, rateLimit, catal
       card = { branchNameAr:branch.nameAr, serviceNamesAr:items.map(i => i.nameAr), staffNameAr:staff.nameAr, bookingDate:args.bookingDate, bookingTime:args.bookingTime, subtotal, discountAmount:0, total:subtotal };
       payload = { branchId:branch.id, staffId:args.staffId, bookingDate:args.bookingDate, bookingTime:args.bookingTime, items:lines };
     } else {
-      identity(request);
+      await identity(request);
       const current = (await invoke(lookup, request, { code:args.code })).booking;
       if (current.branchId !== branch.id) throw new HttpsError('permission-denied','الفرع لا يطابق الحجز');
       const safeCurrent = Object.fromEntries(['code','branchNameAr','serviceNamesAr','staffNameAr','bookingDate','bookingTime','subtotal','discountAmount','total','status'].filter(k=>current[k]!=null).map(k=>[k,current[k]])); safeCurrent.branchNameAr ||= branch.nameAr; card = safeCurrent;
@@ -77,7 +77,7 @@ export function aiAgentHandlers({ db, emulator = false, apiKey, rateLimit, catal
       } else throw new HttpsError('invalid-argument','الأداة غير مسموحة');
     }
     if (!request.auth) return { message:'سجل دخول العميل لتأكيد الحجز', confirmation:card, loginRequired:true };
-    const owner = identity(request);
+    const owner = await identity(request);
     const id = randomBytes(20).toString('hex');
     await db.doc(`aiActionDrafts/${id}`).create({ uid:owner.uid, tool, payload, confirmation:card, expiresAt:Timestamp.fromMillis(Date.now()+600000), status:'PREPARED' });
     return { message:'راجع التفاصيل قبل التأكيد', confirmation:card, draftId:id, action:tool };
@@ -133,7 +133,7 @@ export function aiAgentHandlers({ db, emulator = false, apiKey, rateLimit, catal
     },
     async confirm(request) {
       if (!await enabled()) return { fallback:true };
-      const owner = identity(request);
+      const owner = await identity(request);
       await rateLimit(request,'ai-confirm',10,600000,owner.uid);
       const id = String(request.data?.draftId || '');
       if (request.data?.confirmed !== true || !/^[a-f0-9]{40}$/.test(id)) throw new HttpsError('invalid-argument','التأكيد مطلوب');

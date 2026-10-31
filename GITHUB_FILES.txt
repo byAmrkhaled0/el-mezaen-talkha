@@ -697,3 +697,8 @@ functions/src/record-history.js
 src/record-history-client.js
 tests/record-history.test.mjs
 tests/record-history.emulator.mjs
+tests/results-viewer-focus.test.mjs
+
+functions/src/customer-session.js
+tests/customer-session.test.mjs
+tests/customer-session.emulator.mjs

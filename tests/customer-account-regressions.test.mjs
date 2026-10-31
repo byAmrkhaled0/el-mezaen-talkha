@@ -7,11 +7,13 @@ const [backend, account, homepage, admin, rules, client, firebaseHosting, vercel
   "functions/src/index.js", "src/account.js", "src/app.js", "src/admin.js", "firestore.rules", "src/firebase-client.js", "firebase.json", "vercel.json"
 ].map(path => readFile(path, "utf8")));
 
+const awaitSessionSource = await readFile('functions/src/customer-session.js','utf8');
+
 test("one phone identity is shared across OTP, booking, account and admin lookup", () => {
   const variants = ["01012345678", "201012345678", "+201012345678", "1012345678"];
   assert.deepEqual(variants.map(normalizePhone), variants.map(() => "01012345678"));
   assert.match(account, /phoneE164\(value\) \{ return `\+2\$\{normalizePhone\(value\)\}`/);
-  assert.match(backend, /customerId: hash\(phone\)/);
+  assert.match(awaitSessionSource, /customerId:\s*hash\(phone\)/);
   assert.match(backend, /const customerRef = db\.doc\(`customers\/\$\{hash\(customer\.phone\)\}`\)/);
   assert.match(admin, /function whatsappPhone\(value\)[\s\S]*normalizePhone\(value\)/);
 });

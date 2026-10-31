@@ -3,7 +3,7 @@ import {collectRecordPages} from '../src/record-history-client.js';
 assert.equal(process.env.GCLOUD_PROJECT,'demo-el-mezaen-gate');assert.equal(process.env.FIRESTORE_EMULATOR_HOST,'127.0.0.1:8087');assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST,'127.0.0.1:9097');
 const require=createRequire(new URL('../functions/package.json',import.meta.url)),h=await import('../functions/src/index.js');
 const {getFirestore,Timestamp}=require('firebase-admin/firestore'),{getAuth}=require('firebase-admin/auth'),db=getFirestore(),auth=getAuth();
-const phone='01099887766',customerId=createHash('sha256').update(phone).digest('hex').slice(0,32),customer={uid:'record-customer',token:{phone_number:'+201099887766'}};
+const phone='01099887766',customerId=createHash('sha256').update(phone).digest('hex').slice(0,32),customer={uid:'record-customer',token:{auth_time:Math.ceil(Date.now()/1000),phone_number:'+201099887766'}};
 const actor=(uid,role,branchIds)=>({uid,token:{role,branchIds,auth_time:Math.floor(Date.now()/1000),firebase:{sign_in_provider:'password'}}});
 const cashier=actor('record-cashier','cashier',['talkha']),owner=actor('record-owner','admin',['talkha','mashaya']);
 const manager=actor('record-manager','manager',['talkha']);
