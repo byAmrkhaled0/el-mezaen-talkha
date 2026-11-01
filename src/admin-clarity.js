@@ -1,3 +1,4 @@
+import {decorateBookingActionIcons} from './booking-action-icons.js';
 let nextId=0;
 function uniqueId(doc,prefix){let id;do{id=prefix+'-'+(++nextId);}while(doc.getElementById?.(id));return id;}
 export function identifyAdminFields(root,doc=root.ownerDocument||document){
@@ -16,6 +17,6 @@ export function exposeAdminDisclosure(details,doc=details.ownerDocument||documen
 }
 export function mountAdminClarity(doc=document){
  const app=doc.querySelector('#adminApp');if(!app)return null;const toggles=new Map();let pending=false,disposed=false;
- const sync=()=>{pending=false;if(disposed)return;for(const [details,button]of toggles)if(!details.isConnected){button.remove();toggles.delete(details);}for(const details of app.querySelectorAll('details')){const button=exposeAdminDisclosure(details,doc);if(button)toggles.set(details,button);}identifyAdminFields(app,doc);for(const dialog of doc.querySelectorAll('dialog'))identifyAdminFields(dialog,doc);};
+ const sync=()=>{pending=false;if(disposed)return;for(const [details,button]of toggles)if(!details.isConnected){button.remove();toggles.delete(details);}for(const details of app.querySelectorAll('details')){const button=exposeAdminDisclosure(details,doc);if(button)toggles.set(details,button);}identifyAdminFields(app,doc);for(const dialog of doc.querySelectorAll('dialog'))identifyAdminFields(dialog,doc);decorateBookingActionIcons(doc);};
  const schedule=()=>{if(!pending&&!disposed){pending=true;requestAnimationFrame(sync);}};const observer=new MutationObserver(schedule);observer.observe(doc.body,{childList:true,subtree:true});sync();return {sync,dispose(){disposed=true;observer.disconnect();}};
 }

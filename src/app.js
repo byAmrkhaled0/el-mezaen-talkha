@@ -1144,7 +1144,6 @@ document.addEventListener("click", event => {
   const openBookingButton = event.target.closest("[data-open-booking]");
   if (openBookingButton) void openBooking(openBookingButton);
   if (event.target.closest("[data-open-branch]")) openBranchDialog(true);
-  if (event.target.closest("[data-change-branch]")) openBranchDialog(true);
   if (event.target.closest("[data-close-booking]")) closeBooking();
   if (event.target.closest("[data-close-branch]")) closeBranchDialog();
 });

@@ -182,3 +182,13 @@ body[data-public-refinement] .footer-branch-detail {display:block;margin-block:1
  body[data-public-refinement] #branchDialog .branch-quick-info {font-size:11px}
  body[data-public-refinement] #branchDialog .branch-choice .btn {margin-top:8px;min-height:44px;padding:10px}
 }
+
+/* Service categories scroll with their section; they never overlay the cards. */
+body[data-public-refinement] #services .filter-row{position:static;inset:auto;z-index:auto;transform:none}
+body[data-public-refinement] #services #categoryFilters{flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding-block:8px;scrollbar-width:thin}
+body[data-public-refinement] #bookingDialog .booking-branch-bar{grid-template-columns:24px minmax(0,1fr);padding:8px 14px;align-items:center}
+body[data-public-refinement] #bookingDialog .booking-branch-bar strong{font-size:14px}
+body[data-public-refinement] #bookingDialog #bookingBranchAddress{display:none}
+body[data-public-refinement] #bookingDialog .booking-branch-bar{grid-template-columns:28px minmax(0,1fr);gap:10px}
+body[data-public-refinement] #bookingDialog .booking-branch-icon{width:28px;height:28px;min-width:28px;border-radius:8px}
+body[data-public-refinement] #bookingDialog .booking-branch-icon svg{width:20px;height:20px}

@@ -20,5 +20,12 @@ export function createReadCoordinator(invoke, {identity = () => '', now = Date.n
     return promise;
   };
   read.reset = () => {active.clear(); failures.clear();};
+  // A committed booking signal must not reuse a read started before that commit.
+  // Keep unrelated reads and their failure backoff intact.
+  read.invalidate = name => {
+    const scope = JSON.stringify([identity(), name]);
+    for (const key of active.keys()) if (key.startsWith(scope)) active.delete(key);
+    failures.delete(scope);
+  };
   return read;
 }

@@ -714,3 +714,12 @@ tests/booking-experience.test.mjs
 tests/admin-startup-performance.test.mjs
 src/public-browsing.js
 tests/booking-branch-only.test.mjs
+src/booking-live.js
+src/booking-live.css
+src/booking-action-icons.js
+functions/src/booking-inbox-signals.js
+functions/test/booking-inbox-signals.test.mjs
+tests/booking-live.test.mjs
+tests/booking-live.emulator.mjs
+qa/booking-live-emulator-20261101.json
+qa/booking-live.rules

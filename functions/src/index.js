@@ -40,6 +40,7 @@ import { workerRequestHandlers, requestReviewerAllowed } from "./worker-requests
 import { workerContext } from "./worker-context.js";
 import { workerPushAllowed, deliverWorkerNotification } from "./worker-notification-delivery.js";
 import {operationalPushAllowed} from './operational-push.js';
+import {publishBookingInboxSignal} from './booking-inbox-signals.js';
 import {normalizeWorkerUsername, workerAuthEmail} from './worker-username.js';
 import { readAccountPage } from "./account-center.js";
 import { aiAgentHandlers } from './ai-agent.js';
@@ -4038,7 +4039,8 @@ async function sendOperationalPush(branchId, notification, data, acceptedTokenHa
 export const notifyAdminsOnBooking = onDocumentWritten({region,document:'bookings/{bookingId}'},async event=>{
   const before=event.data?.before?.data(),booking=event.data?.after?.data();if(!booking)return;
   if(before && ['status','bookingDate','bookingTime','staffId','branchId'].every(key=>before[key]===booking[key]))return;
-  await sendOperationalPush(booking.branchId,{title:before?'تم تحديث الحجز':'حجز جديد',body:`${booking.bookingDate||''} • ${booking.bookingTime||''}`},{type:before?'booking_changed':'new_booking',entityId:event.params.bookingId,bookingId:event.params.bookingId});
+  const {getAuth}=await import('firebase-admin/auth');
+  await Promise.all([publishBookingInboxSignal({db,auth:getAuth(),event}),sendOperationalPush(booking.branchId,{title:before?'تم تحديث الحجز':'حجز جديد',body:`${booking.bookingDate||''} • ${booking.bookingTime||''}`},{type:before?'booking_changed':'new_booking',entityId:event.params.bookingId,bookingId:event.params.bookingId})]);
 });
 
 const workerAccess = workerAccessHandlers({ db, requireLiveAdmin, requireRecentAdmin, rateLimit: enforceRateLimit });

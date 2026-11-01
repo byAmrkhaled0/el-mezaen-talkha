@@ -1,0 +1,23 @@
+#bookingLiveControls[hidden],#newBookingBanner[hidden]{display:none!important}
+.booking-live-controls{border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0;background:var(--panel)}
+.booking-live-controls p{font-size:13px;margin:0 0 10px}.booking-live-controls>div{display:flex;flex-wrap:wrap;gap:8px}
+.booking-live-banner{position:fixed;inset-inline:16px;top:calc(var(--admin-live-header-height,76px) + 8px);z-index:180;max-width:680px;margin-inline:auto;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--panel,#fff);color:var(--text,#123);border:2px solid #179a6c;border-radius:14px;box-shadow:0 8px 28px #0003}
+.booking-live-banner strong{flex:1;font-size:15px}.booking-live-banner button{min-height:44px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:var(--panel);color:var(--text);cursor:pointer;font:inherit}.booking-live-banner #openNewBooking{background:#137a57;color:white;border-color:#137a57}
+#adminApp .booking-icon-action{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:10px!important;border:1px solid var(--line)!important;border-radius:11px!important;line-height:1!important;box-shadow:none!important}
+#adminApp .booking-icon-action svg{width:18px;height:18px;flex:none;pointer-events:none}
+#adminApp [data-booking-icon=confirmed]{color:#168153!important;background:color-mix(in srgb,#168153 9%,var(--panel,#fff))!important;border-color:color-mix(in srgb,#168153 22%,var(--line))!important}
+#adminApp [data-booking-icon=rejected]{color:#c2354b!important;background:color-mix(in srgb,#c2354b 8%,var(--panel,#fff))!important;border-color:color-mix(in srgb,#c2354b 22%,var(--line))!important}
+#adminApp [data-booking-icon=whatsapp]{color:#168153!important;background:transparent!important;border-color:var(--line)!important}
+#adminApp .booking-quick-icons{display:flex!important;flex-wrap:wrap;gap:7px;align-items:center;margin-block:6px}
+#adminApp .booking-quick-icons .receipt-print{display:none}
+#adminApp #bookings .booking-primary-actions{display:flex!important;flex-direction:row!important;flex-wrap:nowrap;align-items:center;gap:6px;min-width:max-content}
+#adminApp #bookings .booking-primary-actions>.booking-quick-icons{display:contents!important}
+#adminApp #bookings .booking-primary-actions>:is(button,.admin-disclosure-button,details){width:auto!important;flex:0 0 auto;grid-column:auto;margin:0;white-space:nowrap}
+#adminApp #bookings .booking-primary-actions .booking-icon-action{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;flex-basis:36px!important;padding:8px!important;border-radius:8px!important}
+#adminApp #bookings .booking-primary-actions>.booking-menu-body{flex-basis:100%}
+@media(max-width:720px){#adminApp #bookings .booking-primary-actions{flex-wrap:wrap;min-width:0;justify-content:flex-start}#adminApp #bookings .booking-primary-actions .booking-icon-action{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;flex-basis:44px!important}#adminApp #bookings .booking-primary-actions>.admin-disclosure-panel{flex-basis:100%}}
+@media(max-width:600px){.booking-live-banner{inset-inline:8px;padding:10px;gap:8px}.booking-live-banner strong{font-size:13px}.booking-live-banner button{font-size:12px;padding-inline:10px}}
+
+
+@media(max-width:720px){#adminApp #bookings .booking-primary-actions>[data-open-receipt]{flex-basis:100%;order:0}#adminApp #bookings .booking-primary-actions .booking-icon-action{order:1}#adminApp #bookings .booking-primary-actions>:is(details,.admin-disclosure-button,.admin-disclosure-panel){order:2}}
+

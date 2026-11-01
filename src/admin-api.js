@@ -435,6 +435,24 @@ export async function watchWorkerPush(callback) {
   } catch { return () => {}; /* Optional push availability never blocks the worker account. */ }
 }
 
+export function invalidateBookingReads() {
+  for(const name of ['getAdminDashboard','getCashierSnapshot','getBookingCalendar','getAdminCollection']) coordinatedRead.invalidate(name);
+}
+export async function watchBookingInbox(callback,onStatus=()=>{}) {
+  if(!configured||globalThis.__USE_EMULATORS__||!auth?.currentUser)return ()=>{};
+  const user=auth.currentUser;
+  try{
+    await ensureAdminAppCheckReady();
+    const {getFirestore,doc,onSnapshot}=await import('firebase/firestore');
+    if(auth.currentUser?.uid!==user.uid)return ()=>{};
+    let initial=true;
+    return onSnapshot(doc(getFirestore(app),'users',user.uid),snapshot=>{
+      if(auth.currentUser?.uid!==user.uid)return;
+      onStatus('connected');callback({signals:snapshot.data()?.bookingInboxSignals||{},initial});initial=false;
+    },()=>onStatus('error'));
+  }catch{onStatus('error');return ()=>{};}
+}
+
 export const getAccessAccountCenter = (data = {}) => readCall('getAccessAccountCenter', data);
 
 export async function loginWorkerUsername(username, password) {

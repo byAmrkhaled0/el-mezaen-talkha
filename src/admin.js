@@ -1,3 +1,6 @@
+import {createNewBookingTracker,createBookingSignalPump,mountBookingLiveUi} from './booking-live.js';
+import {watchBookingInbox,invalidateBookingReads} from './admin-api.js';
+import './booking-live.css';
 import {collectRecordPages} from './record-history-client.js';
 import {getAdminHistory} from './admin-api.js';
 import {mountAdminClarity} from './admin-clarity.js';
@@ -1540,9 +1543,9 @@ function bookingRowMini(item) {
   return `<tr><td><b>${escapeHtml(item.code)}</b></td><td><span class="branch-pill">${escapeHtml(item.branchNameAr || branchLabel(item.branchId))}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><small>${money(item.total)}</small></td><td>${escapeHtml(item.staffNameAr)}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br><small>${escapeHtml(item.bookingTime || "")}</small></td><td><span class="status-pill" data-status="${escapeAttr(item.status)}">${statusLabel(item.status)}</span></td><td>${paymentLabel(item.paymentStatus)}</td></tr>`;
 }
 
-function receiptActionButtons(id, printLabel = "طباعة الإيصال", includeDetails = true, includeReprint = true) {
+function receiptActionButtons(id, printLabel = "طباعة الإيصال", includeDetails = true, includeReprint = true, includeWhatsapp = true) {
   const safeId = escapeAttr(id);
-  return `${includeDetails ? `<button class="receipt-action receipt-details" data-open-receipt="${safeId}">تفاصيل</button>` : ""}<button class="receipt-action receipt-print" data-print-booking="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>${escapeHtml(printLabel)}</button>${includeDetails || !includeReprint ? "" : `<button type="button" class="receipt-action" data-reprint-booking="${safeId}">إعادة طباعة الإيصال</button>`}<button class="receipt-action receipt-whatsapp" data-whatsapp-receipt="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1"/></svg>إرسال واتساب</button>`;
+  return `${includeDetails ? `<button class="receipt-action receipt-details" data-open-receipt="${safeId}">تفاصيل</button>` : ""}<button class="receipt-action receipt-print" data-print-booking="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>${escapeHtml(printLabel)}</button>${includeDetails || !includeReprint ? "" : `<button type="button" class="receipt-action" data-reprint-booking="${safeId}">إعادة طباعة الإيصال</button>`}${includeWhatsapp ? `<button class="receipt-action receipt-whatsapp" data-whatsapp-receipt="${safeId}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.8a8 8 0 0 1-11.9 7L4 20l1.2-4A8 8 0 1 1 20 11.8Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1 2 1"/></svg>إرسال واتساب</button>` : ""}`;
 }
 
 function canRefundBooking(item) { return item.paymentStatus === "paid" && Boolean(item.paymentMethod) && (state.role === "admin" || state.permissions.has("revenue") || state.permissions.has("refundTransactions")); }
@@ -1635,7 +1638,7 @@ function renderBookings() {
     const workerAlert = !terminal && item.staffId && item.staffId !== "none" && (state.permissions.has("tasks") || state.permissions.has("bookings") || state.role === "admin") ? `<button type="button" data-notify-worker="${escapeAttr(item.staffId)}" data-notify-branch="${escapeAttr(item.branchId)}" data-notify-booking="${escapeAttr(item.id)}">تنبيه ${escapeHtml(item.staffNameAr || "العامل")}</button>` : "";
     const checkout = !terminal && canCheckout ? `<button class="pay booking-checkout" data-expected-total="${Number(item.total)}" data-expected-revision="${Number(item.orderRevision||0)}" data-booking-action="${item.paymentStatus === "paid" ? "completed" : "checkout"}" data-booking-id="${escapeAttr(item.id)}">${item.paymentStatus === "paid" ? "إكمال وإخفاء" : "تحصيل وإكمال"}</button>` : "";
     const stateActions = item.status === "pending" ? `<button data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "confirmed" ? `<button data-booking-action="arrived" data-booking-id="${escapeAttr(item.id)}">وصل</button><button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button><button data-booking-action="cancelled" data-booking-id="${escapeAttr(item.id)}">إلغاء</button>` : item.status === "arrived" ? `<button data-booking-action="no_show" data-booking-id="${escapeAttr(item.id)}">عدم حضور</button>` : "";
-    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}${item.staffPreference==="any"?'<small class="booking-no-preference">العميل لم يحدد عاملًا</small>':''}${workerControls || workerAlert ? `<details class="booking-row-menu"><summary>العامل والتنبيه</summary><div class="booking-menu-body">${workerControls}${workerAlert}</div></details>` : ""}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b>${!terminal ? `<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select>` : ""}<div class="row-actions">${checkout}${canRefund ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="booking-primary-actions"><button type="button" data-open-receipt="${escapeAttr(item.id)}">تفاصيل الحجز</button>${item.status === "pending" ? `<button type="button" class="primary" data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button>` : ""}<details class="booking-row-menu"><summary>المزيد من الإجراءات</summary><div class="booking-menu-body">${!terminal && canCheckout ? `<button data-booking-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>` : ""}${receiptActionButtons(item.id,"طباعة الإيصال",false,false)}${["pending", "confirmed"].includes(item.status) ? `<button data-reschedule-booking="${escapeAttr(item.id)}">إعادة جدولة</button>` : ""}${item.status === "pending" ? stateActions.replace(/<button[^>]*data-booking-action="confirmed"[^>]*>تأكيد<\/button>/, "") : stateActions}${state.role === "admin" && item.paymentStatus !== "paid" && item.source !== "pos" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}</div></details></div></td></tr>`;
+    return `<tr data-booking-row="${escapeAttr(item.code)}"><td><b>${escapeHtml(item.code)}</b><br><small>${escapeHtml(item.createdAt || "")}</small></td><td><span class="branch-pill">${escapeHtml(branchName)}</span></td><td>${escapeHtml(item.customerName)}<br><small>${escapeHtml(item.phone)}</small><br><small>${item.partySize || 1} فرد</small></td><td>${escapeHtml((item.serviceNamesAr || []).join(" + "))}<br><strong>${money(item.total)}</strong></td><td>${escapeHtml(item.staffNameAr)}${item.staffPreference==="any"?'<small class="booking-no-preference">العميل لم يحدد عاملًا</small>':''}${workerControls || workerAlert ? `<details class="booking-row-menu"><summary>العامل والتنبيه</summary><div class="booking-menu-body">${workerControls}${workerAlert}</div></details>` : ""}</td><td>${escapeHtml(item.bookingDate || "طلب منتجات")}<br>${escapeHtml(item.bookingTime || "")}</td><td><span class="status-pill">${statusLabel(item.status)}</span></td><td><div class="payment-controls"><b>${paymentLabel(item.paymentStatus)}</b>${!terminal ? `<select data-payment-method="${escapeAttr(item.id)}"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="vodafone_cash">فودافون كاش</option><option value="instapay">إنستاباي</option><option value="other">أخرى</option></select>` : ""}<div class="row-actions">${checkout}${canRefund ? `<button class="refund" data-booking-action="refund" data-booking-id="${escapeAttr(item.id)}">استرداد</button>` : ""}</div></div></td><td><div class="booking-primary-actions"><button type="button" data-open-receipt="${escapeAttr(item.id)}">تفاصيل الحجز</button>${item.status === "pending" ? `<div class="booking-quick-icons"><button type="button" data-booking-action="confirmed" data-booking-id="${escapeAttr(item.id)}">تأكيد</button><button type="button" data-booking-action="rejected" data-booking-id="${escapeAttr(item.id)}">رفض</button></div>` : ""}<div class="booking-quick-icons"><button type="button" data-whatsapp-receipt="${escapeAttr(item.id)}">إرسال واتساب</button>${["pending","confirmed"].includes(item.status)?`<button type="button" data-reschedule-booking="${escapeAttr(item.id)}">إعادة جدولة</button>`:""}</div><details class="booking-row-menu"><summary>المزيد من الإجراءات</summary><div class="booking-menu-body">${!terminal && canCheckout ? `<button data-booking-pos="${escapeAttr(item.id)}">فتح في نقطة البيع</button>` : ""}${receiptActionButtons(item.id,"طباعة الإيصال",false,false,false)}${item.status === "pending" ? stateActions.replace(/<button[^>]*data-booking-action="(?:confirmed|rejected)"[^>]*>[^<]*<\/button>/g, "") : stateActions}${state.role === "admin" && item.paymentStatus !== "paid" && item.source !== "pos" ? `<button class="delete" data-secure-delete-booking="${escapeAttr(item.id)}" data-secure-delete-label="الحجز ${escapeAttr(item.code)} للعميل ${escapeAttr(item.customerName)}">حذف نهائي</button>` : ""}</div></details></div></td></tr>`;
   }).join("") || emptyRow(9);
 }
 
@@ -3201,43 +3204,39 @@ function exportCsv(filename, headers, rows) {
   URL.revokeObjectURL(link.href);
 }
 
+let bookingInboxStop=()=>{},bookingSignalPump,bookingInboxEpoch=0;
+const bookingLiveUi=mountBookingLiveUi({branchLabel,onOpen:async id=>{
+  invalidateBookingReads();
+  await showSection('bookings');
+  if(['cashier','manager'].includes(state.role))await loadCashierDashboard(true);else await loadDashboard(true);
+  if(state.dashboard.bookings.some(item=>item.id===id))openReceiptDrawer(id);
+  else toast('وصل الحجز؛ راجع الفلاتر أو ابحث بكوده في قائمة الحجوزات');
+}});
+const newBookingTracker=createNewBookingTracker(item=>notifyNewBooking(item));
 function detectNewBookings(items) {
-  const active = items.filter(item => item.source !== "pos" && ["pending", "confirmed"].includes(item.status));
-  if (!state.lastBookingIds.size) { state.lastBookingIds = new Set(active.map(item => item.id)); return; }
-  const fresh = active.find(item => !state.lastBookingIds.has(item.id));
-  active.forEach(item => state.lastBookingIds.add(item.id));
-  if (state.lastBookingIds.size > 500) state.lastBookingIds = new Set([...state.lastBookingIds].slice(-300));
-  if (fresh) notifyNewBooking(fresh);
+  newBookingTracker.accept(items,JSON.stringify([state.user?.uid,$('#dashboardBranchFilter')?.value||'all']));
 }
-
-let adminNotificationAudio;
-function playAdminNotificationSound() {
-  try {
-    adminNotificationAudio ||= new AudioContext();
-    if (adminNotificationAudio.state === "suspended") void adminNotificationAudio.resume();
-    [0, .13].forEach((delay, index) => {
-      const oscillator = adminNotificationAudio.createOscillator();
-      const gain = adminNotificationAudio.createGain();
-      const startsAt = adminNotificationAudio.currentTime + delay;
-      oscillator.frequency.value = index ? 1046 : 784;
-      gain.gain.setValueAtTime(.0001, startsAt);
-      gain.gain.exponentialRampToValueAtTime(.075, startsAt + .015);
-      gain.gain.exponentialRampToValueAtTime(.0001, startsAt + .12);
-      oscillator.connect(gain).connect(adminNotificationAudio.destination);
-      oscillator.start(startsAt);
-      oscillator.stop(startsAt + .13);
-    });
-  } catch {}
-}
-document.addEventListener("pointerdown", () => {
-  try { adminNotificationAudio ||= new AudioContext(); if (adminNotificationAudio.state === "suspended") void adminNotificationAudio.resume(); } catch {}
-}, { once: true, passive: true });
-
+function playAdminNotificationSound(){void bookingLiveUi.sound.play();}
 function notifyNewBooking(item = {}) {
-  toast(`حجز جديد: ${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${item.code || ""}`);
-  if ("Notification" in window && Notification.permission === "granted") new Notification("حجز جديد وصل الآن", { body: `${item.customerName || "عميل"} • ${item.bookingTime || ""} • ${branchLabel(item.branchId)}`, icon: "/assets/el-mezaen-logo.jpeg", tag: item.id || item.code || "booking" });
-  playAdminNotificationSound();
+  if(!bookingLiveUi.notify(item))return;
+  if("Notification" in window&&Notification.permission==="granted"&&document.hidden)try{new Notification("حجز جديد وصل الآن",{body:branchLabel(item.branchId),icon:"/assets/icon-192.png",tag:item.id});}catch{}
+  toast(`حجز جديد: ${item.customerName||'عميل'} • ${item.bookingTime||''} • ${item.code||''}`);
 }
+function stopBookingInbox(){bookingInboxEpoch++;bookingInboxStop();bookingInboxStop=()=>{};bookingSignalPump?.dispose();bookingSignalPump=null;}
+async function startBookingInbox(){
+  stopBookingInbox();const epoch=bookingInboxEpoch;
+  const allowed=['admin','manager','cashier'].includes(state.role)&&canOpenSection('bookings');
+  bookingLiveUi.showControls(allowed);if(!allowed)return;
+  bookingLiveUi.status('connecting');
+  const pump=createBookingSignalPump({scope:()=>({uid:state.user?.uid,role:state.role,branchIds:state.branchIds,selectedBranch:$('#headerBranchFilter').value}),notify:notifyNewBooking,
+    refresh:async()=>{if(epoch!==bookingInboxEpoch||!state.user)return;invalidateBookingReads();const tasks=[['cashier','manager'].includes(state.role)?loadCashierDashboard(true):loadDashboard(true)];if(state.section==='calendar')tasks.push(loadCalendar(true));await Promise.all(tasks);},onError:()=>bookingLiveUi.status('error')});
+  bookingSignalPump=pump;
+  const unsubscribe=await watchBookingInbox(value=>{if(epoch===bookingInboxEpoch)pump.receive(value);},status=>{if(epoch===bookingInboxEpoch)bookingLiveUi.status(status);});
+  if(epoch!==bookingInboxEpoch){unsubscribe();pump.dispose();return;}bookingInboxStop=unsubscribe;
+}
+window.addEventListener('beforeunload',stopBookingInbox,{once:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)bookingSignalPump?.refresh();});
+window.addEventListener('online',()=>bookingSignalPump?.refresh());
 
 let pushRegistrationReady = false;
 let pushSyncing = false;
@@ -3652,7 +3651,7 @@ $("#adminTheme").addEventListener("click", () => setTheme(document.documentEleme
 $("#mobileThemeToggle")?.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
 $("#logoutButton").addEventListener("click", async () => {
   try{const pending=(await offlineDesk.list()).filter(sale=>sale.status!=='confirmed');if(pending.length&&!confirm(`فيه ${pending.length} شيك محفوظ على الجهاز ولسه مش متأكد على السيرفر. الشيكات هتفضل مرتبطة بالحساب ده وتحتاج تدخل بنفسه علشان تتزامن. تسجيل خروج؟`))return;}catch(error){if(!confirm('تعذر فحص الشيكات المحفوظة على الجهاز. الخروج قد يؤجل مزامنتها لحد دخول نفس الحساب بالإنترنت. تسجيل خروج؟'))return;}
-  await logout();location.replace('/login/');
+  stopBookingInbox();await logout();location.replace('/login/');
 });
 $("#pushButton").addEventListener("click", event => handlePushButton(event.currentTarget));
 $("#mobilePushButton")?.addEventListener("click", event => requestAdminPush(event.currentTarget));
@@ -3884,6 +3883,7 @@ if ("serviceWorker" in navigator) {
 }
 let dashboardRefreshTimer;
 async function bootstrapAdmin(user) {
+  stopBookingInbox();newBookingTracker.reset();bookingLiveUi.reset();
   branchBookingView?.dispose();branchBookingView=null;
   collectionRequestEpoch++;
   collectionLoads.clear(); collectionLoadVersions.clear(); collectionCacheScopes.clear();
@@ -3898,7 +3898,7 @@ async function bootstrapAdmin(user) {
     }
     state.user = user; state.role = access.role; state.staffId = access.staffId || ""; document.documentElement.dataset.adminRole = access.role || "unknown"; state.permissions = effectivePermissions(access.role, access.permissions); state.branchIds = access.role === "admin" ? ["talkha", "mashaya"] : access.branchIds;
     for(const id of ['headerBranchFilter','dashboardBranchFilter','calendarBranchFilter','attendanceBranch','taskBranch','reportBranch','auditBranch','expenseBranchFilter','serviceTargetBranchFilter','posBranch','campaignBranchFilter']) if($('#'+id)) $('#'+id).value=state.branchIds[0];
-    $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"]').forEach(input => { input.value = user.email || ""; });
+    $$('#adminPasswordForm [name="username"], #staffPasswordForm [name="username"], #secureDeleteForm [name="username"]').forEach(input => { input.value = user.email || ""; });
     const roleName = ({ admin: "أدمن", manager: "مسؤول الفرع", cashier: "كاشير", worker: "عامل", media: "الميديا" })[access.role] || access.role;
     const userName = user.displayName || user.email || "حساب مزين";
     $("#welcomeText").textContent = `مزين مصر • ${roleName}`;
@@ -3992,11 +3992,17 @@ async function bootstrapAdmin(user) {
       });
       offlineConnectionMonitor.start();
     }
+    void startBookingInbox();
     if(!['worker','media'].includes(state.role)) void watchWorkerPush(payload=>{
       const branch=payload.data?.branchId, selected=$("#headerBranchFilter").value;
       if(branch && (selected!=='all' && branch!==selected || state.role!=='admin' && !state.branchIds.includes(branch)))return;
       if(payload.data?.type==='service_completed'){completionPollAt=0;void pollCompletedServices();}
       if(payload.data?.type==='order_addition'){void orderAdditionView?.poll(true);if(state.section==='orderAdditions')void orderAdditionView?.load();}
+      if(['new_booking','booking_changed'].includes(payload.data?.type)){
+        const bookingId=payload.data.bookingId||payload.data.entityId;
+        bookingSignalPump?.refresh();
+        if(payload.data.type==='new_booking')notifyNewBooking({id:bookingId,branchId:branch});
+      }
       operationalNotices.unshift({type:payload.data?.type,entityId:payload.data?.entityId,branchId:branch,title:payload.notification?.title||'تحديث التشغيل',body:payload.notification?.body||'',read:false});operationalNotices.splice(20);renderAdminAlerts();
       state.workerRankingKey=null;
       if(['branchOperations','teamAvailability'].includes(state.section))document.dispatchEvent(new Event('mz:service-board-refresh'));
