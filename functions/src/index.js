@@ -1,3 +1,4 @@
+import {createStaffRateLimiter} from './staff-rate-limit.js';
 import {liveCustomerIdentity} from './customer-session.js';
 import {customerRecordPage,adminRecordPage} from './record-history.js';
 import {workerHistoryPage} from './worker-history.js';
@@ -218,6 +219,8 @@ async function consumeRateLimit(fingerprint, action, limit, windowMs, bucket = M
     transaction.set(ref, { action, count: count + 1, expiresAt: Timestamp.fromMillis((bucket + 2) * windowMs), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
 }
+
+const enforceStaffRateLimit = createStaffRateLimiter({consume:consumeRateLimit,fail:(code,message)=>new HttpsError(code,message)});
 
 async function enforceBookingRateLimits(request, phone) {
   const windowMs = 15 * 60 * 1000;
@@ -1192,6 +1195,7 @@ async function recentScoped(collection, allowedBranches, pageSize) {
 
 export const getAdminDashboard = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
+  await enforceStaffRateLimit(request, 'operational-read', 120, 60 * 1000);
   const access = permissionsFor(request);
   if (!["dashboard", "bookings", "revenue", "expenses", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية لوحة المتابعة");
   const canBookings = access.has("dashboard") || access.has("bookings") || access.has("pos");
@@ -1316,6 +1320,7 @@ export const setBranchMonthlyTarget = onCall(adminOptions, async request => {
 
 export const getCashierSnapshot = onCall(adminOptions, async request => {
   await requireLiveStaff(request);
+  await enforceStaffRateLimit(request, 'operational-read', 120, 60 * 1000);
   const access = permissionsFor(request);
   if (!["dashboard", "bookings", "pos"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية شاشة الكاشير");
   const today = businessDateParts().dateKey;
@@ -3144,12 +3149,12 @@ export const updateBooking = onCall(adminOptions, async request => {
   const action = sanitizeText(request.data?.action, 30);
   if(workerDecision&&!['confirmed','rejected'].includes(action))throw new HttpsError('permission-denied','العامل يقبل أو يرفض حجوزه فقط');
   if(!/^[A-Za-z0-9_-]{1,100}$/.test(id))throw new HttpsError('invalid-argument','مرجع الحجز غير صحيح');
-  await enforceRateLimit(request, `booking_mutation_${action || "unknown"}`, 120, 15 * 60 * 1000, request.auth.uid);
+  await enforceStaffRateLimit(request, "booking-mutation", 120, 15 * 60 * 1000);
   const reason = sanitizeText(request.data?.reason, 300);
   const idempotencyKey = sanitizeText(request.data?.idempotencyKey, 100);
   if (["refund", "void"].includes(action) && (!reason || !/^[A-Za-z0-9_-]{16,100}$/.test(idempotencyKey))) throw new HttpsError("invalid-argument", "اكتب سبب العملية ثم أعد المحاولة");
   const ref = db.doc(`bookings/${id}`);
-  const settings = await readSettings();
+  const settings = ["confirmed","completed","checkout","markPaid","refund"].includes(action) ? await readSettings() : null;
   return db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new HttpsError("not-found", "الحجز غير موجود");
@@ -4259,3 +4264,4 @@ export const notifyCashierOnServiceCompletion=onDocumentWritten({region,document
  const ref=db.doc('workerNotifications/service_finished_'+event.params.sessionId);
  await deliverWorkerNotification({db,ref,channel:'operationalPush',send:(note,accepted)=>sendOperationalPush(note.branchId,{title:note.title,body:note.body},{type:'service_completed',entityId:note.bookingId},accepted)});
 }));
+

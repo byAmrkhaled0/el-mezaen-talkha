@@ -27,16 +27,19 @@ test('worker theme preserves the baseline except owner-authorized desktop switch
 test('locked baseline preservation: firestore.rules',()=>assert.equal(createHash('sha256').update(readFileSync(new URL('../firestore.rules',import.meta.url))).digest('hex'),'c8c74afdb9ed73c15631363e6a55b0e8de8267d7a108f2a485294ee2ac79b58d'));
 test('storage baseline preserved except explicit media and shared-catalog grants',()=>{
  let source=readFileSync(new URL('../storage.rules',import.meta.url),'utf8');
+ source=source.replace(/    \/\/ CANONICAL_MEDIA_ACCOUNT_BEGIN[\s\S]*?    \/\/ CANONICAL_MEDIA_ACCOUNT_END\n/,'').replaceAll(' && canonicalMediaAccountLive()','').replaceAll('canonicalMediaAccountLive() && ','');
  source=source.replace(/    function mediaAccountLive\(\) \{[\s\S]*?\n    \}\n/,'').replace(/    \/\/ SHOP_MEDIA_GRANTS_BEGIN[\s\S]*?    \/\/ SHOP_MEDIA_GRANTS_END\n/,'').replaceAll("['manager', 'cashier', 'media']","['manager', 'cashier']").replace(/^[ \t]*&& \(request.auth.token.role != 'media' \|\| mediaAccountLive\(\)\)\n/gm,'');
  assert.equal(createHash('sha256').update(source).digest('hex'),'58a43d852efc7f56ba182101e714ba15087fa07b0cacc8d5e8d6860bfbf63765');
 });
-test('dependency baseline preserved except authorized Vite 7.3.7 security patch',()=>{
+test('dependency baseline preserved except reviewed Vite and RE2JS security updates',()=>{
  const lock=JSON.parse(readFileSync(new URL('../package-lock.json',import.meta.url),'utf8'));
  const before=JSON.parse(readFileSync(new URL('./fixtures/vite-security-baseline.json',import.meta.url),'utf8'));
  assert.equal(lock.packages['node_modules/vite'].version,'7.3.7');
  assert.equal(lock.packages[''].devDependencies.vite,'7.3.7');
  lock.packages['node_modules/vite']=before.beforeVite;
  lock.packages[''].devDependencies.vite=before.beforeRange;
+ assert.equal(lock.packages['node_modules/re2js'].version,'2.9.1');
+ lock.packages['node_modules/re2js']=before.beforeRe2js;
  assert.equal(createHash('sha256').update(JSON.stringify(lock,null,2)+'\n').digest('hex'),'7f52b37a4e0379c91acce2c68a20b9e3efcd55d31aa5454ef399f151ea346701');
 });
 test('reviewed backend lock baseline includes the October 2026 security fixes only',()=>{
@@ -68,3 +71,5 @@ block=block.replace('    if (offlineOrder) offlineProtocol.check(offlineOrder, {
 block=block.replace('    if (offlineOrder) Object.assign(bookingRecord,{offlineOperationId:idempotencyKey,offlineShiftId:offlineOrder.shiftId,offlineSyncedAt:now});\n','');
 block=block.replace('...(offlineOrder ? {offlineFingerprint:offlineOrder.fingerprint} : {expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000)})','expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000)');block=block.replace('    Object.assign(bookingRecord, receiptActor(request), {createdAt:now});\n','');block=block.replace('method === "cash" && activeShift ? activeShift.ref : null','method === "cash" && settings.cashDrawerEnabled === true ? activeShift?.ref : null');assert.equal(createHash('sha256').update(block.replace('ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true, request)', 'ledgerShiftInTransaction(transaction, branch.id, method === \"cash\" && settings.cashDrawerEnabled === true)')).digest('hex'),'a0dff8568d373c8164d7dcdfb3cd55d4ab7f5445313d3e1f7026013ea793d7ef');});
 test('Phase12.3E.1 authorized payroll posting delegates to the isolated financial module',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');assert.match(source,/recordPayrollPayment = onCall\(adminOptions, payrollPosting\(/);const payroll=readFileSync(new URL('../functions/src/payroll-posting.js',import.meta.url),'utf8');assert.match(payroll,/calculatePayroll\(\{\.\.\.staff,revenue,adjustment\}\)/);assert.doesNotMatch(payroll,/workerLeaves|appointmentLocks|workerRequests/);});
+
+

@@ -3077,8 +3077,11 @@ async function submitRefund(event) {
   });
 }
 
+const bookingMutations = new Set();
 async function updateBookingAction(id, action, options = {}) {
   if (action === "refund" && !options.reason) return openRefundDialog(id);
+  if (bookingMutations.has(id)) { toast("في عملية جارية على نفس الحجز؛ انتظر تأكيدها", true); return false; }
+  bookingMutations.add(id);
   const original = (state.receiptLookup?.get(id)||state.dashboard.bookings.find(value => value.id === id));
   const method = action === "refund" ? original?.paymentMethod : (($("#receiptDrawer")?.open ? $("#receiptDrawer").querySelector(`[data-payment-method="${CSS.escape(id)}"]`) : null) || document.querySelector(`[data-payment-method="${CSS.escape(id)}"]`))?.value || "cash";
   try {
@@ -3096,6 +3099,9 @@ async function updateBookingAction(id, action, options = {}) {
     const wasPaid = item?.paymentStatus === "paid";
     if(action==='confirmed'&&item){const selected=document.querySelector(`[data-assign-worker-select="${CSS.escape(id)}"]`)?.value;if(selected&&selected!==item.staffId){const key='review-assignment:'+id+':'+selected,requestId=state.bookingActionKeys.get(key)||crypto.randomUUID();state.bookingActionKeys.set(key,requestId);const moved=await rescheduleBooking({id:item.id,date:item.bookingDate,time:item.bookingTime,staffId:selected,requestId});Object.assign(item,{staffId:moved.workerId,staffNameAr:moved.workerNameAr,...(moved.items?{items:moved.items,workerIds:moved.workerIds,orderRevision:moved.orderRevision}:{})});state.bookingActionKeys.delete(key);assignmentSuggestions.clear();}}
     const result = await changeBooking(id, action, method, reason, idempotencyKey,{expectedTotal:Number.isFinite(options.expectedTotal)?options.expectedTotal:Number(item?.total),expectedOrderRevision:Number.isFinite(options.expectedOrderRevision)?options.expectedOrderRevision:Number(item?.orderRevision||0)});
+    // Discard reads started before the committed write. Never unlock on optimistic success.
+    ++dashboardRequestVersion; ++cashierRequestVersion; ++calendarRequestVersion;
+    invalidateBookingReads();
     if (idempotencyKey) state.bookingActionKeys.delete(`${action}:${id}`);
     if (item) {
       if (["pending", "confirmed", "arrived", "no_show", "rejected", "cancelled", "completed", "void"].includes(action)) item.status = result.status || (action === "void" ? "cancelled" : action);
@@ -3121,15 +3127,24 @@ async function updateBookingAction(id, action, options = {}) {
         stats.lastCollected = Number(item.total || 0);
       }
     }
+    if(item)for(const copy of [state.dashboard.bookings.find(row=>row.id===id),state.receiptLookup?.get(id),serverTransactions?.find(id)])if(copy&&copy!==item)Object.assign(copy,item);
     state.loadedAt.cashier = Date.now();
     renderDashboard();
-    await refreshCashierOperations();
-    if (state.section === "calendar") await loadCalendar(true);
     if ($("#receiptDrawer")?.open) openReceiptDrawer(id);
     toast(action === "checkout" ? "تم التحصيل وإكمال الحجز ونقله إلى السجل" : action === "markPaid" ? "تم تسجيل الدفع مرة واحدة" : action === "refund" ? "تم الاسترداد وعكس الآثار المالية والمخزون" : action === "void" ? "تم إلغاء الشيك مع تسجيل السبب" : action === "completed" ? "تم إكمال الحجز ونقله إلى السجل" : "تم تحديث حالة الحجز");
+    // Reconcile after confirmation; a rejected booking must not wait on cash/ledger reads.
+    void Promise.resolve().then(async()=>{
+      if(!state.user)return;
+      if(["checkout","markPaid","refund","void","completed"].includes(action))await refreshCashierOperations();
+      else if(state.section==='pos'&&serverTransactions)void serverTransactions.load();
+      if(bookingSignalPump)bookingSignalPump.refresh();
+      else await (['cashier','manager'].includes(state.role)?loadCashierDashboard(true):loadDashboard(true));
+      if(state.section==='calendar'&&!bookingSignalPump)await loadCalendar(true);
+    }).catch(()=>toast("اتحفظ التعديل؛ تعذر تحديث باقي البيانات مؤقتًا",true));
     return true;
   }
   catch (error) { toast(error.message || "تعذر تحديث الحجز", true); return false; }
+  finally { bookingMutations.delete(id); }
 }
 
 async function promptRescheduleBooking(id) {

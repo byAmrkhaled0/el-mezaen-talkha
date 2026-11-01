@@ -37,6 +37,8 @@ before(async () => {
   });
 
   await rules.withSecurityRulesDisabled(async (context) => {
+    for(const uid of ['admin-1','offer-admin','content-admin'])await setDoc(doc(context.firestore(),'users/'+uid),{role:'admin',active:true});
+    for(const [uid,role,permission,branch] of [['manager-1','manager','gallery','talkha'],['manager-results','manager','results','talkha'],['manager-hair','manager','hairMedia','mashaya'],['cashier-gallery','cashier','gallery','talkha'],['cashier-offers','cashier','offers','mashaya'],['cashier-no-offers','cashier','pos','mashaya'],['gallery-no-offers','manager','gallery','mashaya'],['content-cashier','cashier','gallery','talkha'],['content-manager','manager','hairMedia','mashaya'],['ordinary-cashier','cashier','pos','talkha']])await setDoc(doc(context.firestore(),'users/'+uid),{role,permissions:[permission],branchIds:[branch],active:true});
     await setDoc(doc(context.firestore(), "users/customer-1"), {
       name: "عميل الاختبار",
     });
@@ -217,6 +219,15 @@ test("Storage allows authorized delete and denies cashier delete", async () => {
 test("Storage denies temporary-password worker photo upload",async()=>{
  const worker=auth('worker-uid',{role:'worker',staffId:'worker-1',branchIds:['talkha'],mustChangePassword:true}).storage();
  await assertFails(uploadBytes(ref(worker,'public/staff/worker-1/gated.webp'),image(),{contentType:'image/webp'}));
+});
+
+test('Storage rejects disabled accounts, removed grants and stale admin roles immediately',async()=>{
+ for(const [uid,role,permission,branch] of [['disabled-media','cashier','gallery','talkha'],['removed-grant','manager','results','talkha'],['old-admin','admin',null,null]]){
+  await rules.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),'users/'+uid),{role:uid==='old-admin'?'cashier':role,active:uid!=='disabled-media',permissions:[],branchIds:branch?[branch]:[]}));
+  const storage=auth(uid,{role,permissions:permission?[permission]:[],branchIds:branch?[branch]:[]}).storage();
+  await assertFails(uploadBytes(ref(storage,role==='admin'?'public/stale-admin.webp':`public/content/${permission==='results'?'result':'gallery'}/${branch}/blocked.webp`),image(),{contentType:'image/webp'}));
+ }
+ const unknown=auth('missing-admin',{role:'admin'}).storage();await assertFails(uploadBytes(ref(unknown,'public/missing-admin.webp'),image(),{contentType:'image/webp'}));
 });
 test("Storage denies stale worker claims while canonical credentials are changing",async()=>{
  await rules.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),'users/worker-uid'),{active:false,mustChangePassword:true,accessOperation:{action:'username'}},{merge:true}));

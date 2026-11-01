@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "node scripts/clean-dist.mjs && node scripts/generate-seo.mjs && vite build",
-    "verify:build": "node scripts/verify-build.mjs",
+    "verify:build": "node scripts/verify-build.mjs && node scripts/verify-client-secrets.mjs",
     "audit:links": "node scripts/link-audit.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "audit:performance": "node scripts/performance-audit.mjs",
@@ -40,3 +40,4 @@
     }
   }
 }
+

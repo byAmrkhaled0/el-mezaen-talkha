@@ -45,7 +45,7 @@ test("runtime has no OS command or dynamic code execution primitives", async () 
 
 test("Storage generic and staff writes are admin only; scoped media paths do not inherit wildcard grants", async () => {
   const rules = await source("storage.rules");
-  assert.match(rules, /function canManageMedia\(\)\s*\{\s*return request\.auth != null && request\.auth\.token\.role == 'admin';/);
+  assert.match(rules, /function canManageMedia\(\)\s*\{\s*return request\.auth != null && request\.auth\.token\.role == 'admin' && canonicalMediaAccountLive\(\);/);
   assert.match(rules, /folder != 'offers' && folder != 'content' && canManageMedia\(\)/);
   assert.match(rules, /isOwnWorkerPhoto\(staffId, fileName\)/);
 });
@@ -117,3 +117,4 @@ test("Firestore collection allowlists and audit payloads exclude raw credentials
   assert.ok(auditWrite);
   assert.doesNotMatch(auditWrite, /\bpassword\b|\btoken\b|\botp\b|\bsecret\b/i);
 });
+

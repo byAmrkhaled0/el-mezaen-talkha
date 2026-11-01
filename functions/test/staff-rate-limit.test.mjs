@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createStaffRateLimiter} from '../src/staff-rate-limit.js';
+test('staff budgets cannot be bypassed by changing IP or forwarded headers; windows and users remain isolated',async()=>{
+ let clock=0;const counts=new Map();const limit=createStaffRateLimiter({now:()=>clock,fail:(code,message)=>Object.assign(Error(message),{code}),consume:async(key,action,max)=>{const count=counts.get(key)||0;if(count>=max)throw Object.assign(Error('limited'),{code:'resource-exhausted'});counts.set(key,count+1);}});
+ const req=(uid,ip)=>({auth:{uid},rawRequest:{ip,headers:{'x-forwarded-for':ip}}});await limit(req('one','a'),'booking-mutation',2,1000);await limit(req('one','b'),'booking-mutation',2,1000);await assert.rejects(limit(req('one','c'),'booking-mutation',2,1000),{code:'resource-exhausted'});await limit(req('two','c'),'booking-mutation',2,1000);clock=1000;await limit(req('one','d'),'booking-mutation',2,1000);assert.throws(()=>limit({},'booking-mutation',2,1000),{code:'unauthenticated'});
+});
