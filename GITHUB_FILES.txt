@@ -738,3 +738,8 @@ functions/src/public-service-sharing.js
 functions/src/public-editorial-scope.js
 functions/src/owner-promotion.js
 tests/public-global-results.test.mjs
+src/device-notifications.js
+tests/device-notifications.test.mjs
+tests/fixtures/backend-glob-security-baseline.json
+functions/test/dependency-glob-compat.test.mjs
+scripts/cloud-protection.ps1

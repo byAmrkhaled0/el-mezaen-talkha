@@ -49,9 +49,14 @@ test('reviewed backend lock baseline includes the October 2026 security fixes on
  assert.equal(lock.packages['node_modules/qs'].version,'6.17.0');
  assert.equal(lock.packages['node_modules/firebase-admin'].version,'14.5.0');
  assert.equal(lock.packages['node_modules/firebase-functions'].version,'7.4.0');
- // Approved changes: body-parser and qs, including their metadata and dependency ranges.
- // Keep the whole-file fingerprint so unrelated dependency changes still fail this gate.
- assert.equal(createHash('sha256').update(source).digest('hex'),'6f52eb8496905e26ae12caeb216e9245fc9f1316526ed280312aee2e9711262d');
+  // Restore only the explicitly reviewed glob dependency subtree before comparing the locked baseline.
+  const reviewed=JSON.parse(readFileSync(new URL('./fixtures/backend-glob-security-baseline.json',import.meta.url),'utf8'));
+  assert.equal(createHash('sha256').update(source).digest('hex'),reviewed.newLockHash);
+  assert.equal(lock.packages['node_modules/glob'].version,'14.0.3');
+  assert.equal(lock.packages['node_modules/minimatch'].version,'11.0.3');
+  for(const [path,value]of Object.entries(reviewed.before)){if(value===null)delete lock.packages[path];else lock.packages[path]=value;}
+  assert.equal(Object.keys(lock.packages).length,reviewed.originalOrder.length); lock.packages=Object.fromEntries(reviewed.originalOrder.map(key=>[key,lock.packages[key]]));
+  assert.equal(createHash('sha256').update(JSON.stringify(lock,null,2)+'\n').digest('hex'),'6f52eb8496905e26ae12caeb216e9245fc9f1316526ed280312aee2e9711262d');
 });
 test('pricing baseline preserved; authorized actor and active-drawer tracking changes only: createPosOrder',()=>{const source=readFileSync(new URL('../functions/src/index.js',import.meta.url),'utf8');let block=source.match(/export const createPosOrder =.*?(?=\nexport const |$)/s)[0];assert.match(block,/Object\.assign\(bookingRecord, receiptActor\(request\), \{createdAt:now\}\)/);block=block.replace(/  \/\/ OFFLINE_POS_BEGIN:[\s\S]*?  \/\/ OFFLINE_POS_END\n/,'').replace('\n\n  const customer =','\n  const customer =');
 // Strip only the authorized read-only price preview and expected-total guard; keep the original financial hash.

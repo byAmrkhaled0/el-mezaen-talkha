@@ -18,6 +18,9 @@
   },
   "overrides": {
     "uuid": "^11.1.1",
-    "brace-expansion": "^2.1.4"
+    "brace-expansion": "^2.1.4",
+    "rimraf@5.0.10": {
+      "glob": "14.0.3"
+    }
   }
 }

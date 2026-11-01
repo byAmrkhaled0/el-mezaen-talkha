@@ -25,3 +25,10 @@
 
 @media(max-width:720px){#adminApp #bookings .booking-primary-actions>[data-open-receipt]{flex-basis:100%;order:0}#adminApp #bookings .booking-primary-actions .booking-icon-action{order:1}#adminApp #bookings .booking-primary-actions>:is(details,.admin-disclosure-button,.admin-disclosure-panel){order:2}}
 
+/* DEVICE_PUSH_CONTROLS_BEGIN */
+.device-push-actions{display:flex;flex-wrap:wrap;gap:6px;margin-block:8px}
+.device-push-actions button{min-height:32px;padding:5px 10px;font-size:11px}
+.device-push-health{display:grid;gap:4px;padding:8px 0;color:var(--text);font-size:12px}
+.device-push-health span{font-size:11px;color:var(--muted)}
+/* DEVICE_PUSH_CONTROLS_END */
+html[data-admin-layout="cashier"] #adminAlertsDialog .device-push-actions #testLocalNotification:not([hidden]){display:inline-flex!important}

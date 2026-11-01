@@ -1,4 +1,5 @@
 import {workerPushNotification} from './worker-push.js';
+import {requestDeviceNotificationPermission,showDeviceNotification} from './device-notifications.js';
 import {verifyStaffStartup,needsMarketingGrantCheck} from './admin-startup.js';
 import {assertDemoEmulator,connectLocalAuth,connectLocalFunctions,connectLocalStorage} from './firebase-local-emulators.js';
 import {legacyCollectionError,legacyCollectionPage} from './legacy-admin-compat.js';
@@ -391,15 +392,22 @@ export async function createVideoPoster(file) {
 export async function enablePush() {
   if(globalThis.__USE_EMULATORS__)throw new Error('تنبيهات الموقع متاحة هنا؛ إشعارات الجهاز تحتاج إعداد Firebase Messaging واختبارًا منفصلًا خارج المحاكيات.');
   if (!configured || !globalThis.__VAPID_KEY__ || !("Notification" in globalThis) || !("serviceWorker" in navigator)) throw new Error("PUSH_NOT_CONFIGURED");
+  await requestDeviceNotificationPermission();
   const { getMessaging, getToken, isSupported } = await loadMessaging();
   if (!await isSupported()) throw new Error("PUSH_NOT_CONFIGURED");
   const registration = await getActiveServiceWorker();
-  const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
-  if (permission !== "granted") throw new Error("PUSH_DENIED");
   const token = await getToken(getMessaging(app), { vapidKey: globalThis.__VAPID_KEY__, serviceWorkerRegistration: registration });
   if (!token) throw new Error("PUSH_TOKEN_FAILED");
   await call("registerPushToken", { token, branchId:document.querySelector("#headerBranchFilter")?.value || "all" });
   return true;
+}
+
+export async function showAdminTestNotification() {
+  if (globalThis.Notification?.permission !== 'granted') throw new Error('PUSH_DENIED');
+  await showDeviceNotification(await getActiveServiceWorker(), 'اختبار إشعارات مزين مصر', {
+    body: 'تجربة عرض محلية على هذا الجهاز؛ وصول الحجوزات في الخلفية يُختبر بحجز تجريبي.',
+    icon: '/assets/icon-192.png', tag: 'admin-notification-test'
+  });
 }
 
 // Uses the existing staff Auth instance and session persistence.

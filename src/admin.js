@@ -1,4 +1,6 @@
 import {createNewBookingTracker,createBookingSignalPump,mountBookingLiveUi} from './booking-live.js';
+import {deviceNotificationControls} from './device-notifications.js';
+import {showAdminTestNotification} from './admin-api.js';
 import {watchBookingInbox,invalidateBookingReads} from './admin-api.js';
 import './booking-live.css';
 import {collectRecordPages} from './record-history-client.js';
@@ -3301,7 +3303,7 @@ function renderAdminAlerts() {
   if (health) {
     const permission = "Notification" in window ? Notification.permission : "unsupported";
     health.hidden = permission === "granted" && pushRegistrationReady;
-    health.innerHTML = health.hidden ? "" : `<b>${permission === "granted" ? "الإذن متاح ويحتاج إعادة ربط" : permission === "denied" ? "إشعارات المتصفح محظورة" : permission === "default" ? "إشعارات المتصفح لم تُفعّل بعد" : "المتصفح لا يدعم الإشعارات"}</b><span>تظل إشعارات الحجوزات داخل اللوحة متاحة هنا.</span>`;
+    health.innerHTML = health.hidden ? "" : `<b>${permission === "granted" ? "الإذن متاح ويحتاج إعادة ربط" : permission === "denied" ? "إشعارات المتصفح محظورة" : permission === "default" ? "إشعارات المتصفح لم تُفعّل بعد" : "المتصفح لا يدعم الإشعارات"}</b><span>${deviceNotificationControls({permission}).help}</span>`;
   }
 }
 function syncPushButtons() {
@@ -3309,6 +3311,11 @@ function syncPushButtons() {
   const permission = supported ? Notification.permission : "unsupported";
   const copy = pushSyncing ? "جارٍ ربط الإشعارات…" : permission === "granted" && pushRegistrationReady ? "الإشعارات مفعلة" : permission === "granted" ? "إعادة ربط الإشعارات" : permission === "denied" ? "الإشعارات محظورة من إعدادات المتصفح" : permission === "default" ? "تفعيل الإشعارات" : "الإشعارات غير مدعومة";
   const disabled = pushSyncing || ["denied", "unsupported"].includes(permission);
+  const controls = deviceNotificationControls({permission,ready:pushRegistrationReady,busy:pushSyncing});
+  const activation = $("#enableDevicePush");
+  if (activation) { activation.textContent=controls.label; activation.disabled=controls.disabled; activation.hidden=controls.hidden; activation.setAttribute('aria-busy',String(pushSyncing)); }
+  const test = $("#testLocalNotification");
+  if (test) { test.hidden=!controls.canTest; test.disabled=!controls.canTest; }
   const mobile = $("#mobilePushButton");
   if (mobile) {
     const label = mobile.querySelector("span"); if (label) label.textContent = copy;
@@ -3328,11 +3335,11 @@ function syncPushButtons() {
 
 async function testLocalNotification(button) {
   if (!("Notification" in window)) return toast("الإشعارات غير مدعومة في هذا المتصفح", true);
-  if (Notification.permission !== "granted") await requestAdminPush(button);
-  if (Notification.permission !== "granted") return;
-  new Notification("اختبار إشعارات مزين مصر", { body: "هذا الجهاز جاهز لاستقبال تنبيهات لوحة الإدارة.", icon: "/assets/icon-192.png", tag: "admin-notification-test" });
+  if (Notification.permission !== "granted" || !pushRegistrationReady) await requestAdminPush(button);
+  if (Notification.permission !== "granted" || !pushRegistrationReady) return;
+  await showAdminTestNotification();
   playAdminNotificationSound();
-  toast("تم إرسال إشعار اختبار محلي لهذا الجهاز");
+  toast("تم عرض إشعار تجريبي محلي؛ اختبر وصول حجز للتأكد من تنبيهات الخلفية");
 }
 
 async function requestAdminPush(button) {
@@ -3343,7 +3350,8 @@ async function requestAdminPush(button) {
   syncPushButtons();
   try { await connectAdminPush(); pushRegistrationReady = true; toast("تم تفعيل الإشعارات وربط هذا الجهاز"); }
   catch (error) {
-    const message = ({ PUSH_NOT_CONFIGURED: "الإشعارات غير متاحة على هذا المتصفح أو إعداداتها غير مكتملة", PUSH_DENIED: "الإشعارات محظورة من إعدادات المتصفح", PUSH_TOKEN_FAILED: "تعذر إنشاء رمز الإشعارات؛ أعد المحاولة" })[error.message] || error.message || "تعذر تفعيل الإشعارات الآن";
+    pushRegistrationReady = false;
+    const message = ({ PUSH_NOT_CONFIGURED: "الإشعارات غير متاحة على هذا المتصفح أو إعداداتها غير مكتملة", PUSH_DENIED: "اسمح بالإشعارات من إعدادات الموقع في المتصفح، ثم أعد التفعيل", PUSH_DISMISSED: "لم يتم تفعيل الإشعارات؛ يمكنك المحاولة وقتما تحب", PUSH_TOKEN_FAILED: "تعذر إنشاء رمز الإشعارات؛ أعد المحاولة" })[error.message] || error.message || "تعذر تفعيل الإشعارات الآن";
     toast(message, true);
   }
   finally { pushSyncing = false; syncPushButtons(); }
@@ -3670,6 +3678,7 @@ $("#logoutButton").addEventListener("click", async () => {
 });
 $("#pushButton").addEventListener("click", event => handlePushButton(event.currentTarget));
 $("#mobilePushButton")?.addEventListener("click", event => requestAdminPush(event.currentTarget));
+$("#enableDevicePush")?.addEventListener("click", event => requestAdminPush(event.currentTarget));
 $("#editorClose").addEventListener("click", () => $("#editorDialog").close());
 $("#editorCancel").addEventListener("click", () => $("#editorDialog").close());
 $("#accessClose").addEventListener("click", () => $("#accessDialog").close());
