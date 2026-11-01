@@ -24,24 +24,27 @@ export function createBookingSignalPump({scope,refresh,notify,onError=()=>{},sch
  },refresh:queue,dispose(){disposed=true;if(timer!==null)cancel(timer);timer=null;seen.clear();}};
 }
 export function createBookingSound({Audio=globalThis.AudioContext,storage=globalThis.localStorage,onState=()=>{}}={}){
- let context,enabled=true,lastPlayed=-Infinity;try{enabled=storage?.getItem('mz-booking-sound')!=='off';}catch{}
+ let context,enabled=true,lastPlayed=-Infinity;const voices=new Set();try{enabled=storage?.getItem('mz-booking-sound')!=='off';}catch{}
  const state=()=>onState({enabled,ready:context?.state==='running'});
  async function arm(){if(!enabled||!Audio)return false;try{context ||= new Audio();if(context.state==='suspended')await context.resume();state();return context.state==='running';}catch{state();return false;}}
- return {arm,async play(){if(!await arm()||Date.now()-lastPlayed<1100)return false;lastPlayed=Date.now();const start=context.currentTime;
-  for(let index=0;index<4;index++){const oscillator=context.createOscillator(),gain=context.createGain(),at=start+index*.22;oscillator.type='sine';oscillator.frequency.value=index%2?1174:880;gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(.28,at+.025);gain.gain.exponentialRampToValueAtTime(.0001,at+.19);oscillator.connect(gain).connect(context.destination);oscillator.start(at);oscillator.stop(at+.21);}return true;
- },setEnabled(value){enabled=Boolean(value);try{storage?.setItem('mz-booking-sound',enabled?'on':'off');}catch{}state();},get enabled(){return enabled;},sync:state};
+ return {arm,async play(){if(!await arm()||!enabled||Date.now()-lastPlayed<1900)return false;lastPlayed=Date.now();const start=context.currentTime;
+  // Three bell strikes; partials total .8 peak and each strike decays before the next.
+  for(let index=0;index<3;index++)for(const [frequency,peak]of [[1046.5,.48],[2095,.22],[2930.2,.10]]){const oscillator=context.createOscillator(),gain=context.createGain(),at=start+index*.58;oscillator.type='sine';oscillator.frequency.value=frequency;gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(peak,at+.008);gain.gain.exponentialRampToValueAtTime(.0001,at+.51);oscillator.connect(gain).connect(context.destination);voices.add(oscillator);oscillator.onended=()=>{voices.delete(oscillator);oscillator.disconnect?.();gain.disconnect?.();};oscillator.start(at);oscillator.stop(at+.53);}return true;
+ },setEnabled(value){enabled=Boolean(value);if(!enabled){for(const oscillator of voices)try{oscillator.stop();}catch{}voices.clear();}try{storage?.setItem('mz-booking-sound',enabled?'on':'off');}catch{}state();},get enabled(){return enabled;},sync:state};
 }
+export function bookingSoundIcon(enabled){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/>${enabled?'<path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/>':'<path d="m16 9 5 6m0-6-5 6"/>'}</svg>`;}
 export function mountBookingLiveUi({root=document,onOpen=()=>{},branchLabel=id=>id}={}){
  const host=root.querySelector('#bookingLiveControls'),banner=root.querySelector('#newBookingBanner');let latest=null;
- const enable=root.querySelector('#bookingSoundEnable'),mute=root.querySelector('#bookingSoundMute'),status=root.querySelector('#bookingLiveStatus');
+ const mute=root.querySelector('#bookingSoundMute');
  const header=root.querySelector('.admin-header');
  if(header&&globalThis.ResizeObserver){const observer=new ResizeObserver(()=>root.documentElement.style.setProperty('--admin-live-header-height',Math.ceil(header.getBoundingClientRect().height)+'px'));observer.observe(header);globalThis.window?.addEventListener('beforeunload',()=>observer.disconnect(),{once:true});}
- const sound=createBookingSound({onState:state=>{if(enable)enable.textContent=state.ready&&state.enabled?'تجربة صوت الحجوزات':'تفعيل وتجربة صوت الحجوزات';if(mute){mute.textContent=state.enabled?'كتم الصوت':'تشغيل الصوت';mute.setAttribute('aria-pressed',String(!state.enabled));}}});
- enable?.addEventListener('click',()=>{sound.setEnabled(true);void sound.play();});mute?.addEventListener('click',()=>{sound.setEnabled(!sound.enabled);if(sound.enabled)void sound.arm();});
+ const sound=createBookingSound({onState:state=>{if(mute){const label=state.enabled?'كتم صوت الحجوزات':'تشغيل صوت الحجوزات';mute.innerHTML=bookingSoundIcon(state.enabled);mute.setAttribute('title',label);mute.setAttribute('aria-label',label);mute.setAttribute('aria-pressed',String(!state.enabled));}}});
+ mute?.addEventListener('click',()=>{sound.setEnabled(!sound.enabled);if(sound.enabled)void sound.arm();});
+ root.querySelector('#bookingSoundTest')?.addEventListener('click',()=>{sound.setEnabled(true);void sound.play();});
  root.addEventListener('pointerdown',()=>void sound.arm(),{once:true,passive:true});sound.sync();
  root.querySelector('#openNewBooking')?.addEventListener('click',()=>{if(latest)void onOpen(latest.id);});root.querySelector('#dismissNewBooking')?.addEventListener('click',()=>{banner.hidden=true;});
  const shown=new Set();
- return {sound,reset(){shown.clear();latest=null;if(banner)banner.hidden=true;},status(value){if(status)status.textContent=value==='connected'?'التحديث التلقائي متصل':value==='error'?'تعذر الاتصال المباشر — التحديث الدوري مستمر':'جاري توصيل التحديث التلقائي…';},notify(item){
+ return {sound,reset(){shown.clear();latest=null;if(banner)banner.hidden=true;},status(value){if(host)host.dataset.connection=value;},notify(item){
   if(!item?.id||shown.has(item.id))return false;shown.add(item.id);if(shown.size>300)shown.delete(shown.values().next().value);latest=item;
   if(banner){banner.hidden=false;root.querySelector('#newBookingBannerText').textContent=`حجز جديد${item.customerName?' — '+item.customerName:''} · ${branchLabel(item.branchId)}`;}
   void sound.play();return true;

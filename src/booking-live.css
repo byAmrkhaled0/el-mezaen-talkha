@@ -1,6 +1,10 @@
 #bookingLiveControls[hidden],#newBookingBanner[hidden]{display:none!important}
-.booking-live-controls{border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0;background:var(--panel)}
-.booking-live-controls p{font-size:13px;margin:0 0 10px}.booking-live-controls>div{display:flex;flex-wrap:wrap;gap:8px}
+.booking-alert-header-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.booking-live-controls{display:flex;align-items:center;gap:5px;border:0;padding:0;margin:0;background:transparent}
+#adminAlertsDialog .booking-sound-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;min-width:28px;height:28px;min-height:28px;padding:5px;border:1px solid #ffffff30;border-radius:6px;background:transparent;color:#fff;box-shadow:none;cursor:pointer}
+#adminAlertsDialog .booking-sound-toggle svg{width:16px;height:16px;pointer-events:none}
+#adminAlertsDialog #bookingSoundMute[aria-pressed=true]{background:#ffffff08;color:#d7e5ef}
+#adminAlertsDialog .booking-sound-toggle:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .booking-live-banner{position:fixed;inset-inline:16px;top:calc(var(--admin-live-header-height,76px) + 8px);z-index:180;max-width:680px;margin-inline:auto;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--panel,#fff);color:var(--text,#123);border:2px solid #179a6c;border-radius:14px;box-shadow:0 8px 28px #0003}
 .booking-live-banner strong{flex:1;font-size:15px}.booking-live-banner button{min-height:44px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:var(--panel);color:var(--text);cursor:pointer;font:inherit}.booking-live-banner #openNewBooking{background:#137a57;color:white;border-color:#137a57}
 #adminApp .booking-icon-action{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:10px!important;border:1px solid var(--line)!important;border-radius:11px!important;line-height:1!important;box-shadow:none!important}
