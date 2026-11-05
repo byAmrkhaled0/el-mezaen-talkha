@@ -3,6 +3,9 @@ import {deviceNotificationControls} from './device-notifications.js';
 import {showAdminTestNotification} from './admin-api.js';
 import {watchBookingInbox,invalidateBookingReads} from './admin-api.js';
 import './booking-live.css';
+import {mountPageGuide} from './page-guide.js';
+import './page-guide.css';
+const pageGuide=mountPageGuide({role:'admin',anchor:document.querySelector('.header-actions')});
 import {collectRecordPages} from './record-history-client.js';
 import {getAdminHistory} from './admin-api.js';
 import {mountAdminClarity} from './admin-clarity.js';
@@ -258,6 +261,7 @@ function showWorkspaceHome({ historyMode = "push" } = {}) {
   const hasSocial = availableHubSections("social").length > 0;
   const socialGate = $('[data-open-hub="social"]');
   if (socialGate) socialGate.hidden = !hasSocial;
+  pageGuide.refresh({uid:state.user?.uid||'',role:state.role||'admin',section:state.section});
   closeAdminMenu();
 }
 async function openHub(hub) {
@@ -397,6 +401,7 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
   if (["attendance", "tasks"].includes(id)) await loadAttendance();
   if (id === "staff") renderStaffSummary();
   if (id === "worker") await loadWorkerWorkspace();
+  pageGuide.refresh({uid:state.user?.uid||'',role:state.role||'admin',section:id});
 }
 
 let campaignOptions = null;
@@ -3907,6 +3912,7 @@ if ("serviceWorker" in navigator) {
 }
 let dashboardRefreshTimer;
 async function bootstrapAdmin(user) {
+  pageGuide.refresh({uid:'',role:'admin',section:''});
   stopBookingInbox();newBookingTracker.reset();bookingLiveUi.reset();
   branchBookingView?.dispose();branchBookingView=null;
   collectionRequestEpoch++;
@@ -4008,6 +4014,7 @@ async function bootstrapAdmin(user) {
       showWorkspaceHome({ historyMode: "replace" });
       if (access.role !== "worker" && (state.role === "admin" || state.permissions.has("dashboard") || state.permissions.has("revenue") || state.permissions.has("pos"))) void loadDashboard(true);
     }
+    pageGuide.refresh({uid:state.user.uid,role:state.role,section:state.section});
     offlineConnectionMonitor?.stop();
     if(canOpenSection('pos')){
       offlineConnectionMonitor=createConnectionMonitor({

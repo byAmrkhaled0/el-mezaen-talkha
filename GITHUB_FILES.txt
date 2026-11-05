@@ -743,3 +743,7 @@ tests/device-notifications.test.mjs
 tests/fixtures/backend-glob-security-baseline.json
 functions/test/dependency-glob-compat.test.mjs
 scripts/cloud-protection.ps1
+src/page-guide.js
+src/page-guide-content.js
+src/page-guide.css
+tests/page-guide.test.mjs

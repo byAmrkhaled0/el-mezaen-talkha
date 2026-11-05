@@ -8,7 +8,7 @@ test('worker sections keep direct links, history and private section loaders in 
  const screens=names.map(name=>({dataset:{screen:name},hidden:true}));
  const buttons=names.map(name=>({dataset:{view:name},setAttribute(key,value){this[key]=value;}}));
  const calls=[],location={hash:'#attendance'},history={replaceState(_,__,hash){location.hash=hash;calls.push(['replace',hash]);},pushState(_,__,hash){location.hash=hash;calls.push(['push',hash]);}};
- const context={document:{querySelectorAll:selector=>selector==='[data-screen]'?screens:buttons},history,location,requestCenter:{load(){calls.push(['requests']);}},orderAdditionView:{load(){calls.push(['bookings']);}},personalAttendanceView:{load(){calls.push(['attendance']);}}};
+ const context={user:{uid:'navigation-worker'},pageGuide:{refresh(){}},document:{querySelectorAll:selector=>selector==='[data-screen]'?screens:buttons},history,location,requestCenter:{load(){calls.push(['requests']);}},orderAdditionView:{load(){calls.push(['bookings']);}},personalAttendanceView:{load(){calls.push(['attendance']);}}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function view('),source.indexOf('function renderBookingQueue(')),context);
  context.view('attendance',{fromHistory:true});assert.equal(screens.filter(n=>!n.hidden)[0].dataset.screen,'attendance');assert.equal(buttons.find(n=>n.dataset.view==='attendance')['aria-current'],'page');assert.deepEqual(calls,[['replace','#attendance'],['attendance']]);
  context.view('bookings');assert.equal(location.hash,'#bookings');assert.deepEqual(calls.slice(-2),[['push','#bookings'],['bookings']]);
