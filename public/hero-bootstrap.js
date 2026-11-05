@@ -20,7 +20,7 @@
     }
   } catch {}
   const link=document.createElement('link');link.rel='preload';link.as='image';link.href=custom||'/assets/owner/owner-hero-studio-suit-640.webp';
-  if(!custom){link.setAttribute('imagesrcset',srcset);link.setAttribute('imagesizes','(max-width:768px) 92vw, (max-width:1280px) 42vw, 520px');link.type='image/webp';}
+  if(!custom){link.setAttribute('imagesrcset',srcset);link.setAttribute('imagesizes','(max-width:360px) 80px, (max-width:620px) 110px, 340px');link.type='image/webp';}
   document.head.append(link);
   globalThis.mountPublicHero=() => {
     const template=document.getElementById('publicHeroTemplate');if(!template)return;

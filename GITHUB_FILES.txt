@@ -747,3 +747,4 @@ src/page-guide.js
 src/page-guide-content.js
 src/page-guide.css
 tests/page-guide.test.mjs
+tests/mobile-booking-polish.test.mjs

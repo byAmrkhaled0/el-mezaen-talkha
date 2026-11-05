@@ -77,10 +77,10 @@ body[data-public-refinement][data-customer-simple] .public-footer .footer-layout
  body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head h2 {font-size:25px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] .section-head p {font-size:13px;margin-top:6px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust {grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
- body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust>span {padding:6px 2px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust>span {grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;min-width:0;padding:6px 2px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust small {display:none}
- body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust svg {width:24px;height:24px;padding:0;border:0}
- body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust b {font-size:10px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust svg {grid-column:1;grid-row:auto;width:24px;height:24px;padding:0;border:0}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .quick-trust b {grid-column:1;font-size:11px;line-height:1.5;max-width:100%;overflow-wrap:break-word}
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-card {display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden}
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-cover {width:100%;height:90px;margin:0;grid-column:auto;grid-row:auto}
@@ -90,7 +90,7 @@ body[data-public-refinement][data-customer-simple] .public-footer .footer-layout
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-meta {font-size:10px;flex-wrap:wrap;gap:4px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .service-purchase {margin-top:auto;display:flex;flex-wrap:wrap;gap:8px}
  body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .price {font-size:20px}
- body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .btn {width:100%;padding:8px;font-size:12px;min-height:40px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] #serviceGrid .btn {width:100%;padding:8px;font-size:12px;min-height:44px}
  body[data-public-refinement][data-customer-simple] .home-explore-head .btn {width:100%;white-space:normal}
 }
 @media(prefers-reduced-motion:no-preference) {
@@ -192,3 +192,15 @@ body[data-public-refinement] #bookingDialog #bookingBranchAddress{display:none}
 body[data-public-refinement] #bookingDialog .booking-branch-bar{grid-template-columns:28px minmax(0,1fr);gap:10px}
 body[data-public-refinement] #bookingDialog .booking-branch-icon{width:28px;height:28px;min-width:28px;border-radius:8px}
 body[data-public-refinement] #bookingDialog .booking-branch-icon svg{width:20px;height:20px}
+
+/* Compact first screen and content-sized branch choice on real phone viewports. */
+body[data-public-refinement] [data-floating-cart][hidden]{display:none!important}
+@media(max-width:820px){
+ body[data-public-refinement] #branchDialog{height:fit-content;min-height:0}
+ body[data-public-refinement] #branchDialog .branch-dialog-shell{height:auto;min-height:0}
+}
+@media(max-width:360px){
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-editorial{grid-template-columns:minmax(0,1fr) 80px;gap:10px;min-height:240px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-frame{width:80px;height:144px}
+ body[data-public-refinement][data-customer-simple][data-home-editorial] .hero-copy h1{font-size:24px}
+}

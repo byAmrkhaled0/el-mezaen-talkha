@@ -892,7 +892,17 @@ async function renderTimes() {
   } catch (error) {
     if (requestId !== availabilityRequestId) return;
     console.debug("Availability loading failed", error?.message || error);
-    select.innerHTML = `<option value="">${state.lang === "ar" ? "تعذر تحميل المواعيد — غيّر التاريخ وحاول مرة أخرى" : "Could not load times — change the date and try again"}</option>`;
+    select.innerHTML = `<option value="">${state.lang === "ar" ? "تعذر تحميل المواعيد — أعد المحاولة" : "Could not load times — retry"}</option>`;
+    const notice = $("#bookingAvailabilityNotice");
+    if (notice) {
+      notice.hidden = false;
+      const message = document.createElement('p');
+      message.textContent = state.lang === 'ar' ? 'تعذر الاتصال لتحميل المواعيد. جرّب تاني من غير ما تغيّر اليوم.' : 'Could not load available times. Retry without changing your date.';
+      const retry = document.createElement('button');retry.id = 'bookingSlotsRetry';retry.type = 'button';retry.className = 'btn btn-ghost';
+      retry.textContent = state.lang === 'ar' ? 'إعادة تحميل المواعيد' : 'Retry available times';
+      retry.onclick = () => { if (!availabilityLoading) void renderTimes(); };
+      notice.replaceChildren(message,retry);
+    }
     showToast(error?.message || (state.lang === "ar" ? "تعذر تحميل المواعيد المتاحة" : "Could not load available times"));
   } finally {
     if (requestId === availabilityRequestId) {
