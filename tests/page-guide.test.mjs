@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {connectedDom} from './helpers/connected-dom.mjs';
 import {guideSteps} from '../src/page-guide-content.js';
-import {mountPageGuide,guideStorageKey,fitGuideCard,isGuideTargetVisible} from '../src/page-guide.js';
+import {mountPageGuide,guideStorageKey,fitGuideCard,isGuideTargetVisible,isAdminGuideContext} from '../src/page-guide.js';
 
 function fixture({hidden=false,blockedStorage=false}={}){
  const {document}=connectedDom(`<html lang="ar"><body><header class="header-actions"></header><div id="adminApp" ${hidden?'hidden':''}><section id="pos"><button data-new-pos>فاتورة جديدة</button><table id="cashierTransactionsTable"></table><input id="posItemSearch"></section></div><dialog id="otherEditor"><form><button type="submit">حفظ</button></form></dialog><dialog id="bookingDialog"><header></header><strong id="bookingBranchName">طلخا</strong><button id="bookingAddService">إضافة خدمة</button><button id="nextStep">التالي</button></dialog></body></html>`);
@@ -30,7 +32,7 @@ test('first use waits for an authenticated visible workspace; navigation stays r
  const f=fixture({hidden:true});let ui;try{
   ui=mountPageGuide({role:'cashier',uid:'one',section:'pos'});f.tick();assert.equal(f.$('.mz-guide-dialog').open,false);
   f.$('#adminApp').hidden=false;f.$('#adminApp').removeAttribute('hidden');ui.refresh();f.tick();assert.equal(f.$('.mz-guide-dialog').open,true);
-  const d=f.$('.mz-guide-dialog');assert.match(f.$('#mzGuideTitle').textContent,/الكاشير/);
+  const d=f.$('.mz-guide-dialog');assert.match(f.$('#mzGuideTitle').textContent,/الكاشير/);assert.equal(f.$('.header-actions .mz-guide-launch').textContent,'؟');assert.equal(f.$('.header-actions .mz-guide-launch').getAttribute('aria-label'),'مساعدة لوحة الإدارة');
   f.$('.mz-guide-next').dispatchEvent({type:'click'});assert.equal(f.mutations,0);
   f.$('.mz-guide-skip').dispatchEvent({type:'click'});assert.equal(d.open,false);assert.equal(f.storage.get(guideStorageKey({uid:'one',role:'cashier'})),'done');
   ui.refresh();f.tick();assert.equal(d.open,false);assert.equal(ui.start(),true);
@@ -45,13 +47,12 @@ test('blocked storage, Escape and focus return work without causing another auto
   ui.refresh();f.tick();assert.equal(f.$('.mz-guide-dialog').open,false);
  }finally{ui?.dispose();f.restore();}
 });
-test('does not interrupt unrelated dialogs, typing or a hidden tab; booking help cannot advance the actual booking',()=>{
+test('does not interrupt any open dialog, typing or a hidden tab and never advances a booking',()=>{
  const f=fixture();let ui;try{
   ui=mountPageGuide({role:'cashier',uid:'one',section:'pos'});f.$('#otherEditor').showModal();f.tick();assert.equal(ui.start(),false);f.$('#otherEditor').close();
   f.document.activeElement=f.$('#posItemSearch');f.tick();assert.equal(f.$('.mz-guide-dialog').open,false);
   f.document.activeElement=null;f.document.hidden=true;ui.refresh();f.tick();assert.equal(f.$('.mz-guide-dialog').open,false);
-  f.document.hidden=false;f.$('#bookingDialog').showModal();assert.equal(ui.start(),true);assert.match(f.$('#mzGuideTitle').textContent,/الفرع/);
-  for(let i=0;i<4;i++)f.$('.mz-guide-next').dispatchEvent({type:'click'});
+  f.document.hidden=false;f.$('#bookingDialog').showModal();assert.equal(ui.start(),false);assert.equal(f.$('.mz-guide-dialog').open,false);
   assert.equal(f.mutations,0);assert.equal(f.$('#bookingDialog').open,true);
  }finally{ui?.dispose();f.restore();}
 });
@@ -70,11 +71,34 @@ test('mobile, desktop and keyboard-height card positions stay inside the viewpor
  }
 });
 test('role/page copy is bilingual, attendance accurately distinguishes GPS from fingerprint capture',()=>{
- for(const role of ['visitor','customer','worker','cashier','manager','admin','media']){
+ for(const role of ['cashier','manager','admin','media']){
   const steps=guideSteps({role,section:'pos'});assert.ok(steps.length>=3);
   for(const s of steps)for(const key of ['title','body','enTitle','enBody'])assert.ok(s[key]?.length>2);
  }
- assert.match(guideSteps({role:'worker',section:'attendance'})[0].body,/لا يجمع بصمة/);
- assert.ok(guideSteps({bookingOpen:true}).some(s=>s.selector==='#finalBookingReview'));
+ assert.match(guideSteps({role:'cashier',section:'myAttendance'})[1].body,/لا يجمع بصمة/);
+ for(const role of ['visitor','customer','worker','unknown'])assert.deepEqual(guideSteps({role}),[]);
  const js=readFileSync(new URL('../src/page-guide.js',import.meta.url),'utf8');assert.doesNotMatch(js,/fetch\(|httpsCallable|\.innerHTML\s*=|\.submit\(|\.click\(/);
+});
+
+test('public, customer and worker pages cannot mount help UI, timers or listeners even after an attempted refresh',()=>{
+ for(const [pathname,role] of [['/','visitor'],['/services/','admin'],['/account/','customer'],['/worker/','worker'],['/login/','admin'],['/administrator/','admin'],['/admin/','worker']]){
+  const f=fixture();try{
+   globalThis.location.pathname=pathname;const ui=mountPageGuide({role,uid:'test'});ui.refresh({role:'admin',uid:'test'});assert.equal(ui.start(),false);
+   assert.equal(f.$('.mz-guide-launch'),null);assert.equal(f.$('.mz-guide-dialog'),null);assert.equal(f.timers.size,0);assert.equal(f.events.size,0);ui.dispose();
+  }finally{f.restore();}
+ }
+ for(const role of ['admin','manager','cashier','media'])assert.equal(isAdminGuideContext('/admin/',role),true);
+});
+test('public browsing, booking, customer and worker module graphs do not load administrative guide JS or CSS',()=>{
+ const root=fileURLToPath(new URL('../',import.meta.url));const seen=new Set();
+ function visit(file){
+  if(seen.has(file))return;seen.add(file);assert.doesNotMatch(path.basename(file),/^page-guide(?:-content)?\.(?:js|css)$/);
+  if(!file.endsWith('.js'))return;const source=readFileSync(file,'utf8');
+  for(const match of source.matchAll(/(?:from\s*|import\s*\(?\s*)['"]([^'"]+)['"]/g)){
+   if(!match[1].startsWith('.'))continue;const next=path.resolve(path.dirname(file),match[1]);if(existsSync(next))visit(next);
+  }
+ }
+ for(const file of ['app.js','global-navigation.js','account.js','worker.js','catalog-page.js','results.js','branch-page.js'])visit(path.resolve(root,'src',file));
+ assert.ok(seen.size>20);
+ const admin=readFileSync(path.resolve(root,'src/admin.js'),'utf8');assert.match(admin,/mountPageGuide/);assert.match(admin,/page-guide\.css/);
 });

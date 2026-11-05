@@ -158,7 +158,6 @@ async function portalFixture(branches, services = {}) {
     recordWorkerAttendance() {}, updateWorkerTask() {}, markWorkerNotificationRead() {}, enablePush() {},
     watchWorkerPush: async () => () => {}, logout() {},
     location: { search: '', hash: '', replace() {} }, history: { replaceState() {} }, navigator: {},
-    mountPageGuide: () => ({refresh() {}}),
     URLSearchParams, setInterval: () => 0, clearInterval() {}, window: { addEventListener() {} },
     FileReader: class { readAsDataURL() { this.result = 'data:image/png;base64,fixture'; this.onload(); } },
     ...services

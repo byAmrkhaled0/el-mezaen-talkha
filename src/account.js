@@ -7,8 +7,6 @@ import {applySiteMedia} from './site-media.js';
 import {getLang} from "./i18n.js";
 import {accountCopy} from "./account-copy.js";
 import './global-navigation.js';
-import {mountPageGuide} from './page-guide.js';
-const pageGuide=mountPageGuide({role:'customer',anchor:document.querySelector('.account-header')});
 import { safeMediaUrl } from "./media.js";
 import "./account.css";
 import "./account-favorite.css";
@@ -131,7 +129,6 @@ async function loadPortal() {
   $("#repeatBooking").hidden = !data.lastBooking;
   $("#favoriteStaff").innerHTML = accountCopy('<option value="">اختر الحلاق</option>') + catalog.staff.map(item => `<option value="${esc(item.id)}" ${item.id === c.favoriteStaffId ? "selected" : ""}>${esc(getLang() === "en" ? item.nameEn || item.nameAr : item.nameAr)} • ${esc((getLang() === "en" ? item.specialtyEn || item.specialtyAr : item.specialtyAr) || "")}</option>`).join("");
   renderFavorite(); $("#loginCard").hidden = true; $("#portal").hidden = false; $("#logout").hidden = false;
-  pageGuide.refresh({uid:auth.currentUser?.uid||'',role:'customer'});
 }
 function findBooking(id) { return [...(portalData?.bookingHistory||[]),...(portalData?.upcomingBookings||[])].find(item => item.id === id); }
 function repeatBooking(item) {
@@ -192,7 +189,7 @@ else {
   auth = getAuth(app); functions = getFunctions(app, "europe-west1");
   if(globalThis.__USE_EMULATORS__){connectLocalAuth(auth,connectAuthEmulator);connectLocalFunctions(functions,connectFunctionsEmulator);}
   setPersistence(auth, browserLocalPersistence).then(() => {
-    unsubscribe = onAuthStateChanged(auth, user => {pageGuide.refresh({uid:'',role:'customer'});void accountEntryRouter.update(user);}, error => {pageGuide.refresh({uid:'',role:'customer'});void accountEntryRouter.update(null);$('#customerGuestMessage').textContent=friendly(error);});
+    unsubscribe = onAuthStateChanged(auth, user => {void accountEntryRouter.update(user);}, error => {void accountEntryRouter.update(null);$('#customerGuestMessage').textContent=friendly(error);});
   }).catch(error => {void accountEntryRouter.update(null);$('#customerGuestMessage').textContent=friendly(error);});
   window.addEventListener("pagehide", () => {accountEntryRouter.dispose();unsubscribe?.();clearInterval(retryTimer);});
 }

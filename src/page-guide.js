@@ -1,6 +1,7 @@
 import {guideSteps,fieldHelp} from './page-guide-content.js';
 
 export const GUIDE_VERSION=1;
+export const isAdminGuideContext=(path,role)=>/^\/admin(?:\/|$)/.test(path)&&['admin','manager','cashier','media'].includes(role);
 export const guideStorageKey=({uid,role})=>`mz:guide:${GUIDE_VERSION}:${role}:${encodeURIComponent(uid||'guest')}`;
 export function fitGuideCard({width,height,target,cardWidth,cardHeight}) {
   const gap=12,w=Math.min(cardWidth,width-2*gap),h=Math.min(cardHeight,height-2*gap);
@@ -13,14 +14,15 @@ export function isGuideTargetVisible(node,win=window) {
   const style=win.getComputedStyle(node);
   return style.display!=='none'&&style.visibility!=='hidden'&&node.getClientRects().length>0;
 }
-export function mountPageGuide({role='visitor',uid='',section='',anchor}={}) {
+export function mountPageGuide({role='admin',uid='',section='',anchor}={}) {
+  if(!isAdminGuideContext(location.pathname,role))return {refresh(){},start(){return false;},dispose(){}};
   let context={role,uid,section},steps=[],index=0,returnFocus,timer,positionFrame,disposed=false,autoShown=false,noteSequence=0;
   const sessionSeen=new Set();
   const en=()=>document.documentElement.lang==='en';
   const copy=(ar,eng)=>en()?eng:ar;
   const create=(tag,className,text)=>{const n=document.createElement(tag);n.className=className;if(text)n.textContent=text;return n;};
   const button=create('button','mz-guide-launch');button.type='button';button.hidden=true;button.dataset.pageGuide='';
-  const host=()=>[...document.querySelectorAll('.cashier-header-tools,.header-actions,.worker-header,.account-header,.site-header .header-inner,.site-header .container')].find(n=>isGuideTargetVisible(n))||anchor||document.querySelector('main');
+  const host=()=>[...document.querySelectorAll('.cashier-header-tools,.header-actions')].find(n=>isGuideTargetVisible(n))||anchor||document.querySelector('main');
   host()?.append(button);
   const dialog=create('dialog','mz-guide-dialog');dialog.setAttribute('aria-labelledby','mzGuideTitle');dialog.setAttribute('aria-describedby','mzGuideBody');
   const spot=create('div','mz-guide-spot');spot.setAttribute('aria-hidden','true');
@@ -31,18 +33,13 @@ export function mountPageGuide({role='visitor',uid='',section='',anchor}={}) {
   for(const b of [skip,back,next])b.type='button';
   actions.append(skip,back,next);card.append(count,title,body,actions);dialog.append(spot,card);document.body.append(dialog);
   const pendingTips=new Set();const tips=new Map();
-  let bookingButton;
-  const bookingDialog=document.querySelector('#bookingDialog');
-  if(bookingDialog){bookingButton=create('button','mz-guide-launch mz-guide-booking');bookingButton.type='button';bookingButton.dataset.pageGuide='';(bookingDialog.querySelector('header')||bookingDialog).append(bookingButton);bookingButton.addEventListener('click',()=>start(false));}
   function ready(){
-    if(context.role==='visitor')return !['/account/','/worker/','/admin/','/login/'].includes(location.pathname);
-    const root=document.querySelector(context.role==='customer'?'#portal':context.role==='worker'?'#workspace':'#adminApp');
-    return !!context.uid&&isGuideTargetVisible(root);
+    return isAdminGuideContext(location.pathname,context.role)&&!!context.uid&&isGuideTargetVisible(document.querySelector('#adminApp'));
   }
   function seen(){try{return sessionSeen.has(guideStorageKey(context))||localStorage.getItem(guideStorageKey(context))==='done';}catch{return sessionSeen.has(guideStorageKey(context));}}
   function remember(){const key=guideStorageKey(context);sessionSeen.add(key);try{localStorage.setItem(key,'done');}catch{/* Private browsing: keep a session-only fallback. */}}
   function targetFor(selector){if(!selector)return null;return [...document.querySelectorAll(selector)].find(n=>isGuideTargetVisible(n))||null;}
-  function language(){button.textContent=copy('؟ شرح الصفحة','? Page help');if(bookingButton)bookingButton.textContent=copy('؟ شرح الحجز','? Booking help');button.setAttribute('aria-label',copy('افتح شرح الصفحة','Open page help'));}
+  function language(){button.textContent=copy('؟','?');const label=copy('مساعدة لوحة الإدارة','Dashboard help');button.setAttribute('aria-label',label);button.title=label;}
   function position(){
     positionFrame=0;if(!dialog.open)return;
     const target=steps[index]?.target?.isConnected&&isGuideTargetVisible(steps[index].target)?steps[index].target:null;
@@ -70,11 +67,8 @@ export function mountPageGuide({role='visitor',uid='',section='',anchor}={}) {
     if(disposed||!ready()||dialog.open)return false;
     if(automatic&&(document.hidden||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')))return false;
     const opened=[...document.querySelectorAll('dialog[open]')].filter(n=>n!==dialog);
-    if(automatic&&opened.length)return false;
-    // Never overlay an unrelated editor/confirmation dialog.
-    if(opened.some(n=>n!==bookingDialog))return false;
-    const bookingOpen=!!bookingDialog?.open;
-    steps=guideSteps({...context,bookingOpen}).map(s=>({...s,target:targetFor(s.selector)})).filter(s=>!s.selector||s.target);
+    if(opened.length)return false;
+    steps=guideSteps(context).map(s=>({...s,target:targetFor(s.selector)})).filter(s=>!s.selector||s.target);
     if(!automatic&&steps.length>1&&!steps[0].selector)steps.shift();
     if(!steps.length)return false;
     index=0;returnFocus=document.activeElement;autoShown=automatic;dialog.showModal();paint();return true;
@@ -112,14 +106,12 @@ export function mountPageGuide({role='visitor',uid='',section='',anchor}={}) {
   }
   function onRoute(){close(autoShown);refresh();}
   function onLanguage(){language();for(const t of tips.values())t.update();close(false);}
-  const onBookingClose=()=>close(false);
   window.addEventListener('hashchange',onRoute);window.addEventListener('popstate',onRoute);window.addEventListener('mz:language',onLanguage);
   window.addEventListener('resize',schedulePosition);document.addEventListener('scroll',schedulePosition,true);
   window.visualViewport?.addEventListener('resize',schedulePosition);window.visualViewport?.addEventListener('scroll',schedulePosition);
-  bookingDialog?.addEventListener('close',onBookingClose);
   // These events only schedule local help decoration, not API reads.
-  const onClick=event=>{if(event.target.closest?.('.mz-guide-dialog'))return;if(event.target.closest?.('[data-account-view],[data-open-account-view]'))close(false);const t=setTimeout(()=>{pendingTips.delete(t);decorate();},0);pendingTips.add(t);};
+  const onClick=event=>{if(event.target.closest?.('.mz-guide-dialog'))return;const t=setTimeout(()=>{pendingTips.delete(t);decorate();},0);pendingTips.add(t);};
   document.addEventListener('click',onClick);
   refresh();
-  return {refresh,start,dispose(){disposed=true;clearTimeout(timer);pendingTips.forEach(clearTimeout);if(positionFrame)cancelAnimationFrame(positionFrame);close(false);button.remove();bookingButton?.remove();dialog.remove();for(const [field,t] of tips){t.help.remove();t.note.remove();if(t.prior)field.setAttribute('aria-describedby',t.prior);else field.removeAttribute('aria-describedby');}window.removeEventListener('hashchange',onRoute);window.removeEventListener('popstate',onRoute);window.removeEventListener('mz:language',onLanguage);window.removeEventListener('resize',schedulePosition);document.removeEventListener('scroll',schedulePosition,true);document.removeEventListener('click',onClick);window.visualViewport?.removeEventListener('resize',schedulePosition);window.visualViewport?.removeEventListener('scroll',schedulePosition);bookingDialog?.removeEventListener('close',onBookingClose);}};
+  return {refresh,start,dispose(){disposed=true;clearTimeout(timer);pendingTips.forEach(clearTimeout);if(positionFrame)cancelAnimationFrame(positionFrame);close(false);button.remove();dialog.remove();for(const [field,t] of tips){t.help.remove();t.note.remove();if(t.prior)field.setAttribute('aria-describedby',t.prior);else field.removeAttribute('aria-describedby');}window.removeEventListener('hashchange',onRoute);window.removeEventListener('popstate',onRoute);window.removeEventListener('mz:language',onLanguage);window.removeEventListener('resize',schedulePosition);document.removeEventListener('scroll',schedulePosition,true);document.removeEventListener('click',onClick);window.visualViewport?.removeEventListener('resize',schedulePosition);window.visualViewport?.removeEventListener('scroll',schedulePosition);}};
 }
