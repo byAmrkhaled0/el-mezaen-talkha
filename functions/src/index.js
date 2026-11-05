@@ -569,18 +569,21 @@ function bookingCandidateLimit(duration) {
   return Math.max(1, Math.min(21, Math.floor(450 / Math.ceil(Math.max(5, Number(duration || 0)) / 5))));
 }
 
-async function loadBookingCandidates(branchId, requestedStaffId, duration) {
+async function loadBookingCandidates(branchId, requestedStaffId, duration, bookingDate) {
   if (requestedStaffId === "any") {
     const snapshot = await db.collection("staff").where("branchIds", "array-contains", branchId).where("active", "==", true).limit(50).get();
-    return snapshot.docs.map(cleanDoc)
+    const members = snapshot.docs.map(cleanDoc)
       .filter(member => member.available !== false && Array.isArray(member.branchIds) && member.branchIds.includes(branchId))
-      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
-      .slice(0, bookingCandidateLimit(duration));
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    const present = await bookingPresence(db, members, branchId, bookingDate);
+    return present.slice(0, bookingCandidateLimit(duration));
   }
   const snapshot = await db.doc(`staff/${requestedStaffId}`).get();
   if (!snapshot.exists || snapshot.data()?.active === false || snapshot.data()?.available === false) return [];
   const member = cleanDoc(snapshot);
-  return Array.isArray(member.branchIds) && member.branchIds.includes(branchId) ? [member] : [];
+  return Array.isArray(member.branchIds) && member.branchIds.includes(branchId)
+    ? bookingPresence(db, [member], branchId, bookingDate)
+    : [];
 }
 async function loadActiveLeaves(dateKey, branchId, staffIds) {
   const ids=[...new Set(staffIds||[])];if(!ids.length||ids.length>21)throw new HttpsError('failed-precondition','حدد العمال المرشحين للحجز');
@@ -661,8 +664,7 @@ export const getAvailableSlots = onCall(publicOptions, async request => {
   const combinedSettings = { ...settings, ...branch };
   if ([branchHoliday, globalHoliday].some(item => item.exists && item.data()?.closed !== false)) return { slots: [], reason: "branch_closed", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 
-  let candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
-  candidates=await bookingPresence(db,candidates,branchId,bookingDate);
+  const candidates = await loadBookingCandidates(branchId, requestedStaffId, duration, bookingDate);
   if (!candidates.length) return { slots: [], reason: bookingDate===today?"staff_not_present":"staff_unavailable", productOnly: false, duration, _meta: { apiVersion: API_VERSION, minimumFrontendVersion: MIN_FRONTEND_VERSION } };
 
   const [leaves, bookingSnapshot, serviceLeaves] = await Promise.all([
@@ -753,14 +755,13 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
   const requestedStaffId = productOnly ? "none" : sanitizeText(data.staffId || "any", 80);
   let candidates = [];
   if (!productOnly) {
-    candidates = await loadBookingCandidates(branchId, requestedStaffId, duration);
+    candidates = await loadBookingCandidates(branchId, requestedStaffId, duration, data.bookingDate);
     const leaves = []; // Canonical leave is rechecked under the scheduling guard inside the transaction.
     const day = new Date(`${data.bookingDate}T12:00:00Z`).getUTCDay();
     const appointmentStart = minutes(data.bookingTime);
     const appointmentEnd = appointmentStart + duration;
     const requestedServiceIds = [...new Set(appointmentItems.flatMap(item => Array.isArray(item.serviceIds) ? item.serviceIds : item.kind === "service" ? [item.id] : []))];
     candidates = candidates.filter(member => staffCanServeInterval(member, { branchId, day, start: appointmentStart, end: appointmentEnd, openingTime: settings.openingTime, closingTime: settings.closingTime, serviceIds: requestedServiceIds, leaves }));
-    if (!candidates.length) throw new HttpsError("failed-precondition", "لا يوجد عضو فريق متاح");
   }
   const code = bookingCode(branch.code);
   const bookingRef = db.doc(`bookings/${code}`);
@@ -796,6 +797,7 @@ export const createBooking = onCall({ ...publicOptions, timeoutSeconds: 30 }, as
         }
         throw new HttpsError("already-exists", "أنت حجزت بالفعل في هذا الموعد", { code: "BOOKING_ALREADY_EXISTS", bookingId: existingId || null });
       }
+      if (!productOnly && !candidates.length) throw new HttpsError("failed-precondition", "لا يوجد عضو فريق متاح");
       if (!baseReads[4].exists) {
         const legacy = await transaction.get(db.collection("customers").where("phone", "in", [customer.phone, `2${customer.phone}`, `+2${customer.phone}`, customer.phone.slice(1)]).limit(10));
         if (legacy.docs.some(item => item.id !== customerRef.id)) throw new HttpsError("failed-precondition", "وجدنا سجل عميل قديم لهذا الرقم يحتاج مراجعة آمنة؛ تواصل مع الفرع لربط الحساب");

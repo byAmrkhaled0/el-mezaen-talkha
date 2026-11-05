@@ -141,6 +141,15 @@ test('GPS attendance gates public today availability; no absence bypass through 
  assert.equal((await publicSlots()).slots.length,0);
  await call('recordWorkerAttendance','worker',{action:'checkIn',branchId:'talkha',latitude:31.05,longitude:31.38,accuracy:10});
  const ready=await publicSlots();assert.ok(ready.slots.length,'test clock must have at least one future slot before closing');assert.equal(ready.duration,30);assert.equal(ready.availability.state,'available');const board=await call('getWorkerAvailability','wagih',{branchId:'talkha',dateKey:readyDate});assert.equal(board.staff.find(s=>s.id===readyWorker).present,true);assert.ok(!JSON.stringify(board.staff).includes('userUid'));
+ const absentRefs = Array.from({length:21}, (_,i) => db.doc('staff/priority-absent-'+i));
+ try {
+  await Promise.all(absentRefs.map((ref,i) => ref.set({nameAr:'Absent fixture',active:true,available:true,branchIds:['talkha'],sortOrder:-100+i})));
+  const any = await handlers.getAvailableSlots.run({data:{branchId:'talkha',staffId:'any',bookingDate:readyDate,items:readyItems},rawRequest:{ip:'127.0.0.1',headers:{}}});
+  assert.ok(any.slots.includes(ready.slots[0]), 'any specialist must consider present staff past the shortlist');
+ } finally {
+  await Promise.all(absentRefs.map(ref => ref.delete()));
+ }
+
 });
 
 test('active in-shop work hides overlapping slots and publishes an estimated next time; concurrent bookings allocate once',async()=>{

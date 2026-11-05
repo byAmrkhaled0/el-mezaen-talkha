@@ -179,3 +179,25 @@
   min-width:0;
  }
 }
+
+#adminApp .calendar-mobile-status {display:none}
+@media(max-width:720px){
+ #adminApp #calendar .calendar-mobile-status {
+  display:grid;
+  gap:5px;
+  margin-block:12px;
+  font-size:12px;
+  color:var(--muted);
+ }
+ #adminApp #calendar .calendar-mobile-status select {
+  min-height:44px;
+  width:100%;
+ }
+ #adminApp #calendar .booking-calendar.booking-calendar-list {
+  grid-template-columns:minmax(0,1fr);
+  overflow:visible;
+ }
+ #adminApp #calendar .booking-calendar-list .booking-board-card {
+  border:1px solid var(--line);
+ }
+}

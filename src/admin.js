@@ -988,6 +988,8 @@ async function loadCalendar(silent = false) {
   catch (error) { if (requestVersion === calendarRequestVersion && !silent) toast(error.message || "تعذر تحميل التقويم", true); }
 }
 
+const calendarPhoneLayout = matchMedia("(max-width: 720px)");
+
 function renderCalendar() {
   const target = $("#bookingCalendar");
   if (!target) return;
@@ -1010,9 +1012,20 @@ function renderCalendar() {
     return `<div class="booking-board-actions">${main}${noShow}${complete}${invoice}</div>`;
   };
   const groups = [{ key: "pending", label: "قيد المراجعة", color: "warning" }, { key: "confirmed", label: "مؤكدة", color: "primary", statuses: ["confirmed", "arrived"] }, { key: "completed", label: "اكتملت", color: "success" }, { key: "cancelled", label: "ملغاة", color: "danger", statuses: ["cancelled", "rejected"] }, { key: "no_show", label: "لم تحضر", color: "muted" }];
+  const card = (item, mobile = false) => `<article class="booking-board-card" data-booking-status="${escapeAttr(item.status)}"><button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${mobile ? escapeHtml(statusLabel(item.status)) + " · " : item.status === "arrived" ? "وصل · " : ""}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small></button>${boardQuickActions(item)}</article>`;
+  const mobile = calendarPhoneLayout.matches;
+  target.classList.toggle("booking-calendar-list", mobile);
+  if (mobile) {
+    const filter = $("#calendarMobileStatus")?.value || "all";
+    const items = bookings.filter(item => filter === "all" || item.status === filter || (filter === "cancelled" && item.status === "rejected"));
+    items.sort((a, b) => (a.bookingDate || "").localeCompare(b.bookingDate || "") ||
+      (a.bookingTime || "").localeCompare(b.bookingTime || ""));
+    target.innerHTML = items.map(item => card(item, true)).join("") || '<p class="booking-board-empty">لا توجد حجوزات بالحالة المختارة.</p>';
+    return;
+  }
   target.innerHTML = groups.map(group => {
     const items = bookings.filter(item => (group.statuses || [group.key]).includes(item.status));
-    return `<section class="booking-board-column"><header><span><i class="board-status-dot ${group.color}"></i>${group.label}<b>${items.length}</b></span><small>${money(items.reduce((sum, item) => sum + Number(item.total || 0), 0))}</small></header><div class="booking-board-items">${items.map(item => `<article class="booking-board-card" data-booking-status="${escapeAttr(item.status)}"><button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${item.status === "arrived" ? "وصل · " : ""}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small></button>${boardQuickActions(item)}</article>`).join("") || '<p class="booking-board-empty">لا توجد حجوزات هنا</p>'}</div></section>`;
+    return `<section class="booking-board-column"><header><span><i class="board-status-dot ${group.color}"></i>${group.label}<b>${items.length}</b></span><small>${money(items.reduce((sum, item) => sum + Number(item.total || 0), 0))}</small></header><div class="booking-board-items">${items.map(item => card(item)).join("") || '<p class="booking-board-empty">لا توجد حجوزات هنا</p>'}</div></section>`;
   }).join("");
 }
 
@@ -3764,6 +3777,8 @@ $('#headerBranchFilter').addEventListener('change',()=>{orderAdditionView.contex
 serverPosCatalog=mountPosCatalogPaging({target:$('#posItems'),decorateRow:item=>({...item,category:item.section==='service'?((state.collections.get('categories')||[]).find(row=>row.id===item.categoryId)?.nameAr||item.category||'خدمات'):item.section==='package'?(item.kind==='offer'?'العروض':'الباقات'):item.section==='product'?'المنتجات':item.section==='drink'?'المشروبات':item.category}),getContext:()=>({branchId:$('#posBranch').value,section:$('#posSectionFilter').value||'all',category:$('#posCategoryFilter').value||'',search:$('#posItemSearch').value.trim(),uid:state.user?.uid||''}),getPage:options=>getCollection('posCatalog',options.take,options.cursor||'',options.branchId,options),offline:()=>isOfflineMode()||navigator.onLine===false,onRows:(rows,context)=>{const pinned=new Set(state.posCart.map(x=>`${x.kind}:${x.id}`));state.posRemoteItems=[...new Map([...(state.posRemoteItems||[]).filter(x=>x.branchId===context.branchId&&pinned.has(`${x.kind}:${x.id}`)),...rows].map(x=>[`${x.kind}:${x.id}`,x])).values()];},onRender:renderPos});
 collectionPaging=collectionPageNavigation({state,scope:collectionReadScope,getPage:getCollection,getBranch:()=>$('#headerBranchFilter').value,render:renderCollection,getOptions:collectionSearchOptions,onError:message=>toast(message,true)});
 mountCollectionSearch({reload:loadCollection,render:collection=>{for(const target of $$(`[data-list="${collection}"]`))target.innerHTML='<p role="status">جاري البحث في السجلات…</p>';}});
+calendarPhoneLayout.addEventListener("change", renderCalendar);
+$("#calendarMobileStatus")?.addEventListener("change", renderCalendar);
 [$("#calendarSearch"), $("#calendarStaffFilter"), $("#calendarPaymentFilter")].filter(Boolean).forEach(input => input.addEventListener(input.tagName === "INPUT" ? "input" : "change", renderCalendar));
 $("#applyRevenueFilter").addEventListener("click", renderRevenue);
 $("#exportBookings").addEventListener("click", event => void exportRecordHistory("bookings",event.currentTarget));

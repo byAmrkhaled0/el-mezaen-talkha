@@ -837,13 +837,45 @@ function slotLabel(value) {
 function renderBookingAvailability(result,select){
  clearTimeout(bookingAvailabilityRefresh);
  let notice=document.querySelector('#bookingAvailabilityNotice');
- if(!notice){notice=document.createElement('aside');notice.id='bookingAvailabilityNotice';notice.className='booking-availability-notice';notice.setAttribute('aria-live','polite');select.closest('label').after(notice);}
+ if(!notice){notice=document.createElement('div');notice.id='bookingAvailabilityNotice';notice.className='booking-availability-notice';notice.setAttribute('aria-live','polite');select.closest('label').after(notice);}
  notice.replaceChildren();notice.hidden=true;
  if(!result)return;
  const ar=state.lang==='ar',info=result.availability;
  if(info?.state==='busy'&&info.nextTime&&result.serverNowMs){const date=document.querySelector('#bookingDate').value,delay=cairoAppointmentMillis(date,info.nextTime)-result.serverNowMs;if(delay>0&&delay<86400000)bookingAvailabilityRefresh=setTimeout(()=>{if(!document.hidden&&document.querySelector('#bookingDate').value===date)void renderTimes();},delay+1000);}
- if(result.reason==='staff_not_present'){notice.hidden=false;notice.textContent=ar?'العامل لم يسجل حضوره في الفرع اليوم، أو انتهت وردية حضوره. جرّب عامل تاني أو يوم تاني.':'This barber has not checked in at this branch today, or their attendance shift has ended. Try another barber or date.';return;}
- if(info?.state==='busy'&&!info.nextTime){notice.hidden=false;notice.textContent=ar?'العامل مشغول أو غير متاح حاليًا، ومفيش موعد متاح بعده في اليوم ده. جرّب يوم تاني أو عامل تاني.':'This barber is busy or unavailable, with no remaining slot today. Try another date or barber.';return;}
+ if (result.reason && !result.slots?.length) {
+   const specific = state.staffId !== 'any';
+   const messages = {
+     branch_closed: ar ? 'الفرع مغلق في اليوم ده.' : 'The branch is closed on this day.',
+     staff_not_present: specific
+       ? (ar ? 'المتخصص المختار مش متاح للحجز في الفرع النهارده.' : 'The selected specialist is unavailable at this branch today.')
+       : (ar ? 'مفيش متخصص متاح للحجز في الفرع النهارده.' : 'No specialist is available at this branch today.'),
+     staff_unavailable: ar ? 'مفيش متخصص متاح للاختيار ده.' : 'No specialist is available for this selection.'
+   };
+   const copy = document.createElement('p');
+   copy.textContent = messages[result.reason] || (ar ? 'مفيش وقت فاضي للخدمة في اليوم ده.' : 'There are no remaining times for this service on this day.');
+   notice.append(copy);
+   const action = (label, onClick) => {
+     const button = document.createElement('button');
+     button.type = 'button';
+     button.className = 'btn btn-ghost';
+     button.textContent = label;
+     button.onclick = onClick;
+     notice.append(button);
+   };
+   if (specific && result.reason !== 'branch_closed') {
+     action(ar ? 'جرّب أي عامل مناسب' : 'Try any available specialist',
+       () => document.querySelector('#staffPicker [data-staff-id="any"]')?.click());
+   }
+   action(ar ? 'اختار يوم تاني' : 'Choose another day', () => {
+     const field = document.querySelector('#bookingDate');
+     field.focus();
+     if (typeof field.showPicker === 'function') {
+       try { field.showPicker(); } catch { /* The focused input remains usable. */ }
+     }
+   });
+   notice.hidden = false;
+   return;
+ }
  if(!info?.nextTime)return;
  notice.hidden=false;
  const title=document.createElement('strong');title.textContent=info.state==='busy'?(ar?'العامل مشغول حاليًا':'The barber is busy now'):(ar?'أقرب موعد متاح':'Next available appointment');
