@@ -41,7 +41,7 @@
  #adminApp #bookings .table-scroll{overflow:visible;max-height:none}
  #adminApp #bookings table{display:block;min-width:0;width:100%;table-layout:auto}
  #adminApp #bookings tbody{display:grid;gap:12px;width:100%}
- #adminApp #bookings tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:10px 12px;padding:12px;border-radius:14px;background:var(--panel)}
+ #adminApp #bookings tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:10px 12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
  #adminApp #bookings .wide-table td{min-width:0;max-width:none;width:auto!important;padding:0;border:0;white-space:normal;overflow-wrap:anywhere;font-size:13px;line-height:1.6;align-self:start}
  #adminApp #bookings td::before{font-size:11px;margin-bottom:3px;line-height:1.5}
  #adminApp #bookings td:nth-child(1){grid-column:1/-1;font-size:12px;border-bottom:1px solid var(--line);padding-bottom:8px}
@@ -50,9 +50,35 @@
  #adminApp #bookings .payment-controls>b{font-size:13px}
  #adminApp #bookings .payment-controls .row-actions{grid-column:1/-1;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
  #adminApp #bookings .payment-controls .row-actions button{width:auto;flex:1 1 140px;max-width:100%;padding:10px 12px;line-height:1.5;white-space:normal}
- #adminApp #bookings .booking-primary-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
- #adminApp #bookings .booking-primary-actions>button{width:100%;min-height:44px;height:auto;white-space:normal;line-height:1.5;padding:8px}
- #adminApp #bookings .booking-primary-actions>:is(.admin-disclosure-button,details){grid-column:1/-1}
+ #adminApp #bookings td:nth-child(9):not([colspan]) {
+  border-top:1px solid var(--line);
+  padding-top:8px;
+ }
+ #adminApp #bookings .booking-primary-actions {
+  align-items:center;
+  gap:6px;
+ }
+ #adminApp #bookings .booking-primary-actions>:is([data-open-receipt],.admin-disclosure-button),
+ #adminApp #bookings .payment-controls .row-actions button {
+  flex:0 1 auto;
+  min-width:0;
+  min-height:44px;
+  padding:6px 10px;
+  border-radius:9px;
+  font-size:12px;
+  line-height:1.4;
+  box-shadow:none;
+ }
+ #adminApp #bookings .booking-primary-actions>[data-open-receipt] {
+  background:var(--bg2);
+  border-color:var(--line);
+  color:var(--text);
+ }
+ #adminApp #bookings .booking-primary-actions>.booking-row-menu[open] {
+  flex-basis:100%;
+  min-width:0;
+  white-space:normal;
+ }
  #adminApp #bookings .booking-worker-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
  #adminApp #bookings .booking-worker-controls button{white-space:normal;min-height:44px}
  #adminApp #bookings td[colspan]{grid-column:1/-1;text-align:center;padding:16px}

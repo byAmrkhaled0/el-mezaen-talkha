@@ -8,7 +8,7 @@ export function identifyAdminFields(root,doc=root.ownerDocument||document){
  }
 }
 export function exposeAdminDisclosure(details,doc=details.ownerDocument||document){
- if(details.dataset.clarityReady)return null;const summary=[...details.children].find(node=>node.tagName==='SUMMARY');if(!summary)return null;
+ if(details.dataset.clarityReady||details.id==="offlineSalesDesk")return null;const summary=[...details.children].find(node=>node.tagName==='SUMMARY');if(!summary)return null;
  details.dataset.clarityReady='true';details.classList.add('admin-disclosure-content');if(!details.id)details.setAttribute('id',uniqueId(doc,'admin-disclosure'));
  const raw=summary.textContent.trim(),label=raw==='المزيد من الإجراءات'?'إجراءات الحجز':raw==='العامل والتنبيه'?'تعيين العامل وإرسال تنبيه':raw;
  const button=doc.createElement('button');button.type='button';button.className='small-button admin-disclosure-button';button.setAttribute('aria-controls',details.id);button.dataset.adminDisclosure='';

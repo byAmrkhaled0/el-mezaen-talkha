@@ -3,7 +3,7 @@ import {isOfflineMode} from './offline-connectivity.js';
 import './offline-admin.css';
 export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector("#posBranch")?.value}) {
   const panel=document.createElement('details');panel.className='offline-desk';panel.id='offlineSalesDesk';
-  const summary=document.createElement('summary');summary.textContent='حالة الاتصال';
+  const summary=document.createElement('summary');summary.setAttribute('aria-label','حالة الاتصال');summary.title='حالة الاتصال';
   const body=document.createElement('div');body.className='offline-desk-body';
   const heading=document.createElement('h2');heading.textContent='الاتصال ومزامنة الشيكات';
   const close=document.createElement('button');close.type='button';close.className='small-button';close.textContent='إغلاق';close.onclick=()=>{panel.open=false;summary.focus();};
@@ -23,8 +23,8 @@ export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector
       readiness.textContent=prepared.ready?'الحفظ التلقائي جاهز في '+(({talkha:'فرع طلخا',mashaya:'فرع المشاية'})[branch()]||branch()):'البيع بدون نت غير جاهز: '+prepared.message;
       readiness.dataset.ready=String(prepared.ready);
       const pending=sales.filter(s=>s.status!=='confirmed'),conflicts=pending.filter(s=>s.status==='conflict');
-      summary.textContent=`${isOfflineMode()?'بدون نت': 'متصل'}${isOfflineMode()&&!prepared.ready?' · البيع غير جاهز':''}${pending.length?' · '+pending.length+' شيك منتظر':''}${conflicts.length?' · يحتاج مراجعة':''}`;
-      panel.dataset.connection=isOfflineMode()?'offline':'online';summary.setAttribute('aria-label',summary.textContent+'، عرض تفاصيل المزامنة');
+      const connectionLabel=`${isOfflineMode()?'بدون نت': 'متصل'}${isOfflineMode()&&!prepared.ready?' · البيع غير جاهز':''}${pending.length?' · '+pending.length+' شيك منتظر':''}${conflicts.length?' · يحتاج مراجعة':''}`;
+      panel.dataset.connection=isOfflineMode()?'offline':'online';summary.setAttribute('aria-label',connectionLabel+'، عرض تفاصيل المزامنة');summary.title=connectionLabel;
       more.hidden=sales.length<=limit;
       panel.dataset.pending=String(pending.length>0);status.textContent=`${isOfflineMode()?'وضع الأوفلاين':'متصل'} · ${pending.length} شيك بإجمالي ${pending.reduce((sum,sale)=>sum+sale.total,0)} ج.م في انتظار التأكيد · ${conflicts.length} يحتاج مراجعة. أرقام الخزنة المعروضة لا تشمل الشيكات المنتظرة.`;
       rows.replaceChildren();
@@ -39,10 +39,11 @@ export function mountOfflineDesk({desk,onError,branch=()=>document.querySelector
     }catch(error){status.textContent='حفظ الأوفلاين غير جاهز على الجهاز: '+error.message;}
   };
   sync.onclick=()=>desk.sync({force:true}).then(update).catch(onError);
-  const onOnline=()=>{void update();void desk.sync({force:true}).catch(onError);};
+  const syncInBackground=options=>desk.sync(options).catch(error=>console.debug('Offline sync deferred',error?.message));
+  const onOnline=()=>{void update();void syncInBackground({force:true});};
   window.addEventListener('online',onOnline);window.addEventListener('offline',update);window.addEventListener('offline-pos-changed',schedule);window.addEventListener('offline-mode-changed',schedule);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)onOnline();});
-  setInterval(()=>{if(!document.hidden)void desk.sync().catch(onError);},15000);
-  void update();void desk.sync({force:true}).catch(onError);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){void update();void syncInBackground();}});
+  setInterval(()=>{if(!document.hidden)void syncInBackground();},15000);
+  void update();void syncInBackground();
   return {update,printSale:showOfflineReceipt};
 }
