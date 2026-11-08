@@ -2,6 +2,7 @@ import test, { before } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { addDays, periodDays, reportPeriod, weekStart } from "../functions/src/reporting.js";
 
 // Run only under `firebase emulators:exec` with a demo- project. Never seed a live project.
 const projectId = "demo-el-mezaen-gate";
@@ -474,7 +475,35 @@ test("V7 daily snapshots use canonical branch ledger and reject cross-branch rea
   await denied("rebuildBusinessReport", "cashierTalkha", { type: "daily", branchId: "talkha", periodKey: dateKey });
   assert.equal((await db.collection("businessReports").where("periodKey", "==", dateKey).get()).docs.filter(item => item.data().type === "daily").length, 2);
   const generatedAt = (await db.doc(`businessReports/daily_talkha_${dateKey}`).get()).data().generatedAt.toMillis();
+  const previousMonth = addDays(`${month}-01`, -1).slice(0, 7);
+  const previousWeek = addDays(weekStart(today), -7);
+  const monthDays = periodDays(reportPeriod("monthly", previousMonth));
+  const reportDays = new Set([...monthDays, ...periodDays(reportPeriod("weekly", previousWeek))]);
+  const missing = monthDays[0];
+  const historical = db.batch();
+  for (const branchId of ["talkha", "mashaya"]) {
+    for (const day of reportDays) {
+      if (day === dateKey || day === missing) continue;
+      historical.set(db.doc(`businessReports/daily_${branchId}_${day}`), {
+        type: "daily", branchId, periodKey: day, totals: { netRevenue: 1 }
+      });
+    }
+    historical.set(db.doc(`revenueLedger/scheduler-backfill-${branchId}`), {
+      branchId, dateKey: missing, amount: 15, type: "payment", paymentMethod: "cash", createdAt: Timestamp.now()
+    });
+  }
+  await historical.commit();
   await handlers.scheduledBusinessReports.run({});
+  for (const branchId of ["talkha", "mashaya"]) {
+    const repaired = (await db.doc(`businessReports/daily_${branchId}_${missing}`).get()).data();
+    assert.equal(repaired.totals.netRevenue, 15);
+    const existingDay = monthDays.find(day => day !== dateKey && day !== missing);
+    assert.equal((await db.doc(`businessReports/daily_${branchId}_${existingDay}`).get()).data().totals.netRevenue, 1);
+    const monthly = (await db.doc(`businessReports/monthly_${branchId}_${previousMonth}`).get()).data();
+    assert.equal(monthly.complete, true);
+    const expected = monthDays.length - 1 + 15 + (monthDays.includes(dateKey) ? (branchId === "talkha" ? 120 : 340) - 1 : 0);
+    assert.equal(monthly.totals.netRevenue, expected);
+  }
   assert.equal((await db.doc(`businessReports/daily_talkha_${dateKey}`).get()).data().generatedAt.toMillis(), generatedAt);
 });
 

@@ -1009,10 +1009,24 @@ function renderCalendar() {
     const noShow = ["confirmed", "arrived"].includes(item.status) ? action("no_show", "لم يحضر") : "";
     const complete = item.status === "arrived" ? action(item.paymentStatus === "paid" ? "completed" : "checkout", item.paymentStatus === "paid" ? "اكتملت" : "تحصيل وإكمال") : "";
     const invoice = state.permissions.has("pos") ? `<button type="button" class="small-button" data-booking-pos="${escapeAttr(item.id)}">فتح الفاتورة</button>` : "";
-    return `<div class="booking-board-actions">${main}${noShow}${complete}${invoice}</div>`;
+    return `<div class="booking-board-actions">${main}${complete}${noShow}${invoice}</div>`;
   };
   const groups = [{ key: "pending", label: "قيد المراجعة", color: "warning" }, { key: "confirmed", label: "مؤكدة", color: "primary", statuses: ["confirmed", "arrived"] }, { key: "completed", label: "اكتملت", color: "success" }, { key: "cancelled", label: "ملغاة", color: "danger", statuses: ["cancelled", "rejected"] }, { key: "no_show", label: "لم تحضر", color: "muted" }];
-  const card = (item, mobile = false) => `<article class="booking-board-card" data-booking-status="${escapeAttr(item.status)}"><button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}"><time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time><b>${escapeHtml(item.customerName || "عميل")}</b><span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span><small>${mobile ? escapeHtml(statusLabel(item.status)) + " · " : item.status === "arrived" ? "وصل · " : ""}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small></button>${boardQuickActions(item)}</article>`;
+  const card = (item, mobile = false) => {
+    const slot = `<time>${escapeHtml(item.bookingDate || "")} · ${escapeHtml(item.bookingTime || "—")}</time>`;
+    const status = mobile ? `<span class="calendar-card-status">${escapeHtml(statusLabel(item.status))}</span>` : "";
+    const schedule = mobile ? `<span class="calendar-card-schedule">${slot}${status}</span>` : slot;
+    const arrived = !mobile && item.status === "arrived" ? "وصل · " : "";
+    return `<article class="booking-board-card" data-booking-status="${escapeAttr(item.status)}">
+      <button type="button" class="booking-board-card-main" data-calendar-booking="${escapeAttr(item.id)}">
+        ${schedule}
+        <b>${escapeHtml(item.customerName || "عميل")}</b>
+        <span>${escapeHtml((item.serviceNamesAr || []).join(" + "))}</span>
+        <small>${arrived}${escapeHtml(workers.get(item.staffId) || item.staffNameAr || "بدون عامل")} · ${escapeHtml(branchLabel(item.branchId))}</small>
+      </button>
+      ${boardQuickActions(item)}
+    </article>`;
+  };
   const mobile = calendarPhoneLayout.matches;
   target.classList.toggle("booking-calendar-list", mobile);
   if (mobile) {
@@ -2783,13 +2797,14 @@ function entityCard(collection, item, readonly = false) {
 }
 
 function activityCard(item) {
-  const actions = { create: "إضافة سجل", update: "تعديل سجل", delete: "حذف سجل", "booking-created": "إنشاء حجز", "booking-confirmed": "تأكيد حجز", "booking-cancelled": "إلغاء حجز", "booking-completed": "إكمال حجز", "booking-no_show": "عدم حضور", "reschedule-booking": "تغيير موعد حجز", "customer-cancel-booking": "إلغاء العميل للحجز", "open-cash-shift": "فتح وردية", "close-cash-shift": "إغلاق وردية", "cash-in": "إضافة كاش", "cash-out": "سحب كاش", "record-expense": "تسجيل مصروف", "update-expense": "تعديل مصروف", "set-branch-monthly-target": "تعديل هدف الفرع", "report-rebuilt": "إعادة بناء تقرير", "password-change-client-confirmed": "تأكيد تغيير كلمة المرور من التطبيق", "set-user-role": "تعديل صلاحيات حساب", "create-user-account": "إنشاء حساب", "secure-delete-user": "حذف حساب", "wallet-adjustment": "تعديل محفظة", "mark-paid": "تسجيل دفع", "refund-order": "استرداد مبلغ", "create-pos-order": "إنشاء شيك", "checkout-booking": "دفع وإكمال حجز" };
+  const actions = { create: "إضافة سجل", update: "تعديل سجل", delete: "حذف سجل", "booking-created": "إنشاء حجز", "booking-confirmed": "تأكيد حجز", "booking-cancelled": "إلغاء حجز", "booking-completed": "إكمال حجز", "booking-no_show": "عدم حضور", "reschedule-booking": "تغيير موعد حجز", "customer-cancel-booking": "إلغاء العميل للحجز", "open-cash-shift": "فتح وردية", "close-cash-shift": "إغلاق وردية", "cash-in": "إضافة كاش", "cash-out": "سحب كاش", "record-expense": "تسجيل مصروف", "update-expense": "تعديل مصروف", "set-branch-monthly-target": "تعديل هدف الفرع", "report-rebuilt": "إعادة بناء تقرير", "report-generation-failed": "تعذر إنشاء تقرير تلقائي", "password-change-client-confirmed": "تأكيد تغيير كلمة المرور من التطبيق", "set-user-role": "تعديل صلاحيات حساب", "create-user-account": "إنشاء حساب", "secure-delete-user": "حذف حساب", "wallet-adjustment": "تعديل محفظة", "mark-paid": "تسجيل دفع", "refund-order": "استرداد مبلغ", "create-pos-order": "إنشاء شيك", "checkout-booking": "دفع وإكمال حجز" };
   const actor = item.actorName || item.userName || item.userEmail || item.actorUid || item.userId || "عميل الموقع";
   const actorId = item.actorUid || item.userId;
   const actorDetail = [item.actorRole || "", actorId ? `UID: ${actorId}` : "", item.branchId ? branchLabel(item.branchId) : ""].filter(Boolean).join(" • ");
   const target = item.targetUserName || item.targetUserEmail || item.deletedUserName || item.deletedUserEmail || item.entityId || item.targetId || "—";
   const change = item.action === "set-user-role" ? `${({ manager: "مدير", cashier: "كاشير" })[item.beforeRole] || item.beforeRole || "—"} ← ${({ manager: "مدير", cashier: "كاشير" })[item.afterRole] || item.afterRole || "—"}` : (item.collection || "");
-  return `<article class="activity-card"><div class="activity-action"><b>${escapeHtml(actions[item.action] || item.action || "نشاط")}</b><time>${escapeHtml(dateTime(item.createdAt))}</time></div><div><span>نفّذه</span><strong>${escapeHtml(actor)}</strong>${actorDetail ? `<small>${escapeHtml(actorDetail)}</small>` : ""}</div><div><span>على</span><strong>${escapeHtml(target)}</strong><small>${escapeHtml(change)}</small></div></article>`;
+  const details = item.action === "report-generation-failed" && item.failedDates?.length ? `أيام ناقصة: ${item.failedDates.join("، ")}` : change;
+  return `<article class="activity-card"><div class="activity-action"><b>${escapeHtml(actions[item.action] || item.action || "نشاط")}</b><time>${escapeHtml(dateTime(item.createdAt))}</time></div><div><span>نفّذه</span><strong>${escapeHtml(actor)}</strong>${actorDetail ? `<small>${escapeHtml(actorDetail)}</small>` : ""}</div><div><span>على</span><strong>${escapeHtml(target)}</strong><small>${escapeHtml(details)}</small></div></article>`;
 }
 
 function reviewCard(item) {

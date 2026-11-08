@@ -199,6 +199,33 @@
  }
  #adminApp #calendar .booking-calendar-list .booking-board-card {
   border:1px solid var(--line);
+  gap:10px;
+ }
+ #adminApp #calendar .calendar-card-schedule {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px 12px;
+ }
+ #adminApp #calendar .calendar-card-status {
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:2px 9px;
+  color:inherit;
+  font-size:12px;
+  font-weight:700;
+ }
+ #adminApp #calendar .booking-calendar-list .booking-board-actions {
+  border-block-start:1px solid var(--line);
+  padding-block-start:8px;
+ }
+ #adminApp #calendar .booking-calendar-list .booking-board-actions button {
+  min-height:44px;
+ }
+ #adminApp #calendar .booking-calendar-list .booking-board-actions :is(.board-action-confirmed,.board-action-arrived,.board-action-checkout,.board-action-completed) {
+  background:#174b65;
+  color:#fff;
  }
 }
 

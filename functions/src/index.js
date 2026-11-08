@@ -2523,13 +2523,30 @@ async function generatePeriodReport(type, branchId, key, actorUid = "scheduler",
   if (period.end >= cairoDateKey()) throw new HttpsError("failed-precondition", "الفترة لم تنته بعد بتوقيت القاهرة");
   const ref = db.doc(`businessReports/${reportId(type, branchId, key)}`);
   if (!rebuild) { const existing = await ref.get(); if (existing.exists) return cleanDoc(existing); }
-  const dailyRefs = periodDays(period).map(date => db.doc(`businessReports/${reportId("daily", branchId, date)}`));
-  const [daily, branch] = await Promise.all([db.getAll(...dailyRefs), readBranch(branchId)]);
-  const missing = daily.filter(item => !item.exists).map(item => item.id.slice(-10));
-  if (missing.length) throw new HttpsError("failed-precondition", `أنشئ التقارير اليومية الناقصة أولًا: ${missing.slice(0, 5).join("، ")}`);
+  const dates = periodDays(period);
+  const dailyRefs = dates.map(date => db.doc(`businessReports/${reportId("daily", branchId, date)}`));
+  const [snapshots, branch] = await Promise.all([db.getAll(...dailyRefs), readBranch(branchId)]);
+  const daily = snapshots.map(snapshot => snapshot.data());
+  const missing = dates.filter((_, index) => !daily[index]);
+  if (rebuild && missing.length) {
+    throw new HttpsError("failed-precondition", `أنشئ التقارير اليومية الناقصة أولًا: ${missing.slice(0, 5).join("، ")}`);
+  }
+  const failedDates = [];
+  for (let offset = 0; offset < missing.length; offset += 3) {
+    const batch = missing.slice(offset, offset + 3);
+    const results = await Promise.allSettled(batch.map(date => generateDailyReport(branchId, date, actorUid)));
+    results.forEach((result, index) => {
+      const date = batch[index];
+      if (result.status === "fulfilled") daily[dates.indexOf(date)] = result.value;
+      else failedDates.push(date);
+    });
+  }
+  if (failedDates.length) {
+    throw new HttpsError("failed-precondition", "تعذر إنشاء بعض التقارير اليومية", { failedDates });
+  }
   const amount = type === "monthly" ? branch.monthlyRevenueTargets?.[key]?.targetAmount ?? null : null;
-  const rollup = rollupDaily(daily.map(item => item.data()), period, amount);
-  const details=rollupDetails(daily.map(item=>item.data()));
+  const rollup = rollupDaily(daily, period, amount);
+  const details=rollupDetails(daily);
   if(type==="monthly"&&details.available&&details.workers.length){
     const ids=details.workers.map(worker=>worker.id).filter(id=>typeof id==='string'&&!id.includes('/')&&id!=='.'&&id!=='..');
     const people=new Map();for(let i=0;i<ids.length;i+=50)for(const doc of await db.getAll(...ids.slice(i,i+50).map(id=>db.doc('staff/'+id))))if(doc.exists)people.set(doc.id,doc.data());
@@ -2619,18 +2636,35 @@ export const rebuildBusinessReport = onCall(adminOptions, async request => {
   return { report };
 });
 
-export const scheduledBusinessReports = onSchedule({ schedule: "10 2 * * *", timeZone: "Africa/Cairo", region, memory: "512MiB", maxInstances: 1 }, async () => {
-  const yesterday = addDays(cairoDateKey(), -1);
+export const scheduledBusinessReports = onSchedule({
+  schedule: "10 2 * * *", timeZone: "Africa/Cairo", region, memory: "512MiB", maxInstances: 1, timeoutSeconds: 540
+}, async () => {
   const today = cairoDateKey();
-  const branches = ["talkha", "mashaya"];
-  for (const branchId of branches) {
-    const attempt = async (type, work) => {
+  const yesterday = addDays(today, -1);
+  const previousWeek = addDays(weekStart(today), -7);
+  const previousMonth = addDays(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
+  for (const branchId of ["talkha", "mashaya"]) {
+    const attempt = async (type, key, work) => {
       try { await work(); }
-      catch (error) { console.error("scheduledBusinessReports", { branchId, day: yesterday, type, code: error.code || error.message }); }
+      catch (error) {
+        const failedDates = error.details?.failedDates || (type === "daily" ? [key] : []);
+        const entityId = reportId(type, branchId, key);
+        const code = error.code || "internal";
+        console.error("scheduledBusinessReports", { branchId, type, key, code, failedDates });
+        try {
+          await db.doc(`activityLogs/report_failed_${entityId}`).set({
+            action: "report-generation-failed", actorUid: "scheduler", actorName: "التقارير التلقائية",
+            branchId, entityType: "businessReport", entityId, failedDates, code,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        } catch (auditError) {
+          console.error("scheduledBusinessReports audit", { entityId, code: auditError.code || "internal" });
+        }
+      }
     };
-    await attempt("daily", () => generateDailyReport(branchId, yesterday));
-    if (new Date(`${today}T12:00:00Z`).getUTCDay() === 1) await attempt("weekly", () => generatePeriodReport("weekly", branchId, weekStart(yesterday)));
-    if (today.endsWith("-01")) await attempt("monthly", () => generatePeriodReport("monthly", branchId, yesterday.slice(0, 7)));
+    await attempt("daily", yesterday, () => generateDailyReport(branchId, yesterday));
+    await attempt("weekly", previousWeek, () => generatePeriodReport("weekly", branchId, previousWeek));
+    await attempt("monthly", previousMonth, () => generatePeriodReport("monthly", branchId, previousMonth));
   }
 });
 
