@@ -349,7 +349,7 @@ async function showSection(id, { historyMode = "push", staffPresentation = false
     $('#staffSummary')?.toggleAttribute('hidden',state.staffPresentation);
     $('#staff [data-new="staff"]')?.toggleAttribute('hidden',state.staffPresentation);
   }
-  if ($("#cashierPageTitle")) $("#cashierPageTitle").textContent = id === "cash" ? "إحصائيات الشيفت" : sectionTitles[id] || id;
+  if ($("#cashierPageTitle")) $("#cashierPageTitle").textContent = id === "cash" ? "الوردية والتقارير" : sectionTitles[id] || id;
   closeAdminMenu();
   syncExtraWorkspaceTabs(id,canOpenSection,showSection);
   const activeSection = $("#" + id);
@@ -1198,12 +1198,91 @@ function printReport(element) {
   window.addEventListener("afterprint", () => element.classList.remove("v7-print-active"), { once: true });
   window.print();
 }
+function setReportExport(prefix, report = null, kind = "") {
+  const result = $(`#${prefix}Result`);
+  delete result.dataset.exportName;
+  delete result.dataset.exportOwner;
+  const branch = report?.branchId;
+  if (state.user?.uid && state.permissions.has("pos") && state.branchIds.includes(branch)) {
+    const date = report.businessDate || report.periodStart;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const shift = /^shift_[a-f0-9]{32}$/.test(report.shiftId) ? `-${report.shiftId}` : "";
+      result.dataset.exportName = `el-mezaen-${branch}-${kind}-${date}${shift}.html`;
+      result.dataset.exportOwner = state.user.uid;
+    }
+  }
+  $$([`[data-report-save="${prefix}"]`, `[data-report-share="${prefix}"]`].join(","))
+    .forEach(button => { button.disabled = !result.dataset.exportName; });
+}
+
+function branchReportFile(prefix) {
+  const result = $(`#${prefix}Result`);
+  if (!result.dataset.exportName || result.dataset.exportOwner !== state.user?.uid) {
+    throw new Error("اعرض تقرير الفرع أولًا");
+  }
+  const report = result.cloneNode(true);
+  // The standalone report works offline and does not request remote assets.
+  report.querySelectorAll("img").forEach(image => image.remove());
+  const html = `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>مزين مصر | تقرير الفرع</title><style>
+body{font:16px/1.65 system-ui,sans-serif;color:#172e40;background:#fff;max-width:960px;margin:auto;padding:20px}
+header{border-bottom:2px solid #23566d;margin-bottom:14px}h2,h3{margin:.35em 0}p{margin:.4em 0}
+dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px}
+dl>div{border:1px solid #ccd8df;border-radius:8px;padding:8px}dt{font-size:.9rem}dd{margin:0;font-weight:700}
+table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border:1px solid #ccd8df;padding:5px;text-align:start}
+@media print{body{padding:0}tr,dl>div{break-inside:avoid}}
+</style><body>${report.innerHTML}</body></html>`;
+  return new File([html], result.dataset.exportName, { type: "text/html;charset=utf-8" });
+}
+
+function downloadBranchReport(file) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function saveBranchReport(prefix) {
+  const file = branchReportFile(prefix);
+  if (typeof window.showSaveFilePicker !== "function") return downloadBranchReport(file);
+  let destination;
+  try {
+    destination = await window.showSaveFilePicker({
+      suggestedName: file.name, types: [{ description: "تقرير قابل للطباعة", accept: { "text/html": [".html"] } }]
+    });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    if (error.name === "SecurityError") return downloadBranchReport(file);
+    throw error;
+  }
+  const writer = await destination.createWritable();
+  try { await writer.write(file); await writer.close(); }
+  catch (error) { await writer.abort().catch(() => {}); throw error; }
+}
+
+async function shareBranchReport(prefix) {
+  const file = branchReportFile(prefix);
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "تقرير فرع مزين مصر" }); return; }
+    catch (error) { if (error.name === "AbortError") return; }
+  }
+  downloadBranchReport(file);
+  window.open("https://wa.me/?text=" + encodeURIComponent("تقرير إقفال فرع مزين مصر"), "_blank", "noopener,noreferrer");
+  toast("اختار الأدمن على واتساب وأرفق ملف التقرير اللي نزل");
+}
+
 function reportNumbers(totals) {
   return `<dl class="v7-report-numbers">${Object.entries(reportLabels).filter(([key]) => key in (totals || {})).map(([key, label]) => `<div><dt>${label}</dt><dd>${totals[key] == null ? "غير متاح" : ["transactions", "bookings", "completed", "cancelled", "noShow"].includes(key) ? Number(totals[key]) : money(totals[key])}</dd></div>`).join("")}</dl>`;
 }
 function showShiftReport(report) {
   const result = $("#shiftReportResult");
   result.innerHTML = `${reportPrintHeader("تقرير إغلاق الشيفت", report.branchName || branchLabel(report.branchId), report.businessDate, report.closedAt)}<p>الكاشير: ${escapeHtml(report.cashierName || report.cashierUid)} • الوردية: ${escapeHtml(report.shiftId)}</p><p>من ${escapeHtml(dateTime(report.openedAt))} إلى ${escapeHtml(dateTime(report.closedAt))}</p>${reportNumbers({ grossRevenue: report.grossRevenue, netRevenue: report.netCollected, cash: report.cash, card: report.card, transfer: report.transfer, other: report.other, refunds: report.refunds, expenses: report.expenses, advances: report.advances, payrollCashPaid: report.payrollCashPaid ?? null, transactions: report.transactions, cashIn: report.cashIn, cashOut: report.cashOut })}${renderShiftReconciliation(report)}${report.notes ? `<p>الملاحظة: ${escapeHtml(report.notes)}</p>` : ""}`;
+  setReportExport("shiftReport", report, "shift-closed");
   $("#shiftReportPrint").disabled = false;
 }
 function showCurrentShiftReport() {
@@ -1211,13 +1290,20 @@ function showCurrentShiftReport() {
   const live = state.cash.snapshot;
   if (!shift || !live || shift.status !== "OPEN") return toast("ابدأ الشيفت أو اختر تقرير وردية مغلقة", true);
   $("#shiftReportResult").innerHTML = `${reportPrintHeader("ملخص الوردية الحالية · مبدئي", branchLabel(shift.branchId), shift.businessDate, new Date().toISOString())}<p>${escapeHtml(shift.cashierName || "الكاشير")} • منذ ${escapeHtml(dateTime(shift.openedAt))}</p>${reportNumbers({ grossRevenue: live.grossRevenue, netRevenue: live.netRevenue, cash: live.cashSales, card: live.cardSales, transfer: live.transferSales, other: live.otherSales, refunds: live.refunds, expenses: live.expenses, advances: live.advances, payrollCashPaid: live.payrollCashPaid ?? null, cashIn: live.cashIn, cashOut: live.cashOut, transactions: live.transactionsCount })}${renderShiftReconciliation({openingCash:shift.openingCash,cash:live.cashSales,cashIn:live.cashIn,cashOut:live.cashOut,expectedCash:live.expectedCash})}<p>الأرقام مبدئية حتى إغلاق الشيفت؛ الجرد الفعلي والفرق يتحددوا وقت الإغلاق.</p>`;
+  setReportExport("shiftReport", shift, "shift-preview");
   $("#shiftReportPrint").disabled = false;
 }
 async function loadShiftReport(button = $("#shiftReportLoad")) {
   const shiftId = $("#shiftReportId").value.trim();
   if (!shiftId) return toast("اكتب معرّف الوردية", true);
+  setReportExport("shiftReport");
+  $("#shiftReportPrint").disabled = true;
   await withButtonBusy(button, async () => {
-    try { const { report } = await getBusinessReport({ type: "shift", shiftId }); showShiftReport(report); }
+    const owner = state.user?.uid;
+    try {
+      const { report } = await getBusinessReport({ type: "shift", shiftId });
+      if (owner === state.user?.uid && shiftId === $("#shiftReportId").value.trim()) showShiftReport(report);
+    }
     catch (error) { $("#shiftReportResult").textContent = error.message; $("#shiftReportPrint").disabled = true; }
   });
 }
@@ -1250,8 +1336,15 @@ async function loadCashierPeriodReport(button = $("#cashierReportLoad")) {
   if (!periodKey) return toast("حدد فترة التقرير", true);
   await withButtonBusy(button, async () => {
     try {
-      const result = await getBusinessReport({ type, branchId: state.branchIds[0], periodKey });
+      const branchId = cashBranch();
+      const owner = state.user?.uid;
+      setReportExport("cashierReport");
+      $("#cashierReportPrint").disabled = true;
+      const result = await getBusinessReport({ type, branchId, periodKey });
+      if (owner !== state.user?.uid || branchId !== cashBranch() || type !== $("#cashierReportType").value || date !== $("#cashierReportDate").value
+          || (type === "monthly" && periodKey !== $("#cashierReportMonth").value)) return;
       showBusinessReports(result.reports, result.missingBranches, null, $("#cashierReportResult"), $("#cashierReportPrint"));
+      setReportExport("cashierReport", result.reports.find(report => report.branchId === branchId), type);
     } catch (error) { $("#cashierReportResult").textContent = error.message; $("#cashierReportPrint").disabled = true; }
   });
 }
@@ -3827,6 +3920,21 @@ $("#reportRebuild")?.addEventListener("click", event => withButtonBusy(event.cur
   catch (error) { toast(error.message, true); }
 }));
 $("#reportPrint")?.addEventListener("click", () => printReport($("#reportResult")));
+$$("[data-report-save]").forEach(button => button.addEventListener("click", () =>
+  saveBranchReport(button.dataset.reportSave).catch(error => toast(error.message || "تعذر حفظ التقرير", true))));
+$$("[data-report-share]").forEach(button => button.addEventListener("click", () =>
+  shareBranchReport(button.dataset.reportShare).catch(error => toast(error.message || "تعذرت مشاركة التقرير", true))));
+for (const id of ["cashierReportType", "cashierReportDate", "cashierReportMonth"]) {
+  $(`#${id}`)?.addEventListener("change", () => {
+    setReportExport("cashierReport");
+    $("#cashierReportPrint").disabled = true;
+    $("#cashierReportResult").textContent = "اضغط عرض لتحميل التقرير للفترة المختارة.";
+  });
+}
+$("#shiftReportId")?.addEventListener("input", () => {
+  setReportExport("shiftReport");
+  $("#shiftReportPrint").disabled = true;
+});
 $("#cashierReportType")?.addEventListener("change", () => { const monthly = $("#cashierReportType").value === "monthly"; $("#cashierReportDate").hidden = monthly; $("#cashierReportMonth").hidden = !monthly; $("#cashierReportPrint").disabled = true; });
 $("#cashierReportDate").value = cairoDateKey();
 $("#cashierReportMonth").value = cairoDateKey().slice(0, 7);

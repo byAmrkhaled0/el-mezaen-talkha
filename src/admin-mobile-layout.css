@@ -201,3 +201,17 @@
   border:1px solid var(--line);
  }
 }
+
+@media (max-width: 720px) {
+ #adminApp :is(.owner-mobile-nav,.cashier-mobile-nav) button.active {
+  box-shadow: inset 0 -3px 0 var(--text);
+ }
+ #adminApp :is(#ownerSalesMobile,#ownerExpensesMobile) .owner-list-head {
+  text-align:start;
+  padding-block-end:10px;
+  border-block-end:1px solid var(--line);
+ }
+ #adminApp :is(#ownerSalesMobile,#ownerExpensesMobile) .owner-filter-grid {
+  padding-block:8px;
+ }
+}

@@ -16,3 +16,12 @@ test('cashier legacy receipts have a branch-scoped descending business-date inde
  const config=JSON.parse(readFileSync(new URL('../firestore.indexes.json',import.meta.url),'utf8'));
  assert.ok(config.indexes.some(index=>index.collectionGroup==='bookings'&&index.queryScope==='COLLECTION'&&JSON.stringify(index.fields.filter(field=>field.fieldPath!=='__name__'))===JSON.stringify([{fieldPath:'branchId',order:'ASCENDING'},{fieldPath:'bookingDate',order:'DESCENDING'}])), 'getCashierSnapshot must support recent legacy receipts without a production FAILED_PRECONDITION');
 });
+
+test('dashboard monthly expenses have the exact ascending branch range index required in production', () => {
+ const config = JSON.parse(readFileSync(new URL('../firestore.indexes.json', import.meta.url), 'utf8'));
+ assert.ok(config.indexes.some(index => index.collectionGroup === 'expenses'
+  && index.queryScope === 'COLLECTION'
+  && JSON.stringify(index.fields) === JSON.stringify([
+   { fieldPath: 'branchId', order: 'ASCENDING' }, { fieldPath: 'dateKey', order: 'ASCENDING' }
+  ])));
+});

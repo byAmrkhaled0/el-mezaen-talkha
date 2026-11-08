@@ -584,3 +584,14 @@ html[data-theme="light"] {
 .catalog-pagination span{color:var(--muted);font-size:14px}.catalog-pagination button{min-width:100px;min-height:44px}
 
 .booking-catalog-search{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:.65rem;margin-block:1rem}.booking-catalog-search input,.booking-catalog-search select{min-width:0;width:100%;min-height:44px}.booking-catalog .catalog-pagination{flex-wrap:wrap}.booking-catalog-search+div[aria-busy=true]{min-height:5rem}@media(max-width:480px){.booking-catalog-search{grid-template-columns:1fr}}
+
+@media (max-width: 540px) {
+  .booking-availability-notice {
+    gap: 8px;
+    padding: 12px;
+    border-inline-start: 3px solid currentColor;
+  }
+  .booking-availability-notice button {
+    text-align: start;
+  }
+}

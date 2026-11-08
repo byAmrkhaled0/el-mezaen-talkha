@@ -1692,27 +1692,49 @@ export const getBusinessDashboard = onCall(adminOptions, async request => {
   if (!["pos", "expenses", "inventory", "drinks", "payroll", "reviews"].some(value => access.has(value))) throw new HttpsError("permission-denied", "لا تملك صلاحية بيانات التشغيل");
   const currentMonth = businessDateParts().month;
   const month = sanitizeText(request.data?.month || currentMonth, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
+  if (!isValidDateKey(`${month}-01`)) throw new HttpsError("invalid-argument", "الشهر غير صحيح");
   const nextMonth = nextMonthKey(month);
   const allowedBranches = selectedReadBranches(request);
-  const [staffRows, ledgerRows, expenseRows, inventoryRows, drinkRows, payrollRows, reviewRows] = await Promise.all([
-    scopedRows(scopedArrayQueries("staff", allowedBranches, query => query.limit(200))),
-    scopedRows(scopedQueries("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000))),
-    scopedRows(scopedQueries("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`).limit(2000))),
-    scopedRows(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500))),
-    scopedRows(scopedQueries("drinks", allowedBranches.length ? [...allowedBranches, "all"] : [], query => query.limit(300))),
-    access.has("payroll") ? scopedRows(scopedQueries("payrollPayments", allowedBranches, query => query.where("month", "==", month).limit(300))) : [],
-    access.has("reviews") ? scopedRows(scopedQueries("reviews", allowedBranches, query => query.limit(500))) : []
+  const canReadPayroll = access.has("payroll");
+  const canReadExpenses = access.has("expenses");
+  const canReadInventory = access.has("inventory");
+  const canReadDrinks = access.has("drinks") || access.has("pos");
+  const canReadFinancialTotals = canReadExpenses || canReadPayroll;
+  const monthRange = query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`);
+  const sumMonth = (collection, configure, field = "amount") =>
+    aggregateScoped(collection, allowedBranches, configure, { amount: AggregateField.sum(field) }, false);
+  const noAmount = { amount: 0 };
+
+  const [
+    staffRows, rawLedger, expenseRows, inventoryRows, drinkRows, payrollRows, reviewRows,
+    monthRevenueAggregate, monthExpenseAggregate, productPurchaseAggregate, drinkRevenueAggregate
+  ] = await Promise.all([
+    canReadPayroll ? scopedRows(scopedArrayQueries("staff", allowedBranches, query => query.limit(200))) : [],
+    canReadPayroll ? db.runTransaction(async tx => {
+      const queries = scopedQueries("revenueLedger", allowedBranches, query => monthRange(query)
+        .orderBy("dateKey").orderBy(FieldPath.documentId())
+        .select("staffId", "amount", "workerBreakdown", "revenueBreakdown", "bookingId", "bookingCode"));
+      const rows = [];
+      for (const query of queries) rows.push(...await monthLedgerPages(tx, query));
+      return rows;
+    }, { readOnly: true }) : [],
+    canReadExpenses ? scopedRows(scopedQueries("expenses", allowedBranches, query => monthRange(query).limit(2000))) : [],
+    canReadExpenses || canReadInventory || access.has("pos") ? scopedRows(scopedQueries("inventoryItems", allowedBranches, query => query.limit(500))) : [],
+    canReadDrinks ? scopedRows(scopedQueries("drinks", allowedBranches.length ? [...allowedBranches, "all"] : [], query => query.limit(300))) : [],
+    canReadPayroll ? scopedRows(scopedQueries("payrollPayments", allowedBranches, query => query.where("month", "==", month).limit(300))) : [],
+    access.has("reviews") ? scopedRows(scopedQueries("reviews", allowedBranches, query => query.limit(500))) : [],
+    canReadFinancialTotals ? sumMonth("revenueLedger", monthRange) : noAmount,
+    canReadFinancialTotals ? sumMonth("expenses", monthRange) : noAmount,
+    canReadInventory || canReadExpenses ? sumMonth("expenses", query => monthRange(query.where("category", "==", "inventory"))) : noAmount,
+    access.has("drinks") ? sumMonth("revenueLedger", monthRange, "revenueBreakdown.drinks") : noAmount
   ]);
-  const [monthRevenueAggregate, monthExpenseAggregate, productPurchaseAggregate, drinkRevenueAggregate] = await Promise.all([
-    aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
-    aggregateScoped("expenses", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
-    aggregateScoped("expenses", allowedBranches, query => query.where("category", "==", "inventory").where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("amount") }),
-    aggregateScoped("revenueLedger", allowedBranches, query => query.where("dateKey", ">=", `${month}-01`).where("dateKey", "<", `${nextMonth}-01`), { amount: AggregateField.sum("revenueBreakdown.drinks") })
-  ]);
-  const rawLedger = ledgerRows;
-  const legacyBookingIds = [...new Set(rawLedger.filter(item => !item.revenueBreakdown).map(item => item.bookingId || item.bookingCode).filter(Boolean))].slice(0, 300);
-  const legacyBookingSnapshots = legacyBookingIds.length ? await db.getAll(...legacyBookingIds.map(id => db.doc(`bookings/${id}`))) : [];
+  const legacyBookingIds = [...new Set(rawLedger.filter(item => !item.revenueBreakdown)
+    .map(item => item.bookingId || item.bookingCode).filter(Boolean))];
+  const legacyBookingSnapshots = [];
+  for (let offset = 0; offset < legacyBookingIds.length; offset += 300) {
+    const refs = legacyBookingIds.slice(offset, offset + 300).map(id => db.doc(`bookings/${id}`));
+    legacyBookingSnapshots.push(...await db.getAll(...refs, { fieldMask: ["branchId", "items"] }));
+  }
   const bookings = new Map(legacyBookingSnapshots.filter(snapshot => snapshot.exists).map(snapshot => [snapshot.id, cleanDoc(snapshot)]).filter(([, item]) => itemInAllowedBranch(item, allowedBranches)));
   const ledger = rawLedger.map(item => {
     const booking = bookings.get(item.bookingId || item.bookingCode);
@@ -2526,7 +2548,12 @@ async function generatePeriodReport(type, branchId, key, actorUid = "scheduler",
 function reportAccess(request, branchId, type) {
   const role = requireRole(request);
   if (role === "worker" || (role !== "admin" && !["manager", "cashier"].includes(role))) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
-  if (role === "cashier" && !hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
+  if (role === "cashier") {
+    if (!hasPermission(request, "pos")) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
+    if (!["talkha", "mashaya"].includes(branchId) || branchId !== branchesFor(request)[0]) {
+      throw new HttpsError("permission-denied", "تقارير الكاشير متاحة لفرعه فقط");
+    }
+  }
   if (role === "manager" && !hasPermission(request, type === "shift" ? "pos" : "revenue")) throw new HttpsError("permission-denied", "لا تملك صلاحية التقارير");
   requireBranchAccess(request, branchId);
 }
